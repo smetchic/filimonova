@@ -933,3 +933,16 @@ svg{display:block}
   align-items:center;
   gap:7px;
 }
+
+
+/* Working summary: visible gap between parent level rule and vertical Section labels */
+.working-summary thead tr:nth-child(2) .vertical-sub{
+  height:70px!important;
+  min-height:70px!important;
+  padding:10px 0 0!important;
+  vertical-align:top!important;
+}
+.working-summary thead tr:nth-child(2) .vertical-sub > span{
+  position:static!important;
+  display:inline-block;
+}
