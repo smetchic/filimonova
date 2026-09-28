@@ -978,3 +978,40 @@ svg{display:block}
   border-color:#7FA8E8;
   box-shadow:0 0 0 1px #7FA8E8;
 }
+
+
+/* Global EngineeringTable header rule: headers wrap when a column is narrowed.
+   The only exception is the intentionally vertical specification subheader. */
+.spec-table thead th,
+.eng-table thead th{
+  white-space:normal!important;
+  line-height:14px!important;
+  height:auto!important;
+  min-height:30px!important;
+  padding-top:4px!important;
+  padding-bottom:4px!important;
+}
+.filterable-head .header-label{
+  white-space:normal!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+  line-height:14px!important;
+}
+.vertical-sub,
+.vertical-sub > span{
+  white-space:nowrap!important;
+}
+
+/* Keep the special vertical labels compact: a small breathing space, not a tall gap. */
+.working-summary thead tr:nth-child(2) .vertical-sub{
+  height:62px!important;
+  min-height:62px!important;
+  padding:4px 0 0!important;
+  vertical-align:top!important;
+}
+.working-summary thead tr:nth-child(2) .vertical-sub > span{
+  position:static!important;
+}
+
+/* Resize remains available by cursor/drag, but no extra blue guide line is drawn. */
+.resize-handle:hover::after{display:none!important}
