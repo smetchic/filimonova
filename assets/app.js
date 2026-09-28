@@ -776,7 +776,13 @@
 
   function buildContext(pageKey, tab) {
     if (pageKey === "spec") return buildSpecContext(tab);
-    if (pageKey === "estimates") return buildEstimateContext(tab);
+    if (pageKey === "estimates") {
+      if (tab === 0) return buildEstimateContext(tab);
+      if (tab === 1) return '<span class="context-caption">Текущая цена</span><span class="context-muted">НДС по объекту 0 %, участвует в формулах</span>';
+      if (tab === 2) return '<span class="context-caption">ГПР</span><span class="context-muted">Помесячный финансовый план · без недель и дней</span><span class="spacer"></span><button class="context-link" type="button">Разнести по месяцам</button><button class="context-link" type="button">Отображение</button><button class="context-link" type="button">Экспорт Excel</button>';
+      if (tab === 3) return '<span class="context-caption">Сверка</span><span class="context-muted">Ручные связи имеют приоритет</span>';
+      return '<span class="context-caption">Журнал</span><span class="context-muted">Записи создаются из контрольных экранов</span>';
+    }
     if (pageKey === "montage") {
       return '<span class="context-caption">Показывать:</span>' +
         checkHtml("all","Все",true,"montage") +
@@ -1105,9 +1111,15 @@
 
     selected.forEach(function(e) {
       let rows = dataState.estimateRows.filter(function(r){ return r.estimate_id === e.id; });
-      rows = rows.filter(function(r){ return passesSearch([r.position,r.basis,r.name]); });
-      rows.sort(function(a,b){ return Number(a.sort_order||0)-Number(b.sort_order||0); });
-      if (!rows.length && currentSearch()) return;
+      rows = rows.filter(function(r){ return passesSearch([r.position,r.basis,r.name]); })
+        .filter(function(r){return rowPassesColumnFilters({position:r.position,basis:r.basis,name:r.name});});
+      rows = sortRows(rows,{
+        position:function(r){return r.position;},
+        basis:function(r){return r.basis;},
+        name:function(r){return r.name;}
+      });
+      if (!sortBucket()) rows.sort(function(a,b){ return Number(a.sort_order||0)-Number(b.sort_order||0); });
+      if (!rows.length && (currentSearch() || Object.keys(filterBucket()).length)) return;
 
       const eKey = "est:estimate:"+e.number;
       body += estimateGroupRow("Смета №"+e.number+" · "+(e.name||""),rows,eKey,0,m);
@@ -1123,12 +1135,13 @@
 
         sRows.forEach(function(r) {
           const c = rowCost(r,m);
-          body += '<tr class="data-row">';
-          body += '<td class="e-sticky-1"><span class="type-mark">' + (r.row_type === "work" ? "Р" : "М") + '</span></td>';
-          body += '<td class="e-sticky-2">' + esc(r.position || "") + '</td>';
-          body += '<td class="e-sticky-3">' + esc(r.basis || "") + '</td>';
-          body += '<td class="e-sticky-4">' + esc(r.name || "") + '</td>';
-          body += '<td>' + esc(r.unit || "") + '</td>';
+          const item=dataState.catalogItems.find(function(x){return x.mark===r.basis;});
+          body += '<tr class="data-row" ' + (r.row_type==="material" ? 'data-material-id="'+esc(item?item.id:"")+'" data-material-mark="'+esc(r.basis||"")+'"' : '') + '>';
+          body += '<td class="e-sticky-1 center"><span class="type-mark">' + (r.row_type === "work" ? "Р" : "М") + '</span></td>';
+          body += filterCell("position",r.position,esc(r.position || ""),"e-sticky-2 center");
+          body += filterCell("basis",r.basis,esc(r.basis || ""),"e-sticky-3");
+          body += filterCell("name",r.name,esc(r.name || ""),"e-sticky-4");
+          body += '<td class="center">' + esc(r.unit || "") + '</td>';
           body += '<td class="num">' + fmt(r.quantity) + '</td>';
           body += '<td class="num">' + fmt(r.quantity) + '</td>';
           body += '<td class="num">' + money(c.salary_unit) + '</td><td class="num">' + money(c.salary_amount) + '</td>';
@@ -1146,9 +1159,9 @@
     const head = '<thead>' +
       '<tr>' +
         '<th class="e-sticky-1" rowspan="2">Тип</th>' +
-        '<th class="e-sticky-2" rowspan="2">Поз. сметы</th>' +
-        '<th class="e-sticky-3" rowspan="2">Обоснование</th>' +
-        '<th class="e-sticky-4" rowspan="2">Наименование</th>' +
+        '<th class="e-sticky-2 filterable-head" rowspan="2">' + filterHeader("Поз. сметы","position") + '</th>' +
+        '<th class="e-sticky-3 filterable-head" rowspan="2">' + filterHeader("Обоснование","basis") + '</th>' +
+        '<th class="e-sticky-4 filterable-head" rowspan="2">' + filterHeader("Наименование","name") + '</th>' +
         '<th rowspan="2">Ед. изм.</th>' +
         '<th rowspan="2">Количество</th>' +
         '<th rowspan="2">Остаток по смете</th>' +
@@ -1158,45 +1171,121 @@
         '<th colspan="2">Транспорт</th>' +
         '<th colspan="2">Всего</th>' +
       '</tr>' +
-      '<tr>' +
-        '<th>ед.</th><th>всего</th><th>ед.</th><th>всего</th><th>ед.</th><th>всего</th><th>ед.</th><th>всего</th><th>ед.</th><th>всего</th>' +
-      '</tr>' +
+      '<tr><th>ед.</th><th>всего</th><th>ед.</th><th>всего</th><th>ед.</th><th>всего</th><th>ед.</th><th>всего</th><th>ед.</th><th>всего</th></tr>' +
     '</thead>';
 
     $("workArea").className = "work-area table-work";
-    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table est-table">' + head + '<tbody>' + body + '</tbody></table></div></div>';
+    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table est-table" data-table-key="estimate-main">' + head + '<tbody>' + body + '</tbody></table></div></div>';
+  }
+
+  function currentPriceModel() {
+    if(!ui.currentPrice) ui.currentPrice={forecast:1.0552,competition:1,vat:0};
+    const P=ui.currentPrice,m=maps();
+    const selectedIds=new Set(dataState.estimates.filter(function(e){return ui.estimates[e.number]!==false;}).map(function(e){return e.id;}));
+    const base={salary:0,machines:0,drivers:0,transport:0,materials:0};
+    dataState.estimateRows.filter(function(r){return selectedIds.has(r.estimate_id);}).forEach(function(r){
+      const c=rowCost(r,m);
+      base.salary+=Number(c.salary_amount||0);
+      base.machines+=Number(c.machines_amount||0);
+      base.drivers+=Number(c.drivers_amount||0);
+      base.transport+=Number(c.transport_amount||0);
+      base.materials+=Number(c.materials_amount||0);
+    });
+    const wageBase=base.salary+base.drivers;
+    const direct=base.salary+base.machines+base.transport+base.materials;
+    const ohr=wageBase*1.0931,profit=wageBase*1.0563,temp=wageBase*.037*.93,winter=wageBase*.025740*.93;
+    const works=direct+ohr+profit+temp+winter,soc=wageBase*.34,travel=0,other=soc+travel,totalWorks=works+other,ret=-temp*.15;
+    const contractor=totalWorks+ret,afterCompetition=contractor*P.competition,afterForecast=afterCompetition*P.forecast,vat=afterForecast*(P.vat/100),grand=afterForecast+vat;
+    return [
+      {id:"salary",name:"Заработная плата",kind:"input",v:base.salary},
+      {id:"machines",name:"Эксплуатация машин и механизмов",kind:"input",v:base.machines},
+      {id:"drivers",name:"Заработная плата машинистов",kind:"input",v:base.drivers},
+      {id:"transport",name:"Транспортные расходы подрядчика",kind:"input",v:base.transport},
+      {id:"materials",name:"Материалы подрядчика",kind:"input",v:base.materials},
+      {id:"direct",name:"Итого прямые затраты",kind:"subtotal",v:direct,refs:["salary","machines","transport","materials"],formula:"Заработная плата + Машины + Транспорт + Материалы"},
+      {id:"ohr",name:"Общехозяйственные и общепроизводственные расходы",kind:"formula",pct:109.31,v:ohr,refs:["salary","drivers"],formula:"(Заработная плата + ЗП машинистов) × 109,31%"},
+      {id:"profit",name:"Плановая прибыль",kind:"formula",pct:105.63,v:profit,refs:["salary","drivers"],formula:"(Заработная плата + ЗП машинистов) × 105,63%"},
+      {id:"temporary",name:"Временные здания и сооружения",kind:"formula",pct:3.7,k:.93,v:temp,refs:["salary","drivers"],formula:"(Заработная плата + ЗП машинистов) × 3,70% × 0,93"},
+      {id:"winter",name:"Дополнительные средства при производстве СМР в зимнее время",kind:"formula",pct:2.574,k:.93,v:winter,refs:["salary","drivers"],formula:"(Заработная плата + ЗП машинистов) × 2,5740% × 0,93"},
+      {id:"works",name:"Итого строительных и иных специальных монтажных работ",kind:"subtotal",v:works,refs:["direct","ohr","profit","temporary","winter"],formula:"Прямые затраты + ОХР + Плановая прибыль + Временные + Зимние"},
+      {id:"otherGroup",name:"Прочие затраты",kind:"group"},
+      {id:"soc",name:"Затраты, связанные с отчислениями на социальное страхование",kind:"formula",pct:34,v:soc,refs:["salary","drivers"],formula:"(Заработная плата + ЗП машинистов) × 34%"},
+      {id:"travel",name:"Средства, связанные с подвижным и разъездным характером работ",kind:"formula",pct:0,v:travel,refs:["salary","drivers"],formula:"(Заработная плата + ЗП машинистов) × 0%"},
+      {id:"other",name:"Итого прочие затраты",kind:"subtotal",v:other,refs:["soc","travel"],formula:"Социальное страхование + разъездной характер"},
+      {id:"totalWorks",name:"Всего строительных и иных специальных монтажных работ",kind:"subtotal",v:totalWorks,refs:["works","other"],formula:"Итого СМР + прочие затраты"},
+      {id:"returnTemp",name:"Возврат от временных зданий и сооружений",kind:"formula",pct:15,v:ret,refs:["temporary"],formula:"− Временные здания и сооружения × 15%"},
+      {id:"contractor",name:"Итого подрядных работ",kind:"subtotal",v:contractor,refs:["totalWorks","returnTemp"],formula:"Всего СМР + возврат от временных"},
+      {id:"competitionK",name:"Конкурсный коэффициент",kind:"parameter",k:P.competition},
+      {id:"afterCompetition",name:"Итого с учётом конкурсного коэффициента",kind:"subtotal",v:afterCompetition,refs:["contractor"],formula:"Итого подрядных работ × конкурсный коэффициент"},
+      {id:"forecastK",name:"Прогнозный индекс",kind:"parameter",k:P.forecast,editable:true},
+      {id:"afterForecast",name:"Итого с учётом прогнозного индекса",kind:"subtotal",v:afterForecast,refs:["afterCompetition"],formula:"Итого с конкурсным коэффициентом × прогнозный индекс"},
+      {id:"vat",name:"НДС",kind:"formula",pct:P.vat,v:vat,refs:["afterForecast"],formula:"Итого с прогнозным индексом × НДС"},
+      {id:"grand",name:"Всего с НДС",kind:"final",v:grand,refs:["afterForecast","vat"],formula:"Итого с прогнозным индексом + НДС"}
+    ];
+  }
+
+  function currentRefValue(row,mode) {
+    if(row.v==null || ["competitionK","afterCompetition","forecastK","afterForecast","vat","grand"].includes(row.id)) return "";
+    const P=ui.currentPrice||{forecast:1.0552,competition:1};
+    if(mode==="forecast") return money(row.v*P.forecast);
+    if(mode==="competition") return money(row.v*P.competition);
+    return money(row.v*P.competition*P.forecast);
   }
 
   function renderCurrentPricePlaceholder() {
-    const totals = dataState.estimateRows.reduce(function(acc,r) {
-      const c = maps().costs.get(r.id);
-      return acc + Number(c ? c.total_amount : 0);
-    },0);
-    $("workArea").className = "work-area content-work";
-    $("workArea").innerHTML =
-      '<div class="review-panel">' +
-        '<div class="review-panel-title">Текущая цена</div>' +
-        '<div class="review-grid">' +
-          '<div><span>База тестовых смет</span><strong>' + money(totals) + '</strong></div>' +
-          '<div><span>Прогнозный индекс</span><strong>1,0552</strong></div>' +
-          '<div><span>Конкурсный коэффициент</span><strong>1,0000</strong></div>' +
-          '<div><span>НДС</span><strong>0%</strong></div>' +
-        '</div>' +
-        '<div class="review-note">Структура экрана уже рабочая; полный расчётный движок текущих цен подключим после согласования таблицы смет.</div>' +
-      '</div>';
+    const model=currentPriceModel();
+    let rows=model.filter(function(r){return r.kind==="group" || passesSearch([r.name]);});
+    let no=0;
+    const body=rows.map(function(r){
+      if(r.kind==="group") return '<tr class="group-only"><td class="center"></td><td colspan="7">'+esc(r.name)+'</td></tr>';
+      no++;
+      const cls=r.kind==="subtotal"?"subtotal":r.kind==="final"?"final":"";
+      const pct=r.pct==null?"":String(r.id==="winter"?"2,5740":r.pct).replace(".",",");
+      let k="";
+      if(r.id==="forecastK") k='<input class="forecast-input" value="'+Number((ui.currentPrice||{}).forecast||1.0552).toFixed(4).replace(".",",")+'" aria-label="Прогнозный индекс">';
+      else if(r.k!=null) k=Number(r.k).toFixed(4).replace(".",",");
+      return '<tr class="'+cls+' data-row" data-formula-row="'+r.id+'"><td class="center">'+no+'</td><td>'+esc(r.name)+'</td><td class="num">'+pct+'</td><td class="num rate-cell">'+k+'</td><td class="num formula-amount" data-formula-cell="'+r.id+'">'+money(r.v)+'</td><td class="num muted">'+currentRefValue(r,"forecast")+'</td><td class="num muted">'+currentRefValue(r,"competition")+'</td><td class="num muted">'+currentRefValue(r,"both")+'</td></tr>';
+    }).join("");
+    $("workArea").className="work-area table-work current-price-work";
+    $("workArea").innerHTML='<div class="formula-strip"><div class="formula-address">—</div><div class="formula-name"><b>fx</b><span>Выберите расчётную строку</span></div><div class="formula-expression"></div></div>'+
+      '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table current-price-table" data-table-key="current-price"><thead><tr><th rowspan="2">№</th><th rowspan="2">Наименование</th><th rowspan="2">%</th><th rowspan="2">К-т</th><th rowspan="2">Текущая стоимость</th><th colspan="3">Справочно</th></tr><tr><th>с прогнозным</th><th>с конкурсным</th><th>с прогнозным и конкурсным</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    const byId=new Map(model.map(function(x){return [x.id,x];}));
+    function select(id){
+      const r=byId.get(id);if(!r)return;
+      document.querySelectorAll(".formula-active,.formula-ref").forEach(function(x){x.classList.remove("formula-active","formula-ref");});
+      const row=document.querySelector('[data-formula-row="'+CSS.escape(id)+'"]');
+      if(row) row.querySelector('[data-formula-cell]')?.classList.add("formula-active");
+      (r.refs||[]).forEach(function(ref){document.querySelector('[data-formula-row="'+CSS.escape(ref)+'"] [data-formula-cell]')?.classList.add("formula-ref");});
+      $(".formula-address").textContent="E"+(model.indexOf(r)+3);
+      $(".formula-name span").textContent=r.name;
+      $(".formula-expression").textContent=r.formula||"";
+    }
+    document.querySelectorAll("[data-formula-row]").forEach(function(row){row.onclick=function(){select(row.dataset.formulaRow);};});
+    const input=document.querySelector(".forecast-input");
+    if(input) input.onchange=function(){
+      const v=Number(input.value.replace(",","."));
+      if(Number.isFinite(v)&&v>0){ui.currentPrice.forecast=v;rerenderContent();}
+    };
+    select("temporary");
   }
 
   function renderGprPlaceholder() {
-    const months = ["Окт. 26","Ноя. 26","Дек. 26","Янв. 27"];
-    const rows = dataState.estimates.map(function(e) {
-      return '<tr><td class="gpr-sticky">' + esc("Смета №"+e.number+" · "+e.name) + '</td>' +
-        months.map(function(){ return '<td class="gpr-month"></td>'; }).join("") + '</tr>';
-    }).join("");
-    $("workArea").className = "work-area table-work";
-    $("workArea").innerHTML =
-      '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table gpr-table">' +
-      '<thead><tr><th class="gpr-sticky">Смета / раздел</th>' + months.map(function(m){return '<th>'+m+'</th>';}).join("") + '</tr></thead>' +
-      '<tbody>' + rows + '</tbody></table></div></div>';
+    if(!ui.gprMonths) ui.gprMonths=["Дек 2026","Янв 2027","Фев 2027","Мар 2027","Апр 2027","Май 2027"];
+    const m=maps(),months=ui.gprMonths;
+    let body="";
+    dataState.estimates.filter(function(e){return ui.estimates[e.number]!==false;}).forEach(function(e){
+      const erows=dataState.estimateRows.filter(function(r){return r.estimate_id===e.id;});
+      const total=erows.reduce(function(a,r){return a+Number(rowCost(r,m).total_amount||0);},0);
+      body+='<tr class="group-row"><td class="gpr-sticky" colspan="4">'+esc("Смета №"+e.number+" · "+e.name)+'</td><td></td><td></td><td></td><td class="num">'+money(total*(ui.currentPrice?ui.currentPrice.forecast:1.0552))+'</td>'+months.map(function(){return '<td class="gpr-month"></td>';}).join("")+'</tr>';
+      erows.forEach(function(r){
+        if(!passesSearch([r.position,r.basis,r.name])) return;
+        const c=rowCost(r,m),price=Number(c.total_unit||0),start=Number(c.total_amount||0)*(ui.currentPrice?ui.currentPrice.forecast:1.0552);
+        const item=dataState.catalogItems.find(function(x){return x.mark===r.basis;});
+        body+='<tr class="data-row" '+(r.row_type==="material"?'data-material-id="'+esc(item?item.id:"")+'" data-material-mark="'+esc(r.basis||"")+'"':'')+'><td class="center">'+(r.row_type==="material"?"М":"Р")+'</td><td class="center">'+esc(r.position)+'</td><td>'+esc(r.basis)+'</td><td>'+esc(r.name)+'</td><td class="center">'+esc(r.unit)+'</td><td class="num">'+fmt(r.quantity)+'</td><td class="num">'+money(price)+'</td><td class="num">'+money(start)+'</td>'+months.map(function(){return '<td class="gpr-month"></td>';}).join("")+'</tr>';
+      });
+    });
+    $("workArea").className="work-area table-work";
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table gpr-table" data-table-key="gpr"><thead><tr><th>Тип</th><th>Поз.</th><th>Обоснование</th><th>Наименование</th><th>Ед. изм.</th><th>Кол-во</th><th>Цена на начало работ</th><th>Стоимость на начало работ</th>'+months.map(function(x){return '<th>'+esc(x)+'</th>';}).join("")+'</tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
 
   function renderSupplySummary() {
