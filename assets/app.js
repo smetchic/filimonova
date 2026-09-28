@@ -5,7 +5,9 @@
     return;
   }
 
-  const reviewMode = new URLSearchParams(window.location.search).get("review") === "1";
+  const query = new URLSearchParams(window.location.search);
+  const reviewMode = query.get("review") === "1";
+  const requestedPage = query.get("page");
 
   const client = window.supabase.createClient(cfg.supabaseUrl, cfg.supabasePublishableKey, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
@@ -37,7 +39,7 @@
       title: "Спецификация",
       subtitle: "Проектная структура ЖБИ и рабочая сводка",
       tabs: ["По проекту", "Рабочая сводка"],
-      context: () => checks(["Все","Секция 1","Секция 2","Цокольные","Выше 0.000","Лестницы"]),
+      context: (tab) => checks(["Все","Секция 1","Секция 2","Цокольные","Выше 0.000","Лестницы"]) + (tab === 1 ? '<span class="spacer"></span><label class="check"><input type="checkbox"><span>Итог по дому</span></label>' : ''),
       serviceLeft: () => '<span class="legend-item"><span class="legend-dot supply"></span>Поставка</span><span class="legend-item"><span class="legend-dot montage"></span>Монтаж</span><span class="legend-item"><span class="legend-dot avr"></span>АВР</span>',
       hierarchical: true
     },
@@ -148,7 +150,9 @@
     }
   };
 
-  let activePage = localStorage.getItem("filimonova.ui.page") || "home";
+  let activePage = requestedPage && pages[requestedPage]
+    ? requestedPage
+    : (localStorage.getItem("filimonova.ui.page") || "home");
   if (!pages[activePage]) activePage = "home";
   const activeTabs = {};
 
@@ -174,6 +178,72 @@
 
   function checksHtml(items) {
     return items.map((x, i) => '<label class="check"><input type="checkbox"' + (i === 0 ? ' checked' : '') + '><span>' + x + '</span></label>').join("");
+  }
+
+
+  function renderSpecificationLayout(tab) {
+    const workArea = $("workArea");
+    workArea.classList.add("spec-review");
+    if (tab === 0) {
+      const levels = ["Ц", ...Array.from({length:19}, (_,i) => String(i+1)), "Ч", "К", "Всего"];
+      workArea.innerHTML =
+        '<div class="spec-table-shell">' +
+          '<table class="spec-table">' +
+            '<thead><tr>' +
+              '<th class="sticky-1">№</th>' +
+              '<th class="sticky-2">Марка</th>' +
+              '<th class="sticky-3">Наименование</th>' +
+              levels.map(x => '<th class="level-col">' + x + '</th>').join("") +
+            '</tr></thead>' +
+            '<tbody>' +
+              '<tr class="group-row"><td colspan="' + (3 + levels.length) + '" class="group-title"><span class="group-arrow">▾</span>Всего по дому</td></tr>' +
+              '<tr class="group-row"><td colspan="' + (3 + levels.length) + '" class="group-title"><span class="group-arrow">▾</span>Секция 1</td></tr>' +
+              '<tr class="group-row"><td colspan="' + (3 + levels.length) + '" class="group-title"><span class="group-arrow">▾</span>Цоколь</td></tr>' +
+              '<tr class="placeholder-row">' +
+                '<td class="sticky-1">—</td><td class="sticky-2">—</td><td class="sticky-3">Строки спецификации появятся на следующем этапе</td>' +
+                levels.map(() => '<td class="level-col"></td>').join("") +
+              '</tr>' +
+            '</tbody>' +
+          '</table>' +
+        '</div>' +
+        '<div class="spec-empty-note">Сейчас проверяем только компоновку, иерархию, B5–B7 и геометрию колонок. Реальные позиции не подключены.</div>';
+      return;
+    }
+
+    const levels = ["Ц", ...Array.from({length:19}, (_,i) => String(i+1)), "Ч", "К"];
+    const showHome = false;
+    workArea.innerHTML =
+      '<div class="spec-table-shell">' +
+        '<table class="spec-table working-summary">' +
+          '<thead>' +
+            '<tr>' +
+              '<th class="sticky-1" rowspan="2">№</th>' +
+              '<th class="sticky-2" rowspan="2">Марка</th>' +
+              '<th class="sticky-3" rowspan="2">Наименование</th>' +
+              '<th colspan="2">Секция 1</th>' +
+              '<th colspan="2">Секция 2</th>' +
+              levels.map(x => '<th colspan="2">' + x + '</th>').join("") +
+              '<th colspan="' + (showHome ? 3 : 2) + '">Всего</th>' +
+            '</tr>' +
+            '<tr>' +
+              '<th class="qty-col">Кол-во, шт.</th><th class="vol-col">Объём, м³</th>' +
+              '<th class="qty-col">Кол-во, шт.</th><th class="vol-col">Объём, м³</th>' +
+              levels.map(() => '<th class="vertical-sub"><span>Секция 1</span></th><th class="vertical-sub"><span>Секция 2</span></th>').join("") +
+              '<th class="vertical-sub"><span>Секция 1</span></th><th class="vertical-sub"><span>Секция 2</span></th>' +
+            '</tr>' +
+          '</thead>' +
+          '<tbody>' +
+            '<tr class="group-row"><td colspan="' + (3 + 4 + levels.length*2 + 2) + '" class="group-title"><span class="group-arrow">▾</span>Всего по дому</td></tr>' +
+            '<tr class="group-row"><td colspan="' + (3 + 4 + levels.length*2 + 2) + '" class="group-title"><span class="group-arrow">▾</span>Цоколь</td></tr>' +
+            '<tr class="group-row"><td colspan="' + (3 + 4 + levels.length*2 + 2) + '" class="group-title"><span class="group-arrow">▾</span>Раздел</td></tr>' +
+            '<tr class="placeholder-row">' +
+              '<td class="sticky-1">—</td><td class="sticky-2">—</td><td class="sticky-3">Номенклатура появится после согласования макета</td>' +
+              Array.from({length:4 + levels.length*2 + 2}, () => '<td></td>').join("") +
+            '</tr>' +
+          '</tbody>' +
+        '</table>' +
+      '</div>' +
+      '<div class="spec-empty-note">Рабочая сводка: секции находятся в колонках одной строки; отдельные уровни «Секция 1 / Секция 2» в иерархии не создаются.</div>';
   }
 
   function renderPage(pageKey, tabIndex = null) {
@@ -207,12 +277,17 @@
       ? '<button class="service-action" type="button">Свернуть всё</button><button class="service-action" type="button">Развернуть всё</button>'
       : '';
 
-    $("workArea").innerHTML =
-      '<div class="empty-state">' +
-        '<div class="empty-kicker">UI · этап 1</div>' +
-        '<h2>' + page.title + ' · ' + page.tabs[tab] + '</h2>' +
-        '<p>Рабочая область пока намеренно пустая — согласовываем B1–B7.</p>' +
-      '</div>';
+    $("workArea").classList.remove("spec-review");
+    if (pageKey === "spec") {
+      renderSpecificationLayout(tab);
+    } else {
+      $("workArea").innerHTML =
+        '<div class="empty-state">' +
+          '<div class="empty-kicker">UI · следующий этап</div>' +
+          '<h2>' + page.title + ' · ' + page.tabs[tab] + '</h2>' +
+          '<p>Эта рабочая область пока не детализирована.</p>' +
+        '</div>';
+    }
   }
 
   tabLogin.addEventListener("click", () => switchAuthTab("login"));
