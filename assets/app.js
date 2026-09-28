@@ -806,7 +806,7 @@
     if (pageKey === "estimates") {
       if (tab === 0) return buildEstimateContext(tab);
       if (tab === 1) return '<span class="context-caption">Текущая цена</span><span class="context-muted">НДС по объекту 0 %, участвует в формулах</span>';
-      if (tab === 2) return '<span class="context-caption">ГПР</span><span class="context-muted">Помесячный финансовый план · без недель и дней</span><span class="spacer"></span><button class="context-link" type="button">Разнести по месяцам</button><button class="context-link" type="button">Отображение</button><button class="context-link" type="button">Экспорт Excel</button>';
+      if (tab === 2) return '<span class="context-caption">ГПР</span><span class="context-muted">Помесячный финансовый план · без недель и дней</span><span class="spacer"></span><button class="context-link" type="button" data-gpr-action="spread">Разнести по месяцам</button><button class="context-link" type="button" data-gpr-action="display">Отображение</button><button class="context-link" type="button" data-gpr-action="excel">Экспорт Excel</button>';
       if (tab === 3) return '<span class="context-caption">Сверка</span><span class="context-muted">Ручные связи имеют приоритет</span>';
       return '<span class="context-caption">Журнал</span><span class="context-muted">Записи создаются из контрольных экранов</span>';
     }
@@ -849,7 +849,7 @@
 
   function isHierarchical(pageKey, tab) {
     if (pageKey === "spec") return true;
-    if (pageKey === "estimates") return tab === 0;
+    if (pageKey === "estimates") return tab === 0 || tab === 2;
     if (pageKey === "supply") return tab === 0 || tab === 2;
     if (pageKey === "avr") return tab === 2;
     return false;
@@ -1334,23 +1334,217 @@
     select("temporary");
   }
 
-  function renderGprPlaceholder() {
-    if(!ui.gprMonths) ui.gprMonths=["Дек 2026","Янв 2027","Фев 2027","Мар 2027","Апр 2027","Май 2027"];
-    const m=maps(),months=ui.gprMonths;
-    let body="";
-    dataState.estimates.filter(function(e){return ui.estimates[e.number]!==false;}).forEach(function(e){
-      const erows=dataState.estimateRows.filter(function(r){return r.estimate_id===e.id;});
-      const total=erows.reduce(function(a,r){return a+Number(rowCost(r,m).total_amount||0);},0);
-      body+='<tr class="group-row"><td class="gpr-sticky" colspan="4">'+esc("Смета №"+e.number+" · "+e.name)+'</td><td></td><td></td><td></td><td class="num">'+money(total*(ui.currentPrice?ui.currentPrice.forecast:1.0552))+'</td>'+months.map(function(){return '<td class="gpr-month"></td>';}).join("")+'</tr>';
-      erows.forEach(function(r){
-        if(!passesSearch([r.position,r.basis,r.name]) || !rowPassesColumnFilters({position:r.position,basis:r.basis,name:r.name})) return;
-        const c=rowCost(r,m),price=Number(c.total_unit||0),start=Number(c.total_amount||0)*(ui.currentPrice?ui.currentPrice.forecast:1.0552);
-        const item=dataState.catalogItems.find(function(x){return x.mark===r.basis;});
-        body+='<tr class="data-row" '+(r.row_type==="material"?'data-material-id="'+esc(item?item.id:"")+'" data-material-mark="'+esc(r.basis||"")+'"':'')+'><td class="center">'+(r.row_type==="material"?"М":"Р")+'</td><td class="center">'+esc(r.position)+'</td><td>'+esc(r.basis)+'</td><td>'+esc(r.name)+'</td><td class="center">'+esc(r.unit)+'</td><td class="num">'+fmt(r.quantity)+'</td><td class="num">'+money(price)+'</td><td class="num">'+money(start)+'</td>'+months.map(function(){return '<td class="gpr-month"></td>';}).join("")+'</tr>';
+  function gprMonths() {
+    return [
+      {key:"2026-12",year:"2026",month:"Дек",label:"Дек 2026",index:1},
+      {key:"2027-01",year:"2027",month:"Янв",label:"Янв 2027",index:1},
+      {key:"2027-02",year:"2027",month:"Фев",label:"Фев 2027",index:1},
+      {key:"2027-03",year:"2027",month:"Мар",label:"Мар 2027",index:1},
+      {key:"2027-04",year:"2027",month:"Апр",label:"Апр 2027",index:1},
+      {key:"2027-05",year:"2027",month:"Май",label:"Май 2027",index:1}
+    ];
+  }
+
+  function gprAssignments() {
+    if (!ui.gprAssignments) {
+      try { ui.gprAssignments = JSON.parse(localStorage.getItem("filimonova.gpr.assignments") || "{}"); }
+      catch(_) { ui.gprAssignments = {}; }
+    }
+    return ui.gprAssignments;
+  }
+
+  function estimateScope(e) {
+    const name=String(e && e.name || "");
+    const section=name.includes("Секция 2") ? "Секция 2" : name.includes("Секция 1") ? "Секция 1" : "";
+    const zone=name.includes("Цоколь") ? "Цоколь" : name.includes("Выше 0.000") ? "Выше 0.000" : "";
+    return {section:section,zone:zone};
+  }
+
+  function gprMaterialMonthQty(row,e,monthKey) {
+    const item=dataState.catalogItems.find(function(x){return x.mark===row.basis;});
+    if(!item) return 0;
+    const scope=estimateScope(e);
+    let qty=0;
+    dataState.specRows.forEach(function(sr){
+      if(sr.catalog_item_id!==item.id) return;
+      const sec=dataState.specSections.find(function(x){return x.id===sr.section_id;});
+      if(!sec) return;
+      if(scope.section && sec.building_section!==scope.section) return;
+      if(scope.zone && sec.zone!==scope.zone) return;
+      dataState.specQuantities.forEach(function(q){
+        if(q.specification_row_id!==sr.id) return;
+        if(gprAssignments()[q.level_code]===monthKey) qty+=Number(q.quantity||0);
       });
     });
+    return qty;
+  }
+
+  function gprRowMonthQty(row,e,monthKey,estimateRows) {
+    if(row.row_type==="material") return gprMaterialMonthQty(row,e,monthKey);
+    const materialRows=estimateRows.filter(function(x){return x.row_type==="material";});
+    const allMaterial=materialRows.reduce(function(sum,mr){return sum+Number(mr.quantity||0);},0);
+    if(!allMaterial) return 0;
+    const monthMaterial=materialRows.reduce(function(sum,mr){return sum+gprMaterialMonthQty(mr,e,monthKey);},0);
+    return Number(row.quantity||0)*(monthMaterial/allMaterial);
+  }
+
+  function gprRowAmounts(row,e,estimateRows,m) {
+    const c=rowCost(row,m);
+    const P=ui.currentPrice||{forecast:1.0552,competition:1};
+    const unitAtStart=Number(c.total_unit||0)*Number(P.competition||1)*Number(P.forecast||1);
+    const totalAtStart=Number(row.quantity||0)*unitAtStart;
+    const months={};
+    gprMonths().forEach(function(month){
+      const q=gprRowMonthQty(row,e,month.key,estimateRows);
+      months[month.key]=q*unitAtStart*Number(month.index||1);
+    });
+    return {unit:unitAtStart,total:totalAtStart,months:months};
+  }
+
+  function gprGroupRow(label,rows,e,key,depth,m) {
+    registerGroup(key);
+    const monthTotals={};
+    let total=0;
+    gprMonths().forEach(function(mon){monthTotals[mon.key]=0;});
+    rows.forEach(function(r){
+      const a=gprRowAmounts(r,e,rows,m);
+      total+=a.total;
+      gprMonths().forEach(function(mon){monthTotals[mon.key]+=a.months[mon.key]||0;});
+    });
+    let html='<tr class="group-row group-toggle" data-group-key="'+esc(key)+'">';
+    html+='<td colspan="4" class="est-group-title gpr-group-title" style="padding-left:'+(8+depth*14)+'px"><span class="group-arrow">'+groupArrow(key)+'</span>'+esc(label)+'</td>';
+    html+='<td></td><td></td><td></td><td class="num strong-num">'+money(total)+'</td>';
+    gprMonths().forEach(function(mon){html+='<td class="num gpr-month group-month">'+money(monthTotals[mon.key])+'</td>';});
+    html+='</tr>';
+    return html;
+  }
+
+  function renderGprPlaceholder() {
+    const m=maps(),months=gprMonths();
+    let body="";
+    ui.currentGroupKeys=[];
+
+    dataState.estimates.filter(function(e){return ui.estimates[e.number]!==false;}).forEach(function(e){
+      let erows=dataState.estimateRows.filter(function(r){return r.estimate_id===e.id;});
+      erows=erows.filter(function(r){return passesSearch([r.position,r.basis,r.name]) && rowPassesColumnFilters({position:r.position,basis:r.basis,name:r.name});});
+      erows=sortRows(erows,{position:function(r){return r.position;},basis:function(r){return r.basis;},name:function(r){return r.name;}});
+      if(!sortBucket()) erows.sort(function(x,y){return Number(x.sort_order||0)-Number(y.sort_order||0);});
+      if(!erows.length && (currentSearch()||Object.keys(filterBucket()).length)) return;
+
+      const eKey="gpr:estimate:"+e.number;
+      body+=gprGroupRow("Смета №"+e.number+" · "+(e.name||""),erows,e,eKey,0,m);
+      if(ui.collapsed.has(eKey)) return;
+
+      const sections=dataState.estimateSections.filter(function(x){return x.estimate_id===e.id;});
+      sections.forEach(function(sec){
+        const sRows=erows.filter(function(r){return r.section_id===sec.id;});
+        if(!sRows.length) return;
+        const sKey="gpr:section:"+e.number+":"+sec.id;
+        body+=gprGroupRow(sec.title,sRows,e,sKey,1,m);
+        if(ui.collapsed.has(sKey)||ui.collapseLeaves) return;
+
+        sRows.forEach(function(r){
+          const a=gprRowAmounts(r,e,sRows,m);
+          const item=dataState.catalogItems.find(function(x){return x.mark===r.basis;});
+          body+='<tr class="data-row '+(r.row_type==="material"?'gpr-material-row':'gpr-work-row')+'" '+(r.row_type==="material"?'data-material-id="'+esc(item?item.id:"")+'" data-material-mark="'+esc(r.basis||"")+'"':'')+'>';
+          body+='<td class="e-sticky-1 center"><span class="type-mark">'+(r.row_type==="material"?"М":"Р")+'</span></td>';
+          body+=filterCell("position",r.position,esc(r.position),"e-sticky-2 center");
+          body+=filterCell("basis",r.basis,esc(r.basis),"e-sticky-3");
+          body+=filterCell("name",r.name,esc(r.name),"e-sticky-4");
+          body+='<td class="center">'+esc(r.unit||"")+'</td><td class="num">'+fmt(r.quantity)+'</td><td class="num">'+money(a.unit)+'</td><td class="num">'+money(a.total)+'</td>';
+          months.forEach(function(mon){body+='<td class="num gpr-month">'+money(a.months[mon.key])+'</td>';});
+          body+='</tr>';
+        });
+      });
+    });
+
+    if(!body) body=tableMessage("Нет строк по текущему фильтру.",8+months.length);
+
+    const years=[];
+    months.forEach(function(mon){
+      let y=years.find(function(x){return x.year===mon.year;});
+      if(!y){y={year:mon.year,count:0};years.push(y);}
+      y.count++;
+    });
+    const yearHead=years.map(function(y){return '<th class="gpr-year" colspan="'+y.count+'">'+esc(y.year)+'</th>';}).join("");
+    const monthHead=months.map(function(mon){return '<th class="gpr-month-head">'+esc(mon.month)+'</th>';}).join("");
+
     $("workArea").className="work-area table-work";
-    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table gpr-table" data-table-key="gpr"><thead><tr><th>Тип</th><th class="filterable-head">'+filterHeader("Поз.","position")+'</th><th class="filterable-head">'+filterHeader("Обоснование","basis")+'</th><th class="filterable-head">'+filterHeader("Наименование","name")+'</th><th>Ед. изм.</th><th>Кол-во</th><th>Цена на начало работ</th><th>Стоимость на начало работ</th>'+months.map(function(x){return '<th>'+esc(x)+'</th>';}).join("")+'</tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table est-table gpr-table" data-table-key="gpr-v2"><thead>'+
+      '<tr><th class="e-sticky-1" rowspan="2">Тип</th><th class="e-sticky-2 filterable-head" rowspan="2">'+filterHeader("Поз. сметы","position")+'</th><th class="e-sticky-3 filterable-head" rowspan="2">'+filterHeader("Обоснование","basis")+'</th><th class="e-sticky-4 filterable-head" rowspan="2">'+filterHeader("Наименование","name")+'</th><th rowspan="2">Ед. изм.</th><th rowspan="2">Кол-во</th><th rowspan="2">Цена на начало работ</th><th rowspan="2">Стоимость на начало работ</th>'+yearHead+'</tr>'+
+      '<tr>'+monthHead+'</tr></thead><tbody>'+body+'</tbody></table></div></div>';
+  }
+
+  function openGprAllocationModal() {
+    const months=gprMonths(),levels=levelCodes(),existing=gprAssignments();
+    let modal=document.getElementById("gprAllocationModal");
+    if(!modal){
+      modal=document.createElement("div");
+      modal.id="gprAllocationModal";
+      modal.className="gpr-modal-backdrop";
+      document.body.appendChild(modal);
+    }
+    const years=[];
+    months.forEach(function(mon){
+      let y=years.find(function(x){return x.year===mon.year;});
+      if(!y){y={year:mon.year,count:0};years.push(y);}
+      y.count++;
+    });
+    modal.innerHTML='<div class="gpr-modal"><div class="gpr-modal-head"><strong>Разнести по месяцам</strong><button type="button" class="gpr-modal-close">×</button></div>'+
+      '<div class="gpr-modal-body"><div class="gpr-alloc-scroll"><table class="gpr-alloc-table"><thead><tr><th rowspan="2">Этаж / уровень</th>'+years.map(function(y){return '<th colspan="'+y.count+'">'+esc(y.year)+'</th>';}).join("")+'</tr><tr>'+months.map(function(mon){return '<th>'+esc(mon.month)+'</th>';}).join("")+'</tr></thead><tbody>'+
+      levels.map(function(level){
+        return '<tr><td>'+esc(summaryLevelLabel(level))+'</td>'+months.map(function(mon){
+          return '<td><input type="checkbox" class="gpr-month-check" data-level="'+esc(level)+'" data-month="'+esc(mon.key)+'" '+(existing[level]===mon.key?'checked':'')+'></td>';
+        }).join("")+'</tr>';
+      }).join("")+'</tbody></table></div></div>'+
+      '<div class="gpr-modal-foot"><button type="button" class="context-link gpr-cancel">Отмена</button><span class="spacer"></span><button type="button" class="context-link gpr-apply">Применить к графику</button></div></div>';
+    modal.classList.add("open");
+
+    modal.querySelectorAll(".gpr-month-check").forEach(function(check){
+      check.onchange=function(){
+        if(!check.checked) return;
+        modal.querySelectorAll('.gpr-month-check[data-level="'+CSS.escape(check.dataset.level)+'"]').forEach(function(other){
+          if(other!==check) other.checked=false;
+        });
+      };
+    });
+    function close(){modal.classList.remove("open");}
+    modal.querySelector(".gpr-modal-close").onclick=close;
+    modal.querySelector(".gpr-cancel").onclick=close;
+    modal.onclick=function(e){if(e.target===modal) close();};
+    modal.querySelector(".gpr-apply").onclick=function(){
+      const next={};
+      modal.querySelectorAll(".gpr-month-check:checked").forEach(function(check){next[check.dataset.level]=check.dataset.month;});
+      ui.gprAssignments=next;
+      localStorage.setItem("filimonova.gpr.assignments",JSON.stringify(next));
+      close();
+      rerenderContent();
+    };
+  }
+
+  function openGprDisplay() {
+    let pop=document.getElementById("gprDisplayPopover");
+    if(!pop){
+      pop=document.createElement("div");
+      pop.id="gprDisplayPopover";
+      pop.className="gpr-display-popover";
+      pop.innerHTML='<strong>Отображение</strong><label><input type="checkbox" checked data-gpr-show="price"> Цена на начало работ</label><label><input type="checkbox" checked data-gpr-show="amount"> Стоимость на начало работ</label><label><input type="checkbox" checked data-gpr-show="months"> Месячные суммы</label><label><input type="checkbox" data-gpr-show="index"> Индекс месяца</label><label><input type="checkbox" checked> Материалы</label><label><input type="checkbox" checked> Работы</label>';
+      document.body.appendChild(pop);
+    }
+    const btn=document.querySelector('[data-gpr-action="display"]');
+    const r=btn.getBoundingClientRect();
+    pop.style.right=Math.max(8,window.innerWidth-r.right)+"px";
+    pop.style.top=(r.bottom+5)+"px";
+    pop.classList.toggle("open");
+  }
+
+  function wireGprControls() {
+    const spread=document.querySelector('[data-gpr-action="spread"]');
+    const display=document.querySelector('[data-gpr-action="display"]');
+    const excel=document.querySelector('[data-gpr-action="excel"]');
+    if(spread) spread.onclick=openGprAllocationModal;
+    if(display) display.onclick=openGprDisplay;
+    if(excel) excel.onclick=function(){alert("Экспорт ГПР формируется только в Excel (.xlsx).");};
   }
 
   function renderSupplySummary() {
@@ -1705,6 +1899,7 @@
     renderContent(ui.page,tab);
     wireTableControls();
     wireServiceControls();
+    wireGprControls();
 
     if (scrollState) {
       const nextScroller = document.querySelector("#workArea .engineering-scroll");
@@ -1762,6 +1957,7 @@
     renderContent(pageKey,tab);
     wireTableControls();
     wireServiceControls();
+    wireGprControls();
 
     if (previousScroll && previousPage === pageKey && previousTab === tab) {
       const nextScroller = document.querySelector("#workArea .engineering-scroll");
