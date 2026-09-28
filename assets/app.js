@@ -1216,23 +1216,23 @@
       {id:"transport",name:"Транспортные расходы подрядчика",kind:"input",v:base.transport},
       {id:"materials",name:"Материалы подрядчика",kind:"input",v:base.materials},
       {id:"direct",name:"Итого прямые затраты",kind:"subtotal",v:direct,refs:["salary","machines","transport","materials"],formula:"Заработная плата + Машины + Транспорт + Материалы"},
-      {id:"ohr",name:"Общехозяйственные и общепроизводственные расходы",kind:"formula",pct:109.31,v:ohr,refs:["salary","drivers"],formula:"(Заработная плата + ЗП машинистов) × 109,31%"},
-      {id:"profit",name:"Плановая прибыль",kind:"formula",pct:105.63,v:profit,refs:["salary","drivers"],formula:"(Заработная плата + ЗП машинистов) × 105,63%"},
-      {id:"temporary",name:"Временные здания и сооружения",kind:"formula",pct:3.7,k:.93,v:temp,refs:["salary","drivers"],formula:"(Заработная плата + ЗП машинистов) × 3,70% × 0,93"},
-      {id:"winter",name:"Дополнительные средства при производстве СМР в зимнее время",kind:"formula",pct:2.574,k:.93,v:winter,refs:["salary","drivers"],formula:"(Заработная плата + ЗП машинистов) × 2,5740% × 0,93"},
+      {id:"ohr",name:"Общехозяйственные и общепроизводственные расходы",kind:"formula",pct:109.31,v:ohr,refs:["salary","drivers","ohr:pct"],formula:"(Заработная плата + ЗП машинистов) × 109,31%"},
+      {id:"profit",name:"Плановая прибыль",kind:"formula",pct:105.63,v:profit,refs:["salary","drivers","profit:pct"],formula:"(Заработная плата + ЗП машинистов) × 105,63%"},
+      {id:"temporary",name:"Временные здания и сооружения",kind:"formula",pct:3.7,k:.93,v:temp,refs:["salary","drivers","temporary:pct","temporary:k"],formula:"(Заработная плата + ЗП машинистов) × 3,70% × 0,93"},
+      {id:"winter",name:"Дополнительные средства при производстве СМР в зимнее время",kind:"formula",pct:2.574,k:.93,v:winter,refs:["salary","drivers","winter:pct","winter:k"],formula:"(Заработная плата + ЗП машинистов) × 2,5740% × 0,93"},
       {id:"works",name:"Итого строительных и иных специальных монтажных работ",kind:"subtotal",v:works,refs:["direct","ohr","profit","temporary","winter"],formula:"Прямые затраты + ОХР + Плановая прибыль + Временные + Зимние"},
       {id:"otherGroup",name:"Прочие затраты",kind:"group"},
-      {id:"soc",name:"Затраты, связанные с отчислениями на социальное страхование",kind:"formula",pct:34,v:soc,refs:["salary","drivers"],formula:"(Заработная плата + ЗП машинистов) × 34%"},
-      {id:"travel",name:"Средства, связанные с подвижным и разъездным характером работ",kind:"formula",pct:0,v:travel,refs:["salary","drivers"],formula:"(Заработная плата + ЗП машинистов) × 0%"},
+      {id:"soc",name:"Затраты, связанные с отчислениями на социальное страхование",kind:"formula",pct:34,v:soc,refs:["salary","drivers","soc:pct"],formula:"(Заработная плата + ЗП машинистов) × 34%"},
+      {id:"travel",name:"Средства, связанные с подвижным и разъездным характером работ",kind:"formula",pct:0,v:travel,refs:["salary","drivers","travel:pct"],formula:"(Заработная плата + ЗП машинистов) × 0%"},
       {id:"other",name:"Итого прочие затраты",kind:"subtotal",v:other,refs:["soc","travel"],formula:"Социальное страхование + разъездной характер"},
       {id:"totalWorks",name:"Всего строительных и иных специальных монтажных работ",kind:"subtotal",v:totalWorks,refs:["works","other"],formula:"Итого СМР + прочие затраты"},
-      {id:"returnTemp",name:"Возврат от временных зданий и сооружений",kind:"formula",pct:15,v:ret,refs:["temporary"],formula:"− Временные здания и сооружения × 15%"},
+      {id:"returnTemp",name:"Возврат от временных зданий и сооружений",kind:"formula",pct:15,v:ret,refs:["temporary","returnTemp:pct"],formula:"− Временные здания и сооружения × 15%"},
       {id:"contractor",name:"Итого подрядных работ",kind:"subtotal",v:contractor,refs:["totalWorks","returnTemp"],formula:"Всего СМР + возврат от временных"},
       {id:"competitionK",name:"Конкурсный коэффициент",kind:"parameter",k:P.competition},
-      {id:"afterCompetition",name:"Итого с учётом конкурсного коэффициента",kind:"subtotal",v:afterCompetition,refs:["contractor"],formula:"Итого подрядных работ × конкурсный коэффициент"},
+      {id:"afterCompetition",name:"Итого с учётом конкурсного коэффициента",kind:"subtotal",v:afterCompetition,refs:["contractor","competitionK:k"],formula:"Итого подрядных работ × конкурсный коэффициент"},
       {id:"forecastK",name:"Прогнозный индекс",kind:"parameter",k:P.forecast,editable:true},
-      {id:"afterForecast",name:"Итого с учётом прогнозного индекса",kind:"subtotal",v:afterForecast,refs:["afterCompetition"],formula:"Итого с конкурсным коэффициентом × прогнозный индекс"},
-      {id:"vat",name:"НДС",kind:"formula",pct:P.vat,v:vat,refs:["afterForecast"],formula:"Итого с прогнозным индексом × НДС"},
+      {id:"afterForecast",name:"Итого с учётом прогнозного индекса",kind:"subtotal",v:afterForecast,refs:["afterCompetition","forecastK:k"],formula:"Итого с конкурсным коэффициентом × прогнозный индекс"},
+      {id:"vat",name:"НДС",kind:"formula",pct:P.vat,v:vat,refs:["afterForecast","vat:pct"],formula:"Итого с прогнозным индексом × НДС"},
       {id:"grand",name:"Всего с НДС",kind:"final",v:grand,refs:["afterForecast","vat"],formula:"Итого с прогнозным индексом + НДС"}
     ];
   }
@@ -1243,6 +1243,39 @@
     if(mode==="forecast") return money(row.v*P.forecast);
     if(mode==="competition") return money(row.v*P.competition);
     return money(row.v*P.competition*P.forecast);
+  }
+
+  function currentFormulaParts(r) {
+    const P=ui.currentPrice||{forecast:1.0552,competition:1,vat:0};
+    const parts={
+      direct:["=",{r:"salary",t:"Заработная плата"}," + ",{r:"machines",t:"Эксплуатация машин и механизмов"}," + ",{r:"transport",t:"Транспортные расходы подрядчика"}," + ",{r:"materials",t:"Материалы подрядчика"}],
+      ohr:["=(",{r:"salary",t:"Заработная плата"}," + ",{r:"drivers",t:"Заработная плата машинистов"},") × ",{r:"ohr:pct",t:"109,31%"}],
+      profit:["=(",{r:"salary",t:"Заработная плата"}," + ",{r:"drivers",t:"Заработная плата машинистов"},") × ",{r:"profit:pct",t:"105,63%"}],
+      temporary:["=(",{r:"salary",t:"Заработная плата"}," + ",{r:"drivers",t:"Заработная плата машинистов"},") × ",{r:"temporary:pct",t:"3,70%"}," × ",{r:"temporary:k",t:"0,93"}," = 3,441% базы"],
+      winter:["=(",{r:"salary",t:"Заработная плата"}," + ",{r:"drivers",t:"Заработная плата машинистов"},") × ",{r:"winter:pct",t:"2,5740%"}," × ",{r:"winter:k",t:"0,93"}," = 2,394% базы"],
+      works:["=",{r:"direct",t:"Итого прямые затраты"}," + ",{r:"ohr",t:"Общехозяйственные и общепроизводственные расходы"}," + ",{r:"profit",t:"Плановая прибыль"}," + ",{r:"temporary",t:"Временные здания и сооружения"}," + ",{r:"winter",t:"Дополнительные средства в зимнее время"}],
+      soc:["=(",{r:"salary",t:"Заработная плата"}," + ",{r:"drivers",t:"Заработная плата машинистов"},") × ",{r:"soc:pct",t:"34%"}],
+      travel:["=(",{r:"salary",t:"Заработная плата"}," + ",{r:"drivers",t:"Заработная плата машинистов"},") × ",{r:"travel:pct",t:"0%"}],
+      other:["=",{r:"soc",t:"Затраты на социальное страхование"}," + ",{r:"travel",t:"Средства, связанные с подвижным и разъездным характером работ"}],
+      totalWorks:["=",{r:"works",t:"Итого строительных и иных специальных монтажных работ"}," + ",{r:"other",t:"Итого прочие затраты"}],
+      returnTemp:["=−",{r:"temporary",t:"Временные здания и сооружения"}," × ",{r:"returnTemp:pct",t:"15%"}],
+      contractor:["=",{r:"totalWorks",t:"Всего строительных и иных специальных монтажных работ"}," + ",{r:"returnTemp",t:"Возврат от временных зданий и сооружений"}],
+      afterCompetition:["=",{r:"contractor",t:"Итого подрядных работ"}," × ",{r:"competitionK:k",t:Number(P.competition||1).toFixed(4).replace(".",",")}],
+      afterForecast:["=",{r:"afterCompetition",t:"Итого с учётом конкурсного коэффициента"}," × ",{r:"forecastK:k",t:Number(P.forecast||1.0552).toFixed(4).replace(".",",")}],
+      vat:["=",{r:"afterForecast",t:"Итого с учётом прогнозного индекса"}," × ",{r:"vat:pct",t:String(P.vat||0).replace(".",",")+"%"}],
+      grand:["=",{r:"afterForecast",t:"Итого с учётом прогнозного индекса"}," + ",{r:"vat",t:"НДС"}]
+    };
+    return parts[r.id] || [];
+  }
+
+  function currentFormulaHtml(r) {
+    const refs=r.refs||[];
+    const colors=["formula-c1","formula-c2","formula-c3","formula-c4"];
+    return currentFormulaParts(r).map(function(x){
+      if(typeof x==="string") return esc(x);
+      const idx=Math.max(0,refs.indexOf(x.r));
+      return '<span class="formula-token '+colors[idx%4]+'">'+esc(x.t)+'</span>';
+    }).join("");
   }
 
   function renderCurrentPricePlaceholder() {
@@ -1258,7 +1291,7 @@
       let k="";
       if(r.id==="forecastK") k='<input class="forecast-input" value="'+Number((ui.currentPrice||{}).forecast||1.0552).toFixed(4).replace(".",",")+'" aria-label="Прогнозный индекс">';
       else if(r.k!=null) k=Number(r.k).toFixed(4).replace(".",",");
-      return '<tr class="'+cls+' data-row" data-formula-row="'+r.id+'"><td class="center">'+no+'</td>'+filterCell("name",r.name,esc(r.name),"")+'<td class="num">'+pct+'</td><td class="num rate-cell">'+k+'</td><td class="num formula-amount" data-formula-cell="'+r.id+'">'+money(r.v)+'</td><td class="num muted">'+currentRefValue(r,"forecast")+'</td><td class="num muted">'+currentRefValue(r,"competition")+'</td><td class="num muted">'+currentRefValue(r,"both")+'</td></tr>';
+      return '<tr class="'+cls+' data-row" data-formula-row="'+r.id+'"><td class="center">'+no+'</td>'+filterCell("name",r.name,esc(r.name),"")+'<td class="num" data-formula-cell="'+r.id+':pct">'+pct+'</td><td class="num rate-cell" data-formula-cell="'+r.id+':k">'+k+'</td><td class="num formula-amount" data-formula-cell="'+r.id+'">'+money(r.v)+'</td><td class="num muted">'+currentRefValue(r,"forecast")+'</td><td class="num muted">'+currentRefValue(r,"competition")+'</td><td class="num muted">'+currentRefValue(r,"both")+'</td></tr>';
     }).join("");
     $("workArea").className="work-area table-work current-price-work";
     $("workArea").innerHTML='<div class="formula-strip"><div class="formula-address">—</div><div class="formula-name"><b>fx</b><span>Выберите расчётную строку</span></div><div class="formula-expression"></div></div>'+
@@ -1266,13 +1299,17 @@
     const byId=new Map(model.map(function(x){return [x.id,x];}));
     function select(id){
       const r=byId.get(id);if(!r)return;
-      document.querySelectorAll(".formula-active,.formula-ref").forEach(function(x){x.classList.remove("formula-active","formula-ref");});
-      const row=document.querySelector('[data-formula-row="'+CSS.escape(id)+'"]');
-      if(row) row.querySelector('[data-formula-cell]')?.classList.add("formula-active");
-      (r.refs||[]).forEach(function(ref){document.querySelector('[data-formula-row="'+CSS.escape(ref)+'"] [data-formula-cell]')?.classList.add("formula-ref");});
+      document.querySelectorAll(".formula-active,.formula-ref1,.formula-ref2,.formula-ref3,.formula-ref4").forEach(function(x){x.classList.remove("formula-active","formula-ref1","formula-ref2","formula-ref3","formula-ref4");});
+      const active=document.querySelector('[data-formula-cell="'+CSS.escape(id)+'"]');
+      if(active) active.classList.add("formula-active");
+      const refClasses=["formula-ref1","formula-ref2","formula-ref3","formula-ref4"];
+      (r.refs||[]).forEach(function(ref,i){
+        const cell=document.querySelector('[data-formula-cell="'+CSS.escape(ref)+'"]');
+        if(cell) cell.classList.add(refClasses[i%4]);
+      });
       document.querySelector(".formula-address").textContent="E"+(model.indexOf(r)+3);
       document.querySelector(".formula-name span").textContent=r.name;
-      document.querySelector(".formula-expression").textContent=r.formula||"";
+      document.querySelector(".formula-expression").innerHTML=currentFormulaHtml(r);
     }
     document.querySelectorAll("[data-formula-row]").forEach(function(row){row.onclick=function(){select(row.dataset.formulaRow);};});
     const input=document.querySelector(".forecast-input");
