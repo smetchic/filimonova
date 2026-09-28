@@ -262,22 +262,6 @@ svg{display:block}
   border-bottom:1px solid var(--line);
   background:#FAFAFA
 }
-.vertical-sub{
-  height:58px!important;
-  min-height:58px!important;
-  width:28px!important;
-  min-width:28px!important;
-  max-width:28px!important;
-  padding:0!important
-}
-.vertical-sub > span{
-  display:inline-block;
-  writing-mode:vertical-rl;
-  transform:rotate(180deg);
-  line-height:1;
-  font-size:10px;
-  color:#595961
-}
 @media(max-width:1100px){
   .spec-table .sticky-3{width:210px;min-width:210px;max-width:210px}
 }
@@ -562,7 +546,6 @@ svg{display:block}
 .spec-group-title,.est-table .est-group-title{min-width:0!important;max-width:none!important}
 .spec-table,.eng-table{min-width:0}
 .spec-table th,.spec-table td,.eng-table th,.eng-table td{overflow:hidden;text-overflow:ellipsis}
-.vertical-sub{width:28px!important;min-width:28px!important;max-width:28px!important}
 
 /* Resize / autofit */
 .resize-handle{
@@ -778,15 +761,6 @@ svg{display:block}
 .column-filter-trigger.active{color:#245FC7}
 
 
-/* Working summary vertical subheaders: keep the level number away from the parent-header rule */
-.working-summary .vertical-sub{
-  height:64px!important;
-  min-height:64px!important;
-}
-.working-summary .vertical-sub > span{
-  position:relative;
-  top:5px;
-}
 
 
 /* GPR — same engineering hierarchy as Estimate + canonical year/month grid */
@@ -935,17 +909,6 @@ svg{display:block}
 }
 
 
-/* Working summary: visible gap between parent level rule and vertical Section labels */
-.working-summary thead tr:nth-child(2) .vertical-sub{
-  height:70px!important;
-  min-height:70px!important;
-  padding:10px 0 0!important;
-  vertical-align:top!important;
-}
-.working-summary thead tr:nth-child(2) .vertical-sub > span{
-  position:static!important;
-  display:inline-block;
-}
 
 
 /* GPR period controls */
@@ -980,8 +943,7 @@ svg{display:block}
 }
 
 
-/* Global EngineeringTable header rule: headers wrap when a column is narrowed.
-   The only exception is the intentionally vertical specification subheader. */
+/* Global EngineeringTable header rule: headers wrap when a column is narrowed. */
 .spec-table thead th,
 .eng-table thead th{
   white-space:normal!important;
@@ -997,21 +959,7 @@ svg{display:block}
   text-overflow:clip!important;
   line-height:14px!important;
 }
-.vertical-sub,
-.vertical-sub > span{
-  white-space:nowrap!important;
-}
 
-/* Keep the special vertical labels compact: a small breathing space, not a tall gap. */
-.working-summary thead tr:nth-child(2) .vertical-sub{
-  height:62px!important;
-  min-height:62px!important;
-  padding:4px 0 0!important;
-  vertical-align:top!important;
-}
-.working-summary thead tr:nth-child(2) .vertical-sub > span{
-  position:static!important;
-}
 
 /* Resize remains available by cursor/drag, but no extra blue guide line is drawn. */
 .resize-handle:hover::after{display:none!important}
