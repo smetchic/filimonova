@@ -656,7 +656,10 @@
       table.insertBefore(cg,table.firstChild);
     }
     let widths=loadTableWidths(table);
-    if(!Array.isArray(widths)||widths.length!==count) widths=Array.from({length:count},function(_,i){return intrinsicColumnWidth(table,i);});
+    if(!Array.isArray(widths)||widths.length!==count) {
+      widths=Array.from({length:count},function(_,i){return intrinsicColumnWidth(table,i);});
+      saveTableWidths(table,widths);
+    }
     Array.from(cg.children).forEach(function(col,i){col.style.width=widths[i]+"px";});
     updateStickyOffsets(table,widths);
 
@@ -911,7 +914,7 @@
               const sRows = zRows.filter(function(r){ return r.section.name === sectionName; });
               const sKey = "spec-project:section:"+bs+":"+zone+":"+sectionName;
               body += specGroupRow(sectionName,sRows,sKey,3,levels);
-              if (ui.collapsed.has(sKey)) return;
+              if (ui.collapsed.has(sKey) || ui.collapseLeaves) return;
               sRows.forEach(function(r) {
                 body += '<tr class="data-row" data-row-id="' + esc(r.id) + '" data-material-id="' + esc(r.catalog_item_id||"") + '">';
                 body += '<td class="sticky-1 center">' + esc(r.position_no) + '</td>';
@@ -1039,7 +1042,7 @@
             const sRows = zRows.filter(function(r){ return r.sectionName === name; });
             const sKey = "spec-summary:section:"+zone+":"+name;
             body += summaryGroupRow(name,sRows,sKey,2,levels);
-            if (ui.collapsed.has(sKey)) return;
+            if (ui.collapsed.has(sKey) || ui.collapseLeaves) return;
             sRows.forEach(function(r,index) {
               const s1 = Number(r.bySection["Секция 1"] || 0);
               const s2 = Number(r.bySection["Секция 2"] || 0);
@@ -1141,7 +1144,7 @@
         if (!sRows.length) return;
         const sKey = "est:section:"+e.number+":"+s.id;
         body += estimateGroupRow(s.title,sRows,sKey,1,m);
-        if (ui.collapsed.has(sKey)) return;
+        if (ui.collapsed.has(sKey) || ui.collapseLeaves) return;
 
         sRows.forEach(function(r) {
           const c = rowCost(r,m);
@@ -1339,7 +1342,7 @@
             const sr = zr.filter(function(r){return r.sectionName===name;});
             const sk = "supply:section:"+zone+":"+name;
             body += group(name,sr,sk,2);
-            if (ui.collapsed.has(sk)) return;
+            if (ui.collapsed.has(sk) || ui.collapseLeaves) return;
             sr.forEach(function(r,index) {
               const q = Number(r.bySection["Секция 1"]||0)+Number(r.bySection["Секция 2"]||0),v=q*Number(r.volumePerPiece||0);
               body += '<tr class="data-row" data-material-id="'+esc(r.catalogItemId||"")+'"><td class="sticky-1 center">'+(index+1)+'</td>'+
@@ -1398,7 +1401,7 @@
           const zk="price:zone:"+zone;body+=group(zone,zr,zk,1);if(ui.collapsed.has(zk))return;
           Array.from(new Set(zr.map(function(r){return r.sectionName;}))).forEach(function(name){
             const sr=zr.filter(function(r){return r.sectionName===name;});const sk="price:section:"+zone+":"+name;
-            body+=group(name,sr,sk,2);if(ui.collapsed.has(sk))return;
+            body+=group(name,sr,sk,2);if(ui.collapsed.has(sk) || ui.collapseLeaves)return;
             sr.forEach(function(r,index){
               const q=Number(r.bySection["Секция 1"]||0)+Number(r.bySection["Секция 2"]||0);
               body+='<tr class="data-row" data-material-id="'+esc(r.catalogItemId||"")+'"><td class="sticky-1 center">'+(index+1)+'</td>'+
@@ -1465,7 +1468,7 @@
       const key = "ks6:"+e.number;
       registerGroup(key);
       body += '<tr class="group-row group-toggle" data-group-key="'+key+'"><td colspan="5" class="est-group-title"><span class="group-arrow">'+groupArrow(key)+'</span>'+esc("Смета №"+e.number+" · "+e.name)+'</td><td class="num">'+fmt(rows.reduce(function(a,r){return a+Number(r.quantity||0);},0))+'</td><td></td><td></td><td class="num">'+fmt(rows.reduce(function(a,r){return a+Number(r.quantity||0);},0))+'</td></tr>';
-      if (ui.collapsed.has(key)) return;
+      if (ui.collapsed.has(key) || ui.collapseLeaves) return;
       rows.forEach(function(r) {
         body += '<tr class="data-row"><td>'+ (r.row_type==="work"?"Р":"М") +'</td><td>'+esc(r.position)+'</td><td>'+esc(r.basis)+'</td><td>'+esc(r.name)+'</td><td>'+esc(r.unit)+'</td><td class="num">'+fmt(r.quantity)+'</td><td class="num"></td><td class="num">0</td><td class="num">'+fmt(r.quantity)+'</td></tr>';
       });
@@ -1612,6 +1615,7 @@
       row.addEventListener("click",function(e) {
         if(e.target.closest(".column-filter-trigger,.resize-handle")) return;
         const key = row.dataset.groupKey;
+        ui.collapseLeaves = false;
         if (ui.collapsed.has(key)) ui.collapsed.delete(key);
         else ui.collapsed.add(key);
         rerenderContent();
@@ -1630,11 +1634,13 @@
     const collapse = document.querySelector('[data-service="collapse"]');
     const expand = document.querySelector('[data-service="expand"]');
     if (collapse) collapse.addEventListener("click",function() {
-      ui.currentGroupKeys.forEach(function(k){ui.collapsed.add(k);});
+      ui.collapsed.clear();
+      ui.collapseLeaves = true;
       rerenderContent();
     });
     if (expand) expand.addEventListener("click",function() {
       ui.collapsed.clear();
+      ui.collapseLeaves = false;
       rerenderContent();
     });
   }
