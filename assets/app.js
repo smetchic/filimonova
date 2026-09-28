@@ -409,6 +409,14 @@
     return code === "К" ? "Кровля" : code;
   }
 
+  function summaryLevelLabel(code) {
+    if (code === "Ц") return "Цоколь";
+    if (code === "Ч") return "Чердак";
+    if (code === "К") return "Крыша";
+    if (/^\d+$/.test(String(code))) return String(code) + " этаж";
+    return String(code);
+  }
+
   function filterBucket() {
     const key = currentViewKey();
     if (!ui.columnFilters) ui.columnFilters = {};
@@ -452,7 +460,8 @@
 
   function filterHeader(label,field) {
     const active = !!filterBucket()[field];
-    return '<span class="header-label">' + esc(label) + '</span><button class="column-filter-trigger' + (active ? ' active' : '') + '" type="button" data-column-filter="' + esc(field) + '" aria-label="Фильтр ' + esc(label) + '">⌄</button>';
+    const icon = '<svg class="filter-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.25h11L9.25 8.2v3.55l-2.5 1.25V8.2L2.5 3.25z" fill="currentColor"/></svg>';
+    return '<span class="header-label">' + esc(label) + '</span><button class="column-filter-trigger' + (active ? ' active' : '') + '" type="button" data-column-filter="' + esc(field) + '" aria-label="Фильтр ' + esc(label) + '">' + icon + '</button>';
   }
 
   function filterCell(field,value,content,extraClass) {
@@ -579,6 +588,11 @@
   }
 
   function intrinsicColumnWidth(table,index) {
+    if (table.classList.contains("working-summary")) {
+      if (index === 3 || index === 5) return 58;
+      if (index === 4 || index === 6) return 64;
+      if (index >= 7) return 28;
+    }
     let max=40;
     const cells=[];
     if(table.tHead) Array.from(table.tHead.rows).forEach(function(row){
@@ -939,7 +953,7 @@
       levels.map(function(x){ return '<th class="level-col">' + esc(x === "Всего" ? "Всего" : levelLabel(x)) + '</th>'; }).join("") +
       '</tr></thead>';
 
-    $("workArea").className = "work-area table-work";
+    $("workArea").className = "work-area table-work spec-work";
     $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="spec-table" data-table-key="spec-project">' + head + '<tbody>' + body + '</tbody></table></div></div>';
   }
 
@@ -1068,7 +1082,7 @@
       '<th class="sticky-2 filterable-head" rowspan="2">' + filterHeader("Марка","mark") + '</th>' +
       '<th class="sticky-3 filterable-head" rowspan="2">' + filterHeader("Наименование","name") + '</th>' +
       '<th colspan="2">Секция 1</th><th colspan="2">Секция 2</th>' +
-      levels.map(function(x){ return '<th colspan="2">' + esc(levelLabel(x)) + '</th>'; }).join("") +
+      levels.map(function(x){ return '<th colspan="2" class="floor-parent">' + esc(summaryLevelLabel(x)) + '</th>'; }).join("") +
       '</tr>';
     const head2 = '<tr>' +
       '<th class="qty-col">Кол-во, шт.</th><th class="vol-col">Объём, м³</th>' +
@@ -1076,8 +1090,8 @@
       levels.map(function(){ return '<th class="vertical-sub"><span>Секция 1</span></th><th class="vertical-sub"><span>Секция 2</span></th>'; }).join("") +
       '</tr>';
 
-    $("workArea").className = "work-area table-work";
-    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="spec-table working-summary" data-table-key="spec-summary"><thead>' + head1 + head2 + '</thead><tbody>' + body + '</tbody></table></div></div>';
+    $("workArea").className = "work-area table-work spec-work";
+    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="spec-table working-summary" data-table-key="spec-summary-v2"><thead>' + head1 + head2 + '</thead><tbody>' + body + '</tbody></table></div></div>';
   }
 
   function rowCost(row,m) {
@@ -1702,6 +1716,11 @@
   }
 
   function renderPage(pageKey,tabIndex) {
+    const previousPage = ui.page;
+    const previousTab = ui.tabs[previousPage] || 0;
+    const previousScroller = document.querySelector("#workArea .engineering-scroll");
+    const previousScroll = previousScroller ? {left:previousScroller.scrollLeft,top:previousScroller.scrollTop} : null;
+
     const page = pages[pageKey] || pages.home;
     ui.page = pageKey;
     localStorage.setItem("filimonova.ui.page",pageKey);
@@ -1743,6 +1762,14 @@
     renderContent(pageKey,tab);
     wireTableControls();
     wireServiceControls();
+
+    if (previousScroll && previousPage === pageKey && previousTab === tab) {
+      const nextScroller = document.querySelector("#workArea .engineering-scroll");
+      if (nextScroller) {
+        nextScroller.scrollLeft = previousScroll.left;
+        nextScroller.scrollTop = previousScroll.top;
+      }
+    }
   }
 
   tabLogin.addEventListener("click",function(){switchAuthTab("login");});
