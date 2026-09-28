@@ -776,3 +776,14 @@ svg{display:block}
   color:#7A7D84;
 }
 .column-filter-trigger.active{color:#245FC7}
+
+
+/* Working summary vertical subheaders: keep the level number away from the parent-header rule */
+.working-summary .vertical-sub{
+  height:64px!important;
+  min-height:64px!important;
+}
+.working-summary .vertical-sub > span{
+  position:relative;
+  top:5px;
+}
