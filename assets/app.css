@@ -675,3 +675,38 @@ svg{display:block}
 .progress{height:6px;margin:0 10px 8px;background:#ECEEF0;border-radius:5px;overflow:hidden}
 .progress i{display:block;height:100%;background:#738EA8}
 @media(max-width:760px){.material-overview{grid-template-columns:1fr}.material-tabs{gap:12px;overflow:auto}.material-identity span{font-size:14px}}
+
+
+/* Canonical visual reset — sourced from approved project references */
+.spec-table tbody td,.eng-table tbody td{height:28px!important;min-height:28px!important;padding:0 7px!important}
+.group-row td{height:28px!important;min-height:28px!important}
+.spec-table thead th,.eng-table thead th{
+  min-height:30px!important;height:30px!important;background:#F4F4F5!important;
+  color:#52525B!important;font-size:12px!important;font-weight:500!important;box-shadow:none!important
+}
+.material-card{width:min(900px,calc(100vw - 28px));background:#fff;border:1px solid #D4D4D8;border-radius:10px;box-shadow:0 14px 34px #00000015}
+.material-card-head{position:relative;min-height:0;padding:12px 48px 10px 16px;border-bottom:1px solid #E4E4E7}
+.material-section-label{font-size:11.5px;color:#71717A;margin-bottom:5px}
+.material-identity{gap:18px;align-items:baseline}
+.material-identity strong{font-size:21px;line-height:24px;font-weight:600}
+.material-identity span{font-size:17px;line-height:21px;font-weight:500;color:#3F3F46}
+.material-close{position:absolute;right:10px;top:8px;width:30px;height:30px;border-radius:6px;font-size:21px}
+.material-tabs{height:32px;align-items:flex-end;gap:20px;padding:0 16px;background:#FCFCFD}
+.material-tabs button{height:31px;font-size:12px;color:#5F6068}
+.material-body{padding:8px 10px 10px}
+.material-overview{grid-template-columns:minmax(0,1.35fr) minmax(320px,.85fr);gap:10px}
+.material-overview section,.material-section{border:1px solid #E4E4E7;border-radius:8px}
+.material-overview h3,.material-section h3{height:29px;padding:0 10px;background:#F7F7F8;border-bottom:1px solid #E4E4E7;font-size:11.5px;font-weight:600}
+.material-metrics>div{min-height:66px;padding:9px 11px}
+.material-metrics span,.material-cost-strip span{font-size:10.5px;color:#71717A;margin-bottom:3px}
+.material-metrics strong{font-size:17px;line-height:21px;font-weight:600}
+.material-cost-strip{margin-top:8px;border:1px solid #E4E4E7;border-radius:8px}
+.material-cost-strip>div{padding:9px 11px}
+.material-note{font-size:10.5px;color:#71717A}
+.floor-matrix{font-size:10px}
+.floor-matrix th,.floor-matrix td{height:26px;min-width:33px;padding:0 6px;border-color:#E4E4E7}
+.floor-matrix th{background:#F7F7F8;color:#5F6068;font-weight:500}
+.material-est-table{font-size:11px}
+.material-est-table th,.material-est-table td{height:28px;padding:0 7px;border-color:#E4E4E7}
+.material-est-table th{background:#F7F7F8;color:#52525B;font-weight:500}
+.material-tech{font-size:10.5px;border-color:#E4E4E7}
