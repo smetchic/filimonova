@@ -1015,3 +1015,45 @@ svg{display:block}
 
 /* Resize remains available by cursor/drag, but no extra blue guide line is drawn. */
 .resize-handle:hover::after{display:none!important}
+
+
+/* GPR period: text controls, no field boxes */
+.gpr-period{
+  gap:6px;
+  margin-left:12px;
+}
+.gpr-period-select,
+.gpr-period-year{
+  height:auto!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  padding:0 2px!important;
+  color:#38383E;
+  font:inherit;
+  font-size:11.5px;
+}
+.gpr-period-select{
+  width:auto!important;
+  min-width:42px;
+  cursor:pointer;
+}
+.gpr-period-year{
+  width:40px!important;
+  min-width:40px;
+  text-align:left;
+  -moz-appearance:textfield;
+}
+.gpr-period-year::-webkit-outer-spin-button,
+.gpr-period-year::-webkit-inner-spin-button{
+  -webkit-appearance:none;
+  margin:0;
+}
+.gpr-period-select:focus,
+.gpr-period-year:focus{
+  outline:none!important;
+  border:0!important;
+  box-shadow:none!important;
+  background:#F4F4F5!important;
+}
