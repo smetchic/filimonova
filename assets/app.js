@@ -38,7 +38,9 @@
       stairs: true,
       showHomeTotal: localStorage.getItem("filimonova.spec.showHomeTotal") === "1"
     },
-    estimates: { "200": true, "201": true, "202": true, "203": true, "207": true }
+    estimates: { "200": true, "201": true, "202": true, "203": true, "207": true },
+    columnFilters: {},
+    columnSort: {}
   };
 
   let dataState = {
@@ -403,6 +405,349 @@
     return norm(parts.join(" ")).includes(q);
   }
 
+  function levelLabel(code) {
+    return code === "К" ? "Кровля" : code;
+  }
+
+  function filterBucket() {
+    const key = currentViewKey();
+    if (!ui.columnFilters) ui.columnFilters = {};
+    if (!ui.columnFilters[key]) ui.columnFilters[key] = {};
+    return ui.columnFilters[key];
+  }
+
+  function sortBucket() {
+    const key = currentViewKey();
+    if (!ui.columnSort) ui.columnSort = {};
+    return ui.columnSort[key] || null;
+  }
+
+  function columnFilterPass(field,value) {
+    const set = filterBucket()[field];
+    if (!set || !set.size) return true;
+    return set.has(String(value == null ? "" : value));
+  }
+
+  function rowPassesColumnFilters(values) {
+    const filters = filterBucket();
+    return Object.keys(filters).every(function(field) {
+      const set = filters[field];
+      if (!set || !set.size) return true;
+      return set.has(String(values[field] == null ? "" : values[field]));
+    });
+  }
+
+  function sortRows(records,getters) {
+    const sort = sortBucket();
+    if (!sort || !getters || !getters[sort.field]) return records;
+    return records.slice().sort(function(a,b) {
+      const av = getters[sort.field](a), bv = getters[sort.field](b);
+      const an = Number(av), bn = Number(bv);
+      let cmp;
+      if (Number.isFinite(an) && Number.isFinite(bn) && String(av).trim() !== "" && String(bv).trim() !== "") cmp = an-bn;
+      else cmp = String(av == null ? "" : av).localeCompare(String(bv == null ? "" : bv),"ru",{numeric:true,sensitivity:"base"});
+      return sort.dir === "desc" ? -cmp : cmp;
+    });
+  }
+
+  function filterHeader(label,field) {
+    const active = !!filterBucket()[field];
+    return '<span class="header-label">' + esc(label) + '</span><button class="column-filter-trigger' + (active ? ' active' : '') + '" type="button" data-column-filter="' + esc(field) + '" aria-label="Фильтр ' + esc(label) + '">⌄</button>';
+  }
+
+  function filterCell(field,value,content,extraClass) {
+    return '<td class="' + esc(extraClass || "") + '" data-filter-field="' + esc(field) + '" data-filter-value="' + esc(value == null ? "" : value) + '">' + content + '</td>';
+  }
+
+  function ensureFilterPopup() {
+    let pop = document.getElementById("columnFilterPopup");
+    if (pop) return pop;
+    pop = document.createElement("div");
+    pop.id = "columnFilterPopup";
+    pop.className = "column-filter-popup";
+    document.body.appendChild(pop);
+    return pop;
+  }
+
+  function openColumnFilter(trigger) {
+    const field = trigger.dataset.columnFilter;
+    const pop = ensureFilterPopup();
+    const cells = Array.from(document.querySelectorAll('#workArea [data-filter-field="' + CSS.escape(field) + '"]'));
+    let values = Array.from(new Set(cells.map(function(c){ return c.dataset.filterValue || ""; })));
+    values.sort(function(a,b){ return a.localeCompare(b,"ru",{numeric:true,sensitivity:"base"}); });
+    const existing = filterBucket()[field];
+    let chosen = new Set(existing ? Array.from(existing) : values);
+    const currentSort = sortBucket();
+
+    function valueRows(query) {
+      const q = norm(query || "");
+      const shown = values.filter(function(v){ return !q || norm(v).includes(q); });
+      const allChecked = shown.length > 0 && shown.every(function(v){return chosen.has(v);});
+      const someChecked = shown.some(function(v){return chosen.has(v);});
+      return '<label class="filter-value filter-all"><input type="checkbox" data-filter-all ' + (allChecked ? 'checked' : '') + '><span>(Выбрать все)</span></label>' +
+        shown.map(function(v){
+          return '<label class="filter-value"><input type="checkbox" data-filter-value-choice="' + esc(v) + '" ' + (chosen.has(v)?'checked':'') + '><span>' + esc(v || "(Пусто)") + '</span></label>';
+        }).join("");
+    }
+
+    pop.innerHTML =
+      '<button class="filter-command" type="button" data-sort-dir="asc">Сортировать по возрастанию' + (currentSort && currentSort.field===field && currentSort.dir==="asc" ? ' ✓' : '') + '</button>' +
+      '<button class="filter-command" type="button" data-sort-dir="desc">Сортировать по убыванию' + (currentSort && currentSort.field===field && currentSort.dir==="desc" ? ' ✓' : '') + '</button>' +
+      '<button class="filter-command" type="button" data-sort-clear>Очистить сортировку</button>' +
+      '<div class="filter-sep"></div><div class="filter-title">Фильтр текущей колонки</div>' +
+      '<input class="filter-search" type="text" placeholder="Поиск по значениям" autocomplete="off">' +
+      '<div class="filter-values">' + valueRows("") + '</div>' +
+      '<div class="filter-footer"><button class="filter-clear" type="button">Очистить фильтр</button><span class="spacer"></span><button class="filter-btn" type="button" data-filter-cancel>Отмена</button><button class="filter-btn primary-small" type="button" data-filter-ok>ОК</button></div>';
+
+    const rect = trigger.getBoundingClientRect();
+    pop.style.left = Math.max(8,Math.min(window.innerWidth-294,rect.right-286)) + "px";
+    pop.style.top = Math.min(window.innerHeight-390,rect.bottom+4) + "px";
+    pop.classList.add("open");
+
+    const search = pop.querySelector(".filter-search");
+    const list = pop.querySelector(".filter-values");
+    function bindValues() {
+      const all = list.querySelector("[data-filter-all]");
+      if (all) {
+        const shown = Array.from(list.querySelectorAll("[data-filter-value-choice]"));
+        all.indeterminate = shown.some(function(x){return x.checked;}) && !shown.every(function(x){return x.checked;});
+        all.onchange = function(){
+          shown.forEach(function(x){
+            x.checked = all.checked;
+            const v=x.dataset.filterValueChoice;
+            if(x.checked) chosen.add(v); else chosen.delete(v);
+          });
+        };
+      }
+      list.querySelectorAll("[data-filter-value-choice]").forEach(function(x){
+        x.onchange=function(){
+          const v=x.dataset.filterValueChoice;
+          if(x.checked) chosen.add(v); else chosen.delete(v);
+          bindValues();
+        };
+      });
+    }
+    bindValues();
+    search.oninput=function(){ list.innerHTML=valueRows(search.value); bindValues(); };
+    pop.querySelectorAll("[data-sort-dir]").forEach(function(b){
+      b.onclick=function(){
+        if(!ui.columnSort) ui.columnSort={};
+        ui.columnSort[currentViewKey()]={field:field,dir:b.dataset.sortDir};
+        pop.classList.remove("open");
+        rerenderContent();
+      };
+    });
+    pop.querySelector("[data-sort-clear]").onclick=function(){
+      if(ui.columnSort) delete ui.columnSort[currentViewKey()];
+      pop.classList.remove("open");
+      rerenderContent();
+    };
+    pop.querySelector("[data-filter-cancel]").onclick=function(){pop.classList.remove("open");};
+    pop.querySelector(".filter-clear").onclick=function(){
+      delete filterBucket()[field];
+      pop.classList.remove("open");
+      rerenderContent();
+    };
+    pop.querySelector("[data-filter-ok]").onclick=function(){
+      const shownValues = values;
+      if (chosen.size === shownValues.length && shownValues.every(function(v){return chosen.has(v);})) delete filterBucket()[field];
+      else filterBucket()[field]=new Set(Array.from(chosen));
+      pop.classList.remove("open");
+      rerenderContent();
+    };
+    setTimeout(function(){search.focus();},0);
+  }
+
+  function logicalHeaderGrid(table) {
+    const grid=[];
+    Array.from(table.tHead ? table.tHead.rows : []).forEach(function(row,r){
+      if(!grid[r]) grid[r]=[];
+      let c=0;
+      Array.from(row.cells).forEach(function(cell){
+        while(grid[r][c]) c++;
+        const rs=cell.rowSpan||1, cs=cell.colSpan||1;
+        cell.dataset.logicalStart=String(c);
+        cell.dataset.logicalSpan=String(cs);
+        for(let rr=r;rr<r+rs;rr++){
+          if(!grid[rr]) grid[rr]=[];
+          for(let cc=0;cc<cs;cc++) grid[rr][c+cc]=cell;
+        }
+        c+=cs;
+      });
+    });
+    return grid;
+  }
+
+  function intrinsicColumnWidth(table,index) {
+    let max=40;
+    const cells=[];
+    if(table.tHead) Array.from(table.tHead.rows).forEach(function(row){
+      Array.from(row.cells).forEach(function(cell){
+        if(Number(cell.dataset.logicalStart)===index && Number(cell.dataset.logicalSpan||1)===1) cells.push(cell);
+      });
+    });
+    Array.from(table.tBodies).forEach(function(body){
+      Array.from(body.rows).forEach(function(row){
+        let c=0;
+        Array.from(row.cells).forEach(function(cell){
+          const span=cell.colSpan||1;
+          if(span===1 && c===index) cells.push(cell);
+          c+=span;
+        });
+      });
+    });
+    cells.forEach(function(cell){
+      if(cell.classList.contains("vertical-sub")) { max=Math.max(max,28); return; }
+      const txt=(cell.textContent||"").trim();
+      const canvas=intrinsicColumnWidth.canvas||(intrinsicColumnWidth.canvas=document.createElement("canvas"));
+      const ctx=canvas.getContext("2d");
+      const cs=getComputedStyle(cell);
+      ctx.font=cs.font||"12px Segoe UI";
+      let w=Math.ceil(ctx.measureText(txt).width)+18;
+      if(cell.querySelector(".column-filter-trigger")) w+=28;
+      max=Math.max(max,w);
+    });
+    if(index===0) max=Math.max(40,Math.min(max,68));
+    return Math.max(28,Math.min(max,340));
+  }
+
+  function saveTableWidths(table,widths) {
+    const key="filimonova.tablewidths."+currentViewKey()+"."+(table.dataset.tableKey||table.className.replace(/\s+/g,"."));
+    localStorage.setItem(key,JSON.stringify(widths));
+  }
+
+  function loadTableWidths(table) {
+    const key="filimonova.tablewidths."+currentViewKey()+"."+(table.dataset.tableKey||table.className.replace(/\s+/g,"."));
+    try{return JSON.parse(localStorage.getItem(key)||"null");}catch(_){return null;}
+  }
+
+  function updateStickyOffsets(table,widths) {
+    const selectors=["sticky-1","sticky-2","sticky-3","e-sticky-1","e-sticky-2","e-sticky-3","e-sticky-4","gpr-sticky"];
+    table.querySelectorAll(selectors.map(function(x){return "."+x;}).join(",")).forEach(function(cell){
+      let index=Number(cell.dataset.logicalStart);
+      if(!Number.isFinite(index)){
+        let c=0, row=cell.parentElement;
+        for(const x of Array.from(row.cells)){if(x===cell) break;c+=x.colSpan||1;}
+        index=c;
+      }
+      const left=widths.slice(0,index).reduce(function(a,b){return a+Number(b||0);},0);
+      cell.style.left=left+"px";
+    });
+  }
+
+  function installResizeAutofit(table) {
+    if(!table || !table.tHead) return;
+    const grid=logicalHeaderGrid(table);
+    const count=Math.max.apply(null,grid.map(function(r){return r.length;}));
+    let cg=table.querySelector("colgroup[data-generated]");
+    if(!cg){
+      cg=document.createElement("colgroup");cg.dataset.generated="1";
+      for(let i=0;i<count;i++) cg.appendChild(document.createElement("col"));
+      table.insertBefore(cg,table.firstChild);
+    }
+    let widths=loadTableWidths(table);
+    if(!Array.isArray(widths)||widths.length!==count) widths=Array.from({length:count},function(_,i){return intrinsicColumnWidth(table,i);});
+    Array.from(cg.children).forEach(function(col,i){col.style.width=widths[i]+"px";});
+    updateStickyOffsets(table,widths);
+
+    table.querySelectorAll("thead th").forEach(function(th){
+      if(Number(th.dataset.logicalSpan||th.colSpan||1)!==1) return;
+      if(th.querySelector(".resize-handle")) return;
+      const index=Number(th.dataset.logicalStart);
+      const h=document.createElement("span");h.className="resize-handle";th.appendChild(h);
+      h.addEventListener("mousedown",function(e){
+        e.preventDefault();e.stopPropagation();
+        const startX=e.clientX,start=widths[index];
+        function move(ev){
+          widths[index]=Math.max(28,Math.min(520,start+ev.clientX-startX));
+          cg.children[index].style.width=widths[index]+"px";
+          updateStickyOffsets(table,widths);
+        }
+        function up(){document.removeEventListener("mousemove",move);document.removeEventListener("mouseup",up);saveTableWidths(table,widths);}
+        document.addEventListener("mousemove",move);document.addEventListener("mouseup",up);
+      });
+      h.addEventListener("dblclick",function(e){
+        e.preventDefault();e.stopPropagation();
+        widths[index]=intrinsicColumnWidth(table,index);
+        cg.children[index].style.width=widths[index]+"px";
+        updateStickyOffsets(table,widths);
+        saveTableWidths(table,widths);
+      });
+    });
+  }
+
+  function installTableTools() {
+    document.querySelectorAll("#workArea table").forEach(function(table){installResizeAutofit(table);});
+    document.querySelectorAll("#workArea .column-filter-trigger").forEach(function(btn){
+      btn.onclick=function(e){e.preventDefault();e.stopPropagation();openColumnFilter(btn);};
+    });
+    document.querySelectorAll('#workArea .data-row[data-material-id],#workArea .data-row[data-material-mark]').forEach(function(row){
+      row.ondblclick=function(e){e.preventDefault();openMaterialCard(row.dataset.materialId||"",row.dataset.materialMark||"");};
+    });
+  }
+
+  function materialStats(item) {
+    const rows=specJoinedRows().filter(function(r){return item && r.catalog_item_id===item.id;});
+    let qty=0,m3=0;const floors=new Map();
+    rows.forEach(function(r){
+      qty+=r.total;m3+=r.total*r.volumePerPiece;
+      r.quantities.forEach(function(v,k){floors.set(k,Number(floors.get(k)||0)+Number(v||0));});
+    });
+    const est=dataState.estimateRows.filter(function(r){return r.row_type==="material" && item && r.basis===item.mark;});
+    return {rows:rows,qty:qty,m3:m3,floors:floors,est:est};
+  }
+
+  function openMaterialCard(id,mark) {
+    let item=dataState.catalogItems.find(function(x){return x.id===id;});
+    if(!item && mark) item=dataState.catalogItems.find(function(x){return x.mark===mark;});
+    const sourceOnly=!item;
+    if(!item) item={id:"",mark:mark||"Материал",name:"Исходная строка без связи"};
+    const st=materialStats(sourceOnly?null:item);
+    let modal=document.getElementById("materialCardModal");
+    if(!modal){
+      modal=document.createElement("div");
+      modal.id="materialCardModal";
+      modal.className="material-modal-backdrop";
+      document.body.appendChild(modal);
+    }
+    const levels=levelCodes();
+    modal.innerHTML='<div class="material-card" role="dialog" aria-modal="true">' +
+      '<div class="material-card-head"><div><div class="material-section-label">Раздел</div><div class="material-identity"><strong>'+esc(item.mark)+'</strong><span>'+esc(item.name)+'</span></div></div><button class="material-close" type="button" aria-label="Закрыть">×</button></div>' +
+      '<div class="material-tabs"><button class="active" data-mtab="overview">Обзор</button><button data-mtab="projectEstimate">Проект и смета</button><button data-mtab="supplyMontage">Поставка и монтаж</button><button data-mtab="avrS29">АВР и С-29</button><button data-mtab="history">История</button></div>' +
+      '<div class="material-body"></div></div>';
+    modal.classList.add("open");
+    function body(tab){
+      const b=modal.querySelector(".material-body");
+      if(tab==="overview"){
+        b.innerHTML='<div class="material-overview"><section><h3>Исполнение</h3><div class="material-metrics"><div><span>Поставлено</span><strong>0 шт. / 0 м³</strong></div><div><span>Смонтировано</span><strong>0 шт. / 0 м³</strong></div><div><span>Запроцентовано</span><strong>0 шт. / 0 м³</strong></div><div><span>Списано</span><strong>0 м³</strong></div></div></section><section><h3>Количество и объём</h3><div class="material-metrics"><div><span>Всего по проекту</span><strong>'+fmt0(st.qty)+' шт. / '+fmt(st.m3)+' м³</strong></div><div><span>Объём 1 шт.</span><strong>'+(st.rows[0]?fmt(st.rows[0].volumePerPiece):"—")+' м³</strong></div><div><span>Осталось поставить</span><strong>'+fmt0(st.qty)+' шт.</strong></div><div><span>Осталось смонтировать</span><strong>'+fmt0(st.qty)+' шт.</strong></div></div></section></div><div class="material-cost-strip"><div><span>Стоимость</span><strong>—</strong></div><div><span>Стоимость единицы</span><strong>—</strong></div></div>'+(sourceOnly?'<div class="material-note">Исходная строка не связана с проектной номенклатурой. Карточка открыта в source-only режиме.</div>':'');
+      } else if(tab==="projectEstimate"){
+        const floorHead=levels.map(function(x){return '<th>'+esc(levelLabel(x))+'</th>';}).join("");
+        const floorVals=levels.map(function(x){return '<td>'+fmt0(st.floors.get(x)||0)+'</td>';}).join("");
+        const estRows=st.est.map(function(r){const e=dataState.estimates.find(function(x){return x.id===r.estimate_id;});return '<tr><td>'+esc(e?e.number:"")+'</td><td>'+esc(r.position)+'</td><td>'+esc(r.basis)+'</td><td>'+esc(r.name)+'</td><td class="num">'+fmt(r.quantity)+'</td></tr>';}).join("");
+        b.innerHTML='<section class="material-section"><h3>Проект</h3><div class="floor-matrix-wrap"><table class="floor-matrix"><thead><tr><th>Секция</th>'+floorHead+'<th>Всего</th></tr></thead><tbody><tr><td>Дом</td>'+floorVals+'<td>'+fmt0(st.qty)+'</td></tr></tbody></table></div></section><section class="material-section"><h3>Связь со сметой</h3><table class="material-est-table"><thead><tr><th>№ сметы</th><th>Позиция</th><th>Обоснование</th><th>Наименование</th><th>Всего по смете</th></tr></thead><tbody>'+(estRows||'<tr><td colspan="5" class="material-note">Связанных строк сметы нет.</td></tr>')+'</tbody></table></section>';
+      } else if(tab==="supplyMontage"){
+        b.innerHTML='<section class="material-section"><h3>Поставка и монтаж</h3><div class="material-progress-row"><span>Поставлено</span><strong>0 / '+fmt0(st.qty)+' шт.</strong></div><div class="progress"><i style="width:0%"></i></div><div class="material-progress-row"><span>Смонтировано</span><strong>0 / '+fmt0(st.qty)+' шт.</strong></div><div class="progress"><i style="width:0%"></i></div><div class="material-note">Фактических документов поставки и монтажа в тестовой базе пока нет.</div></section>';
+      } else if(tab==="avrS29"){
+        b.innerHTML='<section class="material-section"><h3>АВР и С-29</h3><div class="material-note">Подписанные АВР и бухгалтерские снимки отсутствуют. Фиктивные факты не подставляются.</div></section>';
+      } else {
+        b.innerHTML='<section class="material-section"><h3>История</h3><div class="material-note">История будет формироваться из реальных импортов, связей и фактов. Технические ID здесь не выводятся.</div></section>';
+      }
+    }
+    body("overview");
+    modal.querySelector(".material-close").onclick=function(){modal.classList.remove("open");};
+    modal.onclick=function(e){if(e.target===modal) modal.classList.remove("open");};
+    modal.querySelectorAll("[data-mtab]").forEach(function(btn){btn.onclick=function(){modal.querySelectorAll("[data-mtab]").forEach(function(x){x.classList.toggle("active",x===btn);});body(btn.dataset.mtab);};});
+    const card=modal.querySelector(".material-card"), head=modal.querySelector(".material-card-head");
+    let drag=null;
+    head.onmousedown=function(e){
+      if(e.target.closest("button,input,select")) return;
+      const r=card.getBoundingClientRect();drag={x:e.clientX-r.left,y:e.clientY-r.top};card.classList.add("dragging");
+      function move(ev){const left=Math.max(8,Math.min(window.innerWidth-r.width-8,ev.clientX-drag.x));const top=Math.max(8,Math.min(window.innerHeight-r.height-8,ev.clientY-drag.y));card.style.left=left+"px";card.style.top=top+"px";card.style.transform="none";}
+      function up(){document.removeEventListener("mousemove",move);document.removeEventListener("mouseup",up);card.classList.remove("dragging");}
+      document.addEventListener("mousemove",move);document.addEventListener("mouseup",up);
+    };
+  }
+
   function checkHtml(id,label,checked,group) {
     return '<label class="check"><input type="checkbox" data-filter-group="' + esc(group) + '" data-filter-id="' + esc(id) + '"' + (checked ? ' checked' : '') + '><span>' + esc(label) + '</span></label>';
   }
@@ -416,10 +761,6 @@
     html += checkHtml("basement","Цокольные",ui.spec.basement,"spec");
     html += checkHtml("above","Выше 0.000",ui.spec.above,"spec");
     html += checkHtml("stairs","Лестницы",ui.spec.stairs,"spec");
-    if (tab === 1) {
-      html += '<span class="spacer"></span>';
-      html += checkHtml("homeTotal","Итог по дому",ui.spec.showHomeTotal,"spec-option");
-    }
     return html;
   }
 
@@ -453,7 +794,11 @@
       if (tab === 0) return '<button class="context-link" type="button">Месяц ▾</button><span>·</span><button class="context-link" type="button">АВР: нет ▾</button><span>·</span><span class="context-muted">остатки на дату —</span><span>·</span><span class="context-muted">бух. импорт —</span>';
       return '<span class="context-muted">Контекст текущего представления</span>';
     }
-    if (pageKey === "supply") return '<span class="context-muted">Данные по всему объекту</span>';
+    if (pageKey === "supply") {
+      if (tab === 1) return '<span class="context-caption">Документы поставки</span><span>Белые ТТН фиксируют фактическое поступление сразу; зелёные ТТН документально подтверждают его.</span><span class="spacer"></span><span class="context-muted">Двойной клик по строке — редактировать</span>';
+      if (tab === 2) return '<span class="context-caption">Прайс поставщика</span><span>Позиции проекта сгруппированы по Рабочей сводке.</span><span class="spacer"></span><span class="context-muted">Состояние цены фильтруется в колонке «Прайс»</span>';
+      return '<span class="context-muted">Данные по всему объекту</span>';
+    }
     return '<span class="context-muted">Контекст страницы</span>';
   }
 
@@ -516,8 +861,14 @@
 
   function renderSpecProject() {
     const levels = levelCodes().concat(["Всего"]);
-    let rows = specJoinedRows().filter(passesSpecFilters).filter(rowMatchesSpecSearch);
-    rows.sort(function(a,b){ return a.position_no - b.position_no; });
+    let rows = specJoinedRows().filter(passesSpecFilters).filter(rowMatchesSpecSearch)
+      .filter(function(r){return rowPassesColumnFilters({mark:r.mark,name:r.name});});
+    rows = sortRows(rows,{mark:function(r){return r.mark;},name:function(r){return r.name;}});
+    rows.sort(function(a,b){
+      const s=sortBucket();
+      if(s && (s.field==="mark" || s.field==="name")) return 0;
+      return a.position_no - b.position_no;
+    });
 
     let body = "";
     ui.currentGroupKeys = [];
@@ -539,7 +890,6 @@
             const zKey = "spec-project:zone:"+bs+":"+zone;
             body += specGroupRow(zone,zRows,zKey,2,levels);
             if (ui.collapsed.has(zKey)) return;
-
             const sectionNames = Array.from(new Set(zRows.map(function(r){ return r.section.name; })));
             sectionNames.forEach(function(sectionName) {
               const sRows = zRows.filter(function(r){ return r.section.name === sectionName; });
@@ -547,10 +897,10 @@
               body += specGroupRow(sectionName,sRows,sKey,3,levels);
               if (ui.collapsed.has(sKey)) return;
               sRows.forEach(function(r) {
-                body += '<tr class="data-row" data-row-id="' + esc(r.id) + '">';
-                body += '<td class="sticky-1">' + esc(r.position_no) + '</td>';
-                body += '<td class="sticky-2">' + esc(r.mark) + '</td>';
-                body += '<td class="sticky-3">' + esc(r.name) + '</td>';
+                body += '<tr class="data-row" data-row-id="' + esc(r.id) + '" data-material-id="' + esc(r.catalog_item_id||"") + '">';
+                body += '<td class="sticky-1 center">' + esc(r.position_no) + '</td>';
+                body += filterCell("mark",r.mark,esc(r.mark),"sticky-2");
+                body += filterCell("name",r.name,esc(r.name),"sticky-3");
                 levels.forEach(function(code) {
                   const value = code === "Всего" ? r.total : qtyAt(r,code);
                   body += '<td class="level-col num">' + fmt0(value) + '</td>';
@@ -565,13 +915,13 @@
 
     const head = '<thead><tr>' +
       '<th class="sticky-1">№</th>' +
-      '<th class="sticky-2">Марка</th>' +
-      '<th class="sticky-3">Наименование</th>' +
-      levels.map(function(x){ return '<th class="level-col">' + esc(x) + '</th>'; }).join("") +
+      '<th class="sticky-2 filterable-head">' + filterHeader("Марка","mark") + '</th>' +
+      '<th class="sticky-3 filterable-head">' + filterHeader("Наименование","name") + '</th>' +
+      levels.map(function(x){ return '<th class="level-col">' + esc(x === "Всего" ? "Всего" : levelLabel(x)) + '</th>'; }).join("") +
       '</tr></thead>';
 
     $("workArea").className = "work-area table-work";
-    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="spec-table">' + head + '<tbody>' + body + '</tbody></table></div></div>';
+    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="spec-table" data-table-key="spec-project">' + head + '<tbody>' + body + '</tbody></table></div></div>';
   }
 
   function buildWorkingSummaryRows() {
@@ -588,6 +938,7 @@
           sectionName:r.section.name,
           mark:r.mark,
           name:r.name,
+          catalogItemId:r.catalog_item_id || "",
           volumePerPiece:r.volumePerPiece,
           bySection:{"Секция 1":0,"Секция 2":0},
           byLevel:{"Секция 1":new Map(),"Секция 2":new Map()}
@@ -613,7 +964,7 @@
     });
   }
 
-  function summaryVector(rows, levels, showHome) {
+  function summaryVector(rows, levels) {
     const out = [];
     let s1 = 0, s2 = 0, v1 = 0, v2 = 0;
     rows.forEach(function(r) {
@@ -632,14 +983,12 @@
       });
       out.push(a,b);
     });
-    out.push(s1,s2);
-    if (showHome) out.push(s1+s2);
     return out;
   }
 
-  function summaryGroupRow(label, rows, key, depth, levels, showHome) {
+  function summaryGroupRow(label, rows, key, depth, levels) {
     registerGroup(key);
-    const vector = summaryVector(rows,levels,showHome);
+    const vector = summaryVector(rows,levels);
     let html = '<tr class="group-row group-toggle" data-group-key="' + esc(key) + '">';
     html += '<td colspan="3" class="group-title spec-group-title" style="padding-left:' + (8+depth*14) + 'px"><span class="group-arrow">' + groupArrow(key) + '</span>' + esc(label) + '</td>';
     vector.forEach(function(v,i){
@@ -652,44 +1001,42 @@
 
   function renderSpecSummary() {
     const levels = levelCodes();
-    const showHome = ui.spec.showHomeTotal;
-    const rows = buildWorkingSummaryRows();
+    let rows = buildWorkingSummaryRows().filter(function(r){return rowPassesColumnFilters({mark:r.mark,name:r.name});});
+    rows = sortRows(rows,{mark:function(r){return r.mark;},name:function(r){return r.name;}});
     ui.currentGroupKeys = [];
 
     let body = "";
     if (!rows.length) {
-      body = tableMessage("Нет строк по текущему фильтру.",3+4+levels.length*2+2+(showHome?1:0));
+      body = tableMessage("Нет строк по текущему фильтру.",3+4+levels.length*2);
     } else {
       const rootKey = "spec-summary:root";
-      body += summaryGroupRow("Всего по дому",rows,rootKey,0,levels,showHome);
+      body += summaryGroupRow("Всего по дому",rows,rootKey,0,levels);
       if (!ui.collapsed.has(rootKey)) {
         ["Цоколь","Выше 0.000"].forEach(function(zone) {
           const zRows = rows.filter(function(r){ return r.zone === zone; });
           if (!zRows.length) return;
           const zKey = "spec-summary:zone:"+zone;
-          body += summaryGroupRow(zone,zRows,zKey,1,levels,showHome);
+          body += summaryGroupRow(zone,zRows,zKey,1,levels);
           if (ui.collapsed.has(zKey)) return;
           const names = Array.from(new Set(zRows.map(function(r){ return r.sectionName; })));
           names.forEach(function(name) {
             const sRows = zRows.filter(function(r){ return r.sectionName === name; });
             const sKey = "spec-summary:section:"+zone+":"+name;
-            body += summaryGroupRow(name,sRows,sKey,2,levels,showHome);
+            body += summaryGroupRow(name,sRows,sKey,2,levels);
             if (ui.collapsed.has(sKey)) return;
             sRows.forEach(function(r,index) {
               const s1 = Number(r.bySection["Секция 1"] || 0);
               const s2 = Number(r.bySection["Секция 2"] || 0);
-              body += '<tr class="data-row">';
-              body += '<td class="sticky-1">' + (index+1) + '</td>';
-              body += '<td class="sticky-2">' + esc(r.mark) + '</td>';
-              body += '<td class="sticky-3">' + esc(r.name) + '</td>';
+              body += '<tr class="data-row" data-material-id="' + esc(r.catalogItemId||"") + '">';
+              body += '<td class="sticky-1 center">' + (index+1) + '</td>';
+              body += filterCell("mark",r.mark,esc(r.mark),"sticky-2");
+              body += filterCell("name",r.name,esc(r.name),"sticky-3");
               body += '<td class="qty-col num">' + fmt0(s1) + '</td><td class="vol-col num">' + fmt(s1*r.volumePerPiece) + '</td>';
               body += '<td class="qty-col num">' + fmt0(s2) + '</td><td class="vol-col num">' + fmt(s2*r.volumePerPiece) + '</td>';
               levels.forEach(function(code) {
                 body += '<td class="summary-col num">' + fmt0((r.byLevel["Секция 1"] && r.byLevel["Секция 1"].get(code)) || 0) + '</td>';
                 body += '<td class="summary-col num">' + fmt0((r.byLevel["Секция 2"] && r.byLevel["Секция 2"].get(code)) || 0) + '</td>';
               });
-              body += '<td class="summary-col num">' + fmt0(s1) + '</td><td class="summary-col num">' + fmt0(s2) + '</td>';
-              if (showHome) body += '<td class="summary-col num">' + fmt0(s1+s2) + '</td>';
               body += '</tr>';
             });
           });
@@ -699,21 +1046,19 @@
 
     const head1 = '<tr>' +
       '<th class="sticky-1" rowspan="2">№</th>' +
-      '<th class="sticky-2" rowspan="2">Марка</th>' +
-      '<th class="sticky-3" rowspan="2">Наименование</th>' +
+      '<th class="sticky-2 filterable-head" rowspan="2">' + filterHeader("Марка","mark") + '</th>' +
+      '<th class="sticky-3 filterable-head" rowspan="2">' + filterHeader("Наименование","name") + '</th>' +
       '<th colspan="2">Секция 1</th><th colspan="2">Секция 2</th>' +
-      levels.map(function(x){ return '<th colspan="2">' + esc(x) + '</th>'; }).join("") +
-      '<th colspan="' + (showHome ? 3 : 2) + '">Всего</th></tr>';
+      levels.map(function(x){ return '<th colspan="2">' + esc(levelLabel(x)) + '</th>'; }).join("") +
+      '</tr>';
     const head2 = '<tr>' +
       '<th class="qty-col">Кол-во, шт.</th><th class="vol-col">Объём, м³</th>' +
       '<th class="qty-col">Кол-во, шт.</th><th class="vol-col">Объём, м³</th>' +
       levels.map(function(){ return '<th class="vertical-sub"><span>Секция 1</span></th><th class="vertical-sub"><span>Секция 2</span></th>'; }).join("") +
-      '<th class="vertical-sub"><span>Секция 1</span></th><th class="vertical-sub"><span>Секция 2</span></th>' +
-      (showHome ? '<th class="vertical-sub"><span>Дом</span></th>' : '') +
       '</tr>';
 
     $("workArea").className = "work-area table-work";
-    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="spec-table working-summary"><thead>' + head1 + head2 + '</thead><tbody>' + body + '</tbody></table></div></div>';
+    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="spec-table working-summary" data-table-key="spec-summary"><thead>' + head1 + head2 + '</thead><tbody>' + body + '</tbody></table></div></div>';
   }
 
   function rowCost(row,m) {
@@ -1071,8 +1416,26 @@
 
   function wireContextControls() {
     document.querySelectorAll('#contextRow input[data-filter-group="spec"]').forEach(function(input) {
+      input.addEventListener("click",function(e) {
+        const id=input.dataset.filterId;
+        if(id==="s1" || id==="s2"){
+          const focused = id==="s1" ? (ui.spec.s1 && !ui.spec.s2 && !ui.spec.stairs) : (ui.spec.s2 && !ui.spec.s1 && !ui.spec.stairs);
+          e.preventDefault();
+          if(focused){
+            ui.spec[id]=false;
+          }else{
+            ui.spec.s1=id==="s1";
+            ui.spec.s2=id==="s2";
+            ui.spec.basement=true;
+            ui.spec.above=true;
+            ui.spec.stairs=false;
+          }
+          renderPage(ui.page,ui.tabs[ui.page]||0);
+        }
+      });
       input.addEventListener("change",function() {
         const id = input.dataset.filterId;
+        if(id==="s1" || id==="s2") return;
         if (id === "all") {
           ["s1","s2","basement","above","stairs"].forEach(function(k){ui.spec[k]=input.checked;});
         } else {
@@ -1086,15 +1449,6 @@
       const vals = [ui.spec.s1,ui.spec.s2,ui.spec.basement,ui.spec.above,ui.spec.stairs];
       specMaster.indeterminate = vals.some(Boolean) && !vals.every(Boolean);
     }
-    document.querySelectorAll('#contextRow input[data-filter-group="spec-option"]').forEach(function(input) {
-      input.addEventListener("change",function() {
-        if (input.dataset.filterId === "homeTotal") {
-          ui.spec.showHomeTotal = input.checked;
-          localStorage.setItem("filimonova.spec.showHomeTotal",input.checked ? "1" : "0");
-          renderPage(ui.page,ui.tabs[ui.page]||0);
-        }
-      });
-    });
     document.querySelectorAll('#contextRow input[data-filter-group="estimate"]').forEach(function(input) {
       input.addEventListener("change",function() {
         const id = input.dataset.filterId;
@@ -1113,7 +1467,8 @@
 
   function wireTableControls() {
     document.querySelectorAll(".group-toggle[data-group-key]").forEach(function(row) {
-      row.addEventListener("click",function() {
+      row.addEventListener("click",function(e) {
+        if(e.target.closest(".column-filter-trigger,.resize-handle")) return;
         const key = row.dataset.groupKey;
         if (ui.collapsed.has(key)) ui.collapsed.delete(key);
         else ui.collapsed.add(key);
@@ -1126,6 +1481,7 @@
         row.classList.add("active-row");
       });
     });
+    installTableTools();
   }
 
   function wireServiceControls() {
