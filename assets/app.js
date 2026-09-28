@@ -484,7 +484,6 @@
       });
     });
     cells.forEach(function(cell){
-      if(cell.classList.contains("vertical-sub")) { max=Math.max(max,28); return; }
       const txt=(cell.textContent||"").trim();
       const canvas=intrinsicColumnWidth.canvas||(intrinsicColumnWidth.canvas=document.createElement("canvas"));
       const ctx=canvas.getContext("2d");
@@ -1372,11 +1371,11 @@
     const head2 = '<tr>' +
       '<th class="qty-col">Кол-во, шт.</th><th class="vol-col">Объём, м³</th>' +
       '<th class="qty-col">Кол-во, шт.</th><th class="vol-col">Объём, м³</th>' +
-      levels.map(function(){ return '<th class="vertical-sub"><span>Секция 1</span></th><th class="vertical-sub"><span>Секция 2</span></th>'; }).join("") +
+      levels.map(function(){ return '<th class="summary-col">1</th><th class="summary-col">2</th>'; }).join("") +
       '</tr>';
 
     $("workArea").className = "work-area table-work spec-work";
-    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="spec-table working-summary" data-table-key="spec-summary-v2"><thead>' + head1 + head2 + '</thead><tbody>' + body + '</tbody></table></div></div>';
+    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="spec-table working-summary" data-table-key="spec-summary-v3"><thead>' + head1 + head2 + '</thead><tbody>' + body + '</tbody></table></div></div>';
   }
 
   function rowCost(row,m) {
