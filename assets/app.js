@@ -5,6 +5,8 @@
     return;
   }
 
+  const reviewMode = new URLSearchParams(window.location.search).get("review") === "1";
+
   const client = window.supabase.createClient(cfg.supabaseUrl, cfg.supabasePublishableKey, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
   });
@@ -291,6 +293,19 @@
   }
 
   async function renderSession(session) {
+    if (reviewMode) {
+      authView.classList.add("hidden");
+      deniedView.classList.add("hidden");
+      appView.classList.remove("hidden");
+      $("userEmail").textContent = "UI REVIEW";
+      $("adminState").textContent = "Режим просмотра интерфейса";
+      $("projectName").textContent = cfg.projectName;
+      $("projectStatus").textContent = "Без данных";
+      $("projectId").textContent = "—";
+      renderPage(activePage);
+      return;
+    }
+
     if (!session?.user) {
       appView.classList.add("hidden");
       deniedView.classList.add("hidden");
@@ -326,8 +341,13 @@
   }
 
   client.auth.onAuthStateChange((_event, session) => {
+    if (reviewMode) return;
     setTimeout(() => renderSession(session), 0);
   });
 
-  client.auth.getSession().then(({data}) => renderSession(data.session));
+  if (reviewMode) {
+    renderSession(null);
+  } else {
+    client.auth.getSession().then(({data}) => renderSession(data.session));
+  }
 })();
