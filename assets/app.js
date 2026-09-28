@@ -622,26 +622,27 @@
   }
 
   function updateStickyOffsets(table,widths) {
-    const selectors=["sticky-1","sticky-2","sticky-3","e-sticky-1","e-sticky-2","e-sticky-3","e-sticky-4","gpr-sticky"];
-    const selector=selectors.map(function(x){return "."+x;}).join(",");
-    const stickyCells=Array.from(table.querySelectorAll(selector));
+    /* Sticky offsets must be based only on the rendered sticky identity columns.
+       Colgroup widths are not reliable here because grouped headers can make the
+       browser redistribute column width. */
+    const sets = [
+      ["sticky-1","sticky-2","sticky-3"],
+      ["e-sticky-1","e-sticky-2","e-sticky-3","e-sticky-4"]
+    ];
 
-    /* Measure the real rendered columns first. Using the requested col widths here
-       can push sticky cells to the right when the browser expands a colspan/table. */
-    stickyCells.forEach(function(cell){ cell.style.left="auto"; });
-    const cols=Array.from(table.querySelectorAll('colgroup[data-generated] col'));
-    const actualWidths=cols.length ? cols.map(function(col){return col.getBoundingClientRect().width;}) : widths;
-
-    stickyCells.forEach(function(cell){
-      let index=Number(cell.dataset.logicalStart);
-      if(!Number.isFinite(index)){
-        let c=0,row=cell.parentElement;
-        for(const x of Array.from(row.cells)){if(x===cell) break;c+=x.colSpan||1;}
-        index=c;
-      }
-      const left=actualWidths.slice(0,index).reduce(function(a,b){return a+Number(b||0);},0);
-      cell.style.left=Math.round(left)+"px";
+    sets.forEach(function(classes) {
+      let left = 0;
+      classes.forEach(function(cls) {
+        const cells = Array.from(table.querySelectorAll("." + cls));
+        if (!cells.length) return;
+        cells.forEach(function(cell){ cell.style.left = Math.round(left) + "px"; });
+        const head = table.querySelector("thead ." + cls) || cells[0];
+        const width = head.getBoundingClientRect().width;
+        if (Number.isFinite(width) && width > 0) left += width;
+      });
     });
+
+    table.querySelectorAll(".gpr-sticky").forEach(function(cell){cell.style.left="0px";});
   }
 
   function installResizeAutofit(table) {
