@@ -199,14 +199,18 @@
               '<tr class="group-row"><td colspan="' + (3 + levels.length) + '" class="group-title"><span class="group-arrow">▾</span>Всего по дому</td></tr>' +
               '<tr class="group-row"><td colspan="' + (3 + levels.length) + '" class="group-title"><span class="group-arrow">▾</span>Секция 1</td></tr>' +
               '<tr class="group-row"><td colspan="' + (3 + levels.length) + '" class="group-title"><span class="group-arrow">▾</span>Цоколь</td></tr>' +
-              '<tr class="placeholder-row">' +
-                '<td class="sticky-1">—</td><td class="sticky-2">—</td><td class="sticky-3">Строки спецификации появятся на следующем этапе</td>' +
-                levels.map(() => '<td class="level-col"></td>').join("") +
+              '<tr>' +
+                '<td class="sticky-1">1</td><td class="sticky-2">ПСВ 31.16.26-13у</td><td class="sticky-3">Панель стеновая внутренняя</td>' +
+                levels.map((x,i) => '<td class="level-col">' + (i===1 ? '2' : i===2 ? '2' : '') + '</td>').join("") +
+              '</tr>' +
+              '<tr>' +
+                '<td class="sticky-1">2</td><td class="sticky-2">ПСВ 31.16.26-14у</td><td class="sticky-3">Панель стеновая внутренняя</td>' +
+                levels.map((x,i) => '<td class="level-col">' + (i===1 ? '1' : i===3 ? '2' : '') + '</td>').join("") +
               '</tr>' +
             '</tbody>' +
           '</table>' +
         '</div>' +
-        '<div class="spec-empty-note">Сейчас проверяем только компоновку, иерархию, B5–B7 и геометрию колонок. Реальные позиции не подключены.</div>';
+        '<div class="spec-empty-note">Показаны 2 демонстрационные строки только для оценки ширин, читаемости и компоновки таблицы. К реальным данным они не привязаны.</div>';
       return;
     }
 
@@ -236,14 +240,22 @@
             '<tr class="group-row"><td colspan="' + (3 + 4 + levels.length*2 + 2) + '" class="group-title"><span class="group-arrow">▾</span>Всего по дому</td></tr>' +
             '<tr class="group-row"><td colspan="' + (3 + 4 + levels.length*2 + 2) + '" class="group-title"><span class="group-arrow">▾</span>Цоколь</td></tr>' +
             '<tr class="group-row"><td colspan="' + (3 + 4 + levels.length*2 + 2) + '" class="group-title"><span class="group-arrow">▾</span>Раздел</td></tr>' +
-            '<tr class="placeholder-row">' +
-              '<td class="sticky-1">—</td><td class="sticky-2">—</td><td class="sticky-3">Номенклатура появится после согласования макета</td>' +
-              Array.from({length:4 + levels.length*2 + 2}, () => '<td></td>').join("") +
+            '<tr>' +
+              '<td class="sticky-1">1</td><td class="sticky-2">ПСВ 31.16.26-13у</td><td class="sticky-3">Панель стеновая внутренняя</td>' +
+              '<td class="qty-col">38</td><td class="vol-col">19,76</td><td class="qty-col">34</td><td class="vol-col">17,68</td>' +
+              levels.map((x,i) => '<td class="summary-col">' + (i===1 ? '2' : i===2 ? '2' : '') + '</td><td class="summary-col">' + (i===1 ? '2' : i===2 ? '2' : '') + '</td>').join("") +
+              '<td class="summary-col">38</td><td class="summary-col">34</td>' +
+            '</tr>' +
+            '<tr>' +
+              '<td class="sticky-1">2</td><td class="sticky-2">ПСВ 31.16.26-14у</td><td class="sticky-3">Панель стеновая внутренняя</td>' +
+              '<td class="qty-col">18</td><td class="vol-col">9,18</td><td class="qty-col">20</td><td class="vol-col">10,20</td>' +
+              levels.map((x,i) => '<td class="summary-col">' + (i===1 ? '1' : i===3 ? '2' : '') + '</td><td class="summary-col">' + (i===1 ? '1' : i===3 ? '2' : '') + '</td>').join("") +
+              '<td class="summary-col">18</td><td class="summary-col">20</td>' +
             '</tr>' +
           '</tbody>' +
         '</table>' +
       '</div>' +
-      '<div class="spec-empty-note">Рабочая сводка: секции находятся в колонках одной строки; отдельные уровни «Секция 1 / Секция 2» в иерархии не создаются.</div>';
+      '<div class="spec-empty-note">Показаны 2 демонстрационные строки. В Рабочей сводке секции находятся в колонках одной строки; отдельные уровни «Секция 1 / Секция 2» в иерархии не создаются.</div>';
   }
 
   function renderPage(pageKey, tabIndex = null) {
