@@ -1234,7 +1234,8 @@
 
   function renderCurrentPricePlaceholder() {
     const model=currentPriceModel();
-    let rows=model.filter(function(r){return r.kind==="group" || passesSearch([r.name]);});
+    let rows=model.filter(function(r){return r.kind==="group" || passesSearch([r.name]);})
+      .filter(function(r){return r.kind==="group" || rowPassesColumnFilters({name:r.name});});
     let no=0;
     const body=rows.map(function(r){
       if(r.kind==="group") return '<tr class="group-only"><td class="center"></td><td colspan="7">'+esc(r.name)+'</td></tr>';
@@ -1244,11 +1245,11 @@
       let k="";
       if(r.id==="forecastK") k='<input class="forecast-input" value="'+Number((ui.currentPrice||{}).forecast||1.0552).toFixed(4).replace(".",",")+'" aria-label="Прогнозный индекс">';
       else if(r.k!=null) k=Number(r.k).toFixed(4).replace(".",",");
-      return '<tr class="'+cls+' data-row" data-formula-row="'+r.id+'"><td class="center">'+no+'</td><td>'+esc(r.name)+'</td><td class="num">'+pct+'</td><td class="num rate-cell">'+k+'</td><td class="num formula-amount" data-formula-cell="'+r.id+'">'+money(r.v)+'</td><td class="num muted">'+currentRefValue(r,"forecast")+'</td><td class="num muted">'+currentRefValue(r,"competition")+'</td><td class="num muted">'+currentRefValue(r,"both")+'</td></tr>';
+      return '<tr class="'+cls+' data-row" data-formula-row="'+r.id+'"><td class="center">'+no+'</td>'+filterCell("name",r.name,esc(r.name),"")+'<td class="num">'+pct+'</td><td class="num rate-cell">'+k+'</td><td class="num formula-amount" data-formula-cell="'+r.id+'">'+money(r.v)+'</td><td class="num muted">'+currentRefValue(r,"forecast")+'</td><td class="num muted">'+currentRefValue(r,"competition")+'</td><td class="num muted">'+currentRefValue(r,"both")+'</td></tr>';
     }).join("");
     $("workArea").className="work-area table-work current-price-work";
     $("workArea").innerHTML='<div class="formula-strip"><div class="formula-address">—</div><div class="formula-name"><b>fx</b><span>Выберите расчётную строку</span></div><div class="formula-expression"></div></div>'+
-      '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table current-price-table" data-table-key="current-price"><thead><tr><th rowspan="2">№</th><th rowspan="2">Наименование</th><th rowspan="2">%</th><th rowspan="2">К-т</th><th rowspan="2">Текущая стоимость</th><th colspan="3">Справочно</th></tr><tr><th>с прогнозным</th><th>с конкурсным</th><th>с прогнозным и конкурсным</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+      '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table current-price-table" data-table-key="current-price"><thead><tr><th rowspan="2">№</th><th class="filterable-head" rowspan="2">'+filterHeader("Наименование","name")+'</th><th rowspan="2">%</th><th rowspan="2">К-т</th><th rowspan="2">Текущая стоимость</th><th colspan="3">Справочно</th></tr><tr><th>с прогнозным</th><th>с конкурсным</th><th>с прогнозным и конкурсным</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
     const byId=new Map(model.map(function(x){return [x.id,x];}));
     function select(id){
       const r=byId.get(id);if(!r)return;
@@ -1256,9 +1257,9 @@
       const row=document.querySelector('[data-formula-row="'+CSS.escape(id)+'"]');
       if(row) row.querySelector('[data-formula-cell]')?.classList.add("formula-active");
       (r.refs||[]).forEach(function(ref){document.querySelector('[data-formula-row="'+CSS.escape(ref)+'"] [data-formula-cell]')?.classList.add("formula-ref");});
-      $(".formula-address").textContent="E"+(model.indexOf(r)+3);
-      $(".formula-name span").textContent=r.name;
-      $(".formula-expression").textContent=r.formula||"";
+      document.querySelector(".formula-address").textContent="E"+(model.indexOf(r)+3);
+      document.querySelector(".formula-name span").textContent=r.name;
+      document.querySelector(".formula-expression").textContent=r.formula||"";
     }
     document.querySelectorAll("[data-formula-row]").forEach(function(row){row.onclick=function(){select(row.dataset.formulaRow);};});
     const input=document.querySelector(".forecast-input");
@@ -1278,14 +1279,14 @@
       const total=erows.reduce(function(a,r){return a+Number(rowCost(r,m).total_amount||0);},0);
       body+='<tr class="group-row"><td class="gpr-sticky" colspan="4">'+esc("Смета №"+e.number+" · "+e.name)+'</td><td></td><td></td><td></td><td class="num">'+money(total*(ui.currentPrice?ui.currentPrice.forecast:1.0552))+'</td>'+months.map(function(){return '<td class="gpr-month"></td>';}).join("")+'</tr>';
       erows.forEach(function(r){
-        if(!passesSearch([r.position,r.basis,r.name])) return;
+        if(!passesSearch([r.position,r.basis,r.name]) || !rowPassesColumnFilters({position:r.position,basis:r.basis,name:r.name})) return;
         const c=rowCost(r,m),price=Number(c.total_unit||0),start=Number(c.total_amount||0)*(ui.currentPrice?ui.currentPrice.forecast:1.0552);
         const item=dataState.catalogItems.find(function(x){return x.mark===r.basis;});
         body+='<tr class="data-row" '+(r.row_type==="material"?'data-material-id="'+esc(item?item.id:"")+'" data-material-mark="'+esc(r.basis||"")+'"':'')+'><td class="center">'+(r.row_type==="material"?"М":"Р")+'</td><td class="center">'+esc(r.position)+'</td><td>'+esc(r.basis)+'</td><td>'+esc(r.name)+'</td><td class="center">'+esc(r.unit)+'</td><td class="num">'+fmt(r.quantity)+'</td><td class="num">'+money(price)+'</td><td class="num">'+money(start)+'</td>'+months.map(function(){return '<td class="gpr-month"></td>';}).join("")+'</tr>';
       });
     });
     $("workArea").className="work-area table-work";
-    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table gpr-table" data-table-key="gpr"><thead><tr><th>Тип</th><th>Поз.</th><th>Обоснование</th><th>Наименование</th><th>Ед. изм.</th><th>Кол-во</th><th>Цена на начало работ</th><th>Стоимость на начало работ</th>'+months.map(function(x){return '<th>'+esc(x)+'</th>';}).join("")+'</tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table gpr-table" data-table-key="gpr"><thead><tr><th>Тип</th><th class="filterable-head">'+filterHeader("Поз.","position")+'</th><th class="filterable-head">'+filterHeader("Обоснование","basis")+'</th><th class="filterable-head">'+filterHeader("Наименование","name")+'</th><th>Ед. изм.</th><th>Кол-во</th><th>Цена на начало работ</th><th>Стоимость на начало работ</th>'+months.map(function(x){return '<th>'+esc(x)+'</th>';}).join("")+'</tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
 
   function renderSupplySummary() {
@@ -1415,17 +1416,17 @@
       return;
     }
     const days = Array.from({length:30},function(_,i){return i+1;});
-    const rows = specJoinedRows().filter(function(r){ return passesSearch([r.mark,r.name]); });
+    const rows = specJoinedRows().filter(function(r){ return passesSearch([r.mark,r.name]) && rowPassesColumnFilters({mark:r.mark,name:r.name}); });
     let body = rows.map(function(r) {
       const floorQty = qtyAt(r,"1");
-      return '<tr class="data-row"><td class="sticky-1">'+esc(r.position_no)+'</td><td class="sticky-2">'+esc(r.mark)+'</td><td class="sticky-3">'+esc(r.name)+'</td>' +
+      return '<tr class="data-row" data-material-id="'+esc(r.catalog_item_id||"")+'"><td class="sticky-1 center">'+esc(r.position_no)+'</td>'+filterCell("mark",r.mark,esc(r.mark),"sticky-2")+filterCell("name",r.name,esc(r.name),"sticky-3") +
         '<td class="num">'+fmt0(floorQty)+'</td><td class="num">0</td><td class="num">'+fmt0(floorQty)+'</td><td class="num">0</td><td class="num">0</td>' +
         days.map(function(){return '<td class="day-cell"></td>';}).join("") + '</tr>';
     }).join("");
     if (!body) body = tableMessage("Нет строк по текущему поиску.",8+days.length);
     $("workArea").className = "work-area table-work";
     $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table montage-table"><thead><tr>' +
-      '<th class="sticky-1">№</th><th class="sticky-2">Марка</th><th class="sticky-3">Наименование</th><th>На этаж</th><th>Смонтировано</th><th>Остаток</th><th>Поставлено</th><th>Доступно для монтажа</th>' +
+      '<th class="sticky-1">№</th><th class="sticky-2 filterable-head">'+filterHeader("Марка","mark")+'</th><th class="sticky-3 filterable-head">'+filterHeader("Наименование","name")+'</th><th>На этаж</th><th>Смонтировано</th><th>Остаток</th><th>Поставлено</th><th>Доступно для монтажа</th>' +
       days.map(function(d){return '<th class="day-cell">'+d+'</th>';}).join("") + '</tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
 
@@ -1449,7 +1450,7 @@
     ui.currentGroupKeys = [];
     let body = "";
     estimates.forEach(function(e) {
-      let rows = dataState.estimateRows.filter(function(r){return r.estimate_id===e.id && passesSearch([r.position,r.basis,r.name]);});
+      let rows = dataState.estimateRows.filter(function(r){return r.estimate_id===e.id && passesSearch([r.position,r.basis,r.name]) && rowPassesColumnFilters({position:r.position,basis:r.basis,name:r.name});});
       if (!rows.length && currentSearch()) return;
       const key = "ks6:"+e.number;
       registerGroup(key);
@@ -1461,7 +1462,7 @@
     });
     if (!body) body = tableMessage("Нет строк по текущему фильтру.",9);
     $("workArea").className = "work-area table-work";
-    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table ks-table"><thead><tr><th>Тип</th><th>Поз. сметы</th><th>Обоснование</th><th>Наименование</th><th>Ед. изм.</th><th>По смете</th><th>Сен. 26</th><th>Запроцентовано</th><th>Остаток</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table ks-table" data-table-key="ks6"><thead><tr><th>Тип</th><th class="filterable-head">'+filterHeader("Поз. сметы","position")+'</th><th class="filterable-head">'+filterHeader("Обоснование","basis")+'</th><th class="filterable-head">'+filterHeader("Наименование","name")+'</th><th>Ед. изм.</th><th>По смете</th><th>Сен. 26</th><th>Запроцентовано</th><th>Остаток</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
 
   function renderS29(tab) {
