@@ -2345,9 +2345,32 @@
   $("logoutBtn").addEventListener("click",logout);
   $("deniedLogoutBtn").addEventListener("click",logout);
 
+  const sidebarKey = "filimonova:ui:sidebar-collapsed";
+  function syncSidebarState() {
+    const collapsed = document.body.classList.contains("sidebar-collapsed");
+    const toggle = $("sidebarToggle");
+    if (toggle) {
+      toggle.setAttribute("aria-expanded",collapsed ? "false" : "true");
+      const label = toggle.querySelector("span");
+      if (label) label.textContent = collapsed ? "Развернуть" : "Свернуть";
+      toggle.title = collapsed ? "Развернуть меню" : "Свернуть меню";
+    }
+  }
+  if (localStorage.getItem(sidebarKey) === "1") document.body.classList.add("sidebar-collapsed");
   document.querySelectorAll(".nav-btn").forEach(function(btn) {
+    const label=btn.querySelector("span");
+    if(label) btn.title=label.textContent.trim();
     btn.addEventListener("click",function(){renderPage(btn.dataset.page);});
   });
+  const sidebarToggle=$("sidebarToggle");
+  if(sidebarToggle) {
+    sidebarToggle.addEventListener("click",function() {
+      document.body.classList.toggle("sidebar-collapsed");
+      localStorage.setItem(sidebarKey,document.body.classList.contains("sidebar-collapsed") ? "1" : "0");
+      syncSidebarState();
+    });
+  }
+  syncSidebarState();
 
   $("searchInput").addEventListener("input",function() {
     const key = currentViewKey();
