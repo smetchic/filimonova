@@ -787,3 +787,149 @@ svg{display:block}
   position:relative;
   top:5px;
 }
+
+
+/* GPR — same engineering hierarchy as Estimate + canonical year/month grid */
+.gpr-table .gpr-year,
+.gpr-table .gpr-month-head{
+  text-align:center!important;
+}
+.gpr-table .gpr-year{
+  font-weight:600!important;
+}
+.gpr-table .gpr-group-title{
+  background:var(--group)!important;
+}
+.gpr-table .gpr-material-row .gpr-month{
+  background:#EEF6FF;
+}
+.gpr-table .gpr-work-row .gpr-month{
+  background:#EEF8F1;
+}
+.gpr-table .group-month{
+  background:#EEF0F2!important;
+  font-weight:600;
+}
+.gpr-table .gpr-month:empty{
+  background:#fff;
+}
+.gpr-modal-backdrop{
+  position:fixed;
+  inset:0;
+  z-index:650;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  background:rgba(25,29,34,.34);
+}
+.gpr-modal-backdrop.open{display:flex}
+.gpr-modal{
+  width:min(930px,calc(100vw - 28px));
+  height:min(640px,calc(100vh - 28px));
+  display:flex;
+  flex-direction:column;
+  background:#fff;
+  border:1px solid #D4D4D8;
+  border-radius:8px;
+  box-shadow:0 18px 52px rgba(18,24,32,.24);
+  overflow:hidden;
+}
+.gpr-modal-head{
+  height:46px;
+  flex:0 0 46px;
+  display:flex;
+  align-items:center;
+  padding:0 14px;
+  border-bottom:1px solid #E4E4E7;
+}
+.gpr-modal-head strong{font-size:14px;font-weight:600}
+.gpr-modal-close{
+  margin-left:auto;
+  width:28px;
+  height:28px;
+  border:0;
+  background:transparent;
+  border-radius:5px;
+  font-size:20px;
+  cursor:pointer;
+}
+.gpr-modal-close:hover{background:#F1F2F3}
+.gpr-modal-body{
+  flex:1;
+  min-height:0;
+  padding:10px 12px;
+}
+.gpr-alloc-scroll{
+  width:100%;
+  height:100%;
+  overflow:auto;
+  border:1px solid #E4E4E7;
+}
+.gpr-alloc-table{
+  border-collapse:separate;
+  border-spacing:0;
+  width:max-content;
+  min-width:100%;
+  font-size:12px;
+}
+.gpr-alloc-table th,
+.gpr-alloc-table td{
+  height:30px;
+  padding:0 8px;
+  border-right:1px solid #E4E4E7;
+  border-bottom:1px solid #E4E4E7;
+  text-align:center;
+  white-space:nowrap;
+}
+.gpr-alloc-table th{
+  position:sticky;
+  top:0;
+  z-index:3;
+  background:#F4F4F5;
+  color:#52525B;
+  font-weight:500;
+}
+.gpr-alloc-table thead tr:nth-child(2) th{top:30px}
+.gpr-alloc-table th:first-child,
+.gpr-alloc-table td:first-child{
+  position:sticky;
+  left:0;
+  z-index:4;
+  text-align:left;
+}
+.gpr-alloc-table td:first-child{background:#fff}
+.gpr-alloc-table thead th:first-child{z-index:6;background:#F4F4F5}
+.gpr-month-check{
+  width:14px;
+  height:14px;
+  margin:0;
+}
+.gpr-modal-foot{
+  height:44px;
+  flex:0 0 44px;
+  display:flex;
+  align-items:center;
+  gap:14px;
+  padding:0 14px;
+  border-top:1px solid #E4E4E7;
+}
+.gpr-display-popover{
+  position:fixed;
+  display:none;
+  z-index:620;
+  width:250px;
+  padding:9px 10px;
+  background:#fff;
+  border:1px solid #D4D4D8;
+  border-radius:6px;
+  box-shadow:0 8px 28px rgba(0,0,0,.10);
+  font-size:11.5px;
+}
+.gpr-display-popover.open{display:block}
+.gpr-display-popover strong{display:block;margin-bottom:6px}
+.gpr-display-popover label{
+  min-height:27px;
+  display:flex;
+  align-items:center;
+  gap:7px;
+}
