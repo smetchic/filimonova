@@ -186,142 +186,15 @@
     setStatus(signupStatus, "");
   }
 
-  function makeDemoData() {
-    const catalogItems = [
-      { id:"c1", mark:"ПСЦ 31.16.26-01", name:"Панель стеновая внутренняя цоколя", normalized_key:"test:псц31.16.26-01" },
-      { id:"c2", mark:"ПСЦ 31.16.26-02", name:"Панель стеновая внутренняя цоколя", normalized_key:"test:псц31.16.26-02" },
-      { id:"c3", mark:"ПСВ 31.16.26-13у", name:"Панель стеновая внутренняя", normalized_key:"test:псв31.16.26-13у" },
-      { id:"c4", mark:"ПСВ 31.16.26-14у", name:"Панель стеновая внутренняя", normalized_key:"test:псв31.16.26-14у" }
-    ];
-    const specSections = [
-      {id:"s1b",building_section:"Секция 1",zone:"Цоколь",name:"Внутренние стеновые панели цоколя",sort_order:20,is_stairs:false},
-      {id:"s1a",building_section:"Секция 1",zone:"Выше 0.000",name:"Внутренние стеновые панели",sort_order:30,is_stairs:false},
-      {id:"s2b",building_section:"Секция 2",zone:"Цоколь",name:"Внутренние стеновые панели цоколя",sort_order:20,is_stairs:false},
-      {id:"s2a",building_section:"Секция 2",zone:"Выше 0.000",name:"Внутренние стеновые панели",sort_order:30,is_stairs:false}
-    ];
-    const specRows = [
-      {id:"r1",section_id:"s1b",catalog_item_id:"c1",position_no:1,designation:"ФМ-ТЕСТ-Ц-01",project_volume_m3:0.86,sort_order:10},
-      {id:"r2",section_id:"s1b",catalog_item_id:"c2",position_no:2,designation:"ФМ-ТЕСТ-Ц-02",project_volume_m3:0.92,sort_order:20},
-      {id:"r3",section_id:"s1a",catalog_item_id:"c3",position_no:3,designation:"ФМ-ТЕСТ-В-13",project_volume_m3:0.52,sort_order:10},
-      {id:"r4",section_id:"s1a",catalog_item_id:"c4",position_no:4,designation:"ФМ-ТЕСТ-В-14",project_volume_m3:0.51,sort_order:20},
-      {id:"r5",section_id:"s2b",catalog_item_id:"c1",position_no:5,designation:"ФМ-ТЕСТ-Ц-01",project_volume_m3:0.86,sort_order:10},
-      {id:"r6",section_id:"s2b",catalog_item_id:"c2",position_no:6,designation:"ФМ-ТЕСТ-Ц-02",project_volume_m3:0.92,sort_order:20},
-      {id:"r7",section_id:"s2a",catalog_item_id:"c3",position_no:7,designation:"ФМ-ТЕСТ-В-13",project_volume_m3:0.52,sort_order:10},
-      {id:"r8",section_id:"s2a",catalog_item_id:"c4",position_no:8,designation:"ФМ-ТЕСТ-В-14",project_volume_m3:0.51,sort_order:20}
-    ];
-    const specQuantities = [];
-    function q(row, code, order, quantity) {
-      specQuantities.push({specification_row_id:row,level_code:code,level_order:order,quantity:quantity});
-    }
-    q("r1","Ц",0,4); q("r2","Ц",0,2);
-    q("r3","1",1,2); q("r3","2",2,2); q("r3","3",3,2);
-    q("r4","1",1,1); q("r4","2",2,1); q("r4","3",3,1);
-    q("r5","Ц",0,3); q("r6","Ц",0,3);
-    q("r7","1",1,2); q("r7","2",2,2); q("r7","3",3,2);
-    q("r8","1",1,1); q("r8","2",2,1); q("r8","3",3,2);
-
-    const estimates = [
-      {id:"e200",number:"200",name:"Секция 1 · Цоколь",status:"active"},
-      {id:"e201",number:"201",name:"Секция 2 · Цоколь",status:"active"},
-      {id:"e202",number:"202",name:"Секция 1 · Выше 0.000",status:"active"},
-      {id:"e203",number:"203",name:"Секция 2 · Выше 0.000",status:"active"},
-      {id:"e207",number:"207",name:"Элементы лестниц",status:"active"}
-    ];
-    const estimateSections = estimates.map(function(e) {
-      return {
-        id:"es"+e.number,
-        estimate_id:e.id,
-        title:e.number === "207" ? "Элементы лестниц" : (e.number === "200" || e.number === "201" ? "Стеновые панели цоколя" : "Стеновые панели выше 0.000"),
-        sort_order:10
-      };
-    });
-    const estimateRows = [];
-    function er(number,type,position,basis,name,qty,order) {
-      estimateRows.push({
-        id:"er"+number+"_"+position,
-        estimate_id:"e"+number,
-        section_id:"es"+number,
-        row_type:type,
-        position:String(position),
-        basis:basis,
-        name:name,
-        unit:"шт.",
-        quantity:qty,
-        sort_order:order
-      });
-    }
-    er("200","work",1,"Е7-1-1","Монтаж стеновых панелей цоколя",6,10);
-    er("200","material",2,"ПСЦ 31.16.26-01","Панель ПСЦ 31.16.26-01",4,20);
-    er("200","material",3,"ПСЦ 31.16.26-02","Панель ПСЦ 31.16.26-02",2,30);
-    er("201","work",1,"Е7-1-1","Монтаж стеновых панелей цоколя",6,10);
-    er("201","material",2,"ПСЦ 31.16.26-01","Панель ПСЦ 31.16.26-01",3,20);
-    er("201","material",3,"ПСЦ 31.16.26-02","Панель ПСЦ 31.16.26-02",3,30);
-    er("202","work",1,"Е7-1-2","Монтаж внутренних стеновых панелей",9,10);
-    er("202","material",2,"ПСВ 31.16.26-13у","Панель ПСВ 31.16.26-13у",6,20);
-    er("202","material",3,"ПСВ 31.16.26-14у","Панель ПСВ 31.16.26-14у",3,30);
-    er("203","work",1,"Е7-1-2","Монтаж внутренних стеновых панелей",10,10);
-    er("203","material",2,"ПСВ 31.16.26-13у","Панель ПСВ 31.16.26-13у",6,20);
-    er("203","material",3,"ПСВ 31.16.26-14у","Панель ПСВ 31.16.26-14у",4,30);
-    er("207","work",1,"Е7-5-1","Монтаж элементов лестниц",8,10);
-    er("207","material",2,"ЛМ 30.12-1","Лестничный марш ЛМ 30.12-1",4,20);
-    er("207","material",3,"ЛП 28.12-1","Лестничная площадка ЛП 28.12-1",4,30);
-
-    const estimateCosts = estimateRows.map(function(r) {
-      let totalUnit = 83.70;
-      let material = 0;
-      if (r.row_type === "material") {
-        const price = {
-          "ПСЦ 31.16.26-01":974.50,
-          "ПСЦ 31.16.26-02":1049.50,
-          "ПСВ 31.16.26-13у":799.50,
-          "ПСВ 31.16.26-14у":824.50,
-          "ЛМ 30.12-1":1214.50,
-          "ЛП 28.12-1":894.50
-        }[r.basis] || 0;
-        totalUnit = price;
-        material = Math.max(0, price - 34.50);
-      }
-      return {
-        estimate_row_id:r.id,
-        salary_unit:r.row_type === "work" ? 54.20 : 0,
-        salary_amount:r.row_type === "work" ? 54.20 * r.quantity : 0,
-        machines_unit:r.row_type === "work" ? 21.40 : 0,
-        machines_amount:r.row_type === "work" ? 21.40 * r.quantity : 0,
-        drivers_unit:r.row_type === "work" ? 8.10 : 0,
-        drivers_amount:r.row_type === "work" ? 8.10 * r.quantity : 0,
-        materials_unit:r.row_type === "material" ? material : 0,
-        materials_amount:r.row_type === "material" ? material * r.quantity : 0,
-        transport_unit:r.row_type === "material" ? 34.50 : 0,
-        transport_amount:r.row_type === "material" ? 34.50 * r.quantity : 0,
-        total_unit:totalUnit,
-        total_amount:totalUnit * r.quantity
-      };
-    });
-
-    return {
-      loaded:true,
-      source:"demo",
-      project:{id:"demo",code:"FILIMONOVA",name:"Филимонова",status:"active"},
-      catalogItems:catalogItems,
-      specSections:specSections,
-      specRows:specRows,
-      specQuantities:specQuantities,
-      estimates:estimates,
-      estimateSections:estimateSections,
-      estimateRows:estimateRows,
-      estimateCosts:estimateCosts
-    };
-  }
-
   async function loadProjectData(project) {
     const requests = [
       client.from("catalog_items").select("id,mark,name,normalized_key").eq("project_id",project.id).is("archived_at",null).order("mark"),
       client.from("specification_sections").select("id,building_section,zone,name,sort_order,is_stairs").eq("project_id",project.id).order("sort_order"),
       client.from("specification_rows").select("id,section_id,catalog_item_id,position_no,designation,project_volume_m3,sort_order").eq("project_id",project.id).is("archived_at",null).order("position_no"),
       client.from("specification_quantities").select("specification_row_id,level_code,level_order,quantity").eq("project_id",project.id).order("level_order"),
-      client.from("estimates").select("id,number,name,status").eq("project_id",project.id).eq("status","active").order("number"),
+      client.from("estimates").select("id,number,name,status,building_section,zone,is_stairs").eq("project_id",project.id).eq("status","active").order("number"),
       client.from("estimate_sections").select("id,estimate_id,title,sort_order").eq("project_id",project.id).order("sort_order"),
-      client.from("estimate_rows").select("id,estimate_id,section_id,row_type,position,basis,name,unit,quantity,sort_order").eq("project_id",project.id).is("archived_at",null).order("sort_order"),
+      client.from("estimate_rows").select("id,estimate_id,section_id,row_type,position,basis,name,unit,quantity,sort_order,catalog_item_id").eq("project_id",project.id).is("archived_at",null).order("sort_order"),
       client.from("estimate_row_costs").select("estimate_row_id,salary_unit,salary_amount,machines_unit,machines_amount,drivers_unit,drivers_amount,materials_unit,materials_amount,transport_unit,transport_amount,total_unit,total_amount").eq("project_id",project.id)
     ];
     const results = await Promise.all(requests);
@@ -857,8 +730,7 @@
         '<span class="legend-item"><span class="legend-dot avr"></span>АВР</span>';
     }
     if (pageKey === "montage") return '<span class="context-muted">ЛКМ +1 · ПКМ −1</span>';
-    if (dataState.source === "supabase") return '<span class="context-muted">Тестовые данные · Supabase</span>';
-    if (reviewMode) return '<span class="context-muted">Тестовые данные · режим просмотра</span>';
+    if (dataState.source === "supabase") return '<span class="context-muted">Данные проекта · Supabase</span>';
     return "";
   }
 
@@ -2116,36 +1988,34 @@
 
   async function renderSession(session) {
     if (reviewMode) {
+      if (!session || !session.user) {
+        appView.classList.add("hidden");
+        deniedView.classList.add("hidden");
+        authView.classList.remove("hidden");
+        return;
+      }
       authView.classList.add("hidden");
       deniedView.classList.add("hidden");
-      appView.classList.remove("hidden");
       try {
-        if (session && session.user) {
-          const admin = await isAdmin(session.user.id);
-          if (admin) {
-            const project = await ensureProject(session.user);
-            await loadProjectData(project);
-            $("userEmail").textContent = session.user.email || "—";
-            $("adminState").textContent = "Глобальный администратор";
-            $("projectName").textContent = project.name || cfg.projectName;
-            $("projectStatus").textContent = "Тестовая база · Supabase";
-            $("projectId").textContent = project.id;
-          } else {
-            dataState = makeDemoData();
-            $("userEmail").textContent = "UI REVIEW";
-          }
-        } else {
-          dataState = makeDemoData();
-          $("userEmail").textContent = "UI REVIEW";
-          $("adminState").textContent = "Режим просмотра интерфейса";
-          $("projectName").textContent = cfg.projectName;
-          $("projectStatus").textContent = "Тестовые данные";
-          $("projectId").textContent = "—";
+        const admin = await isAdmin(session.user.id);
+        if (!admin) {
+          appView.classList.add("hidden");
+          deniedView.classList.remove("hidden");
+          return;
         }
+        const project = await ensureProject(session.user);
+        await loadProjectData(project);
+        $("userEmail").textContent = session.user.email || "—";
+        $("adminState").textContent = "Глобальный администратор";
+        $("projectName").textContent = project.name || cfg.projectName;
+        $("projectStatus").textContent = "База готова к импорту";
+        $("projectId").textContent = project.id;
+        appView.classList.remove("hidden");
       } catch (err) {
-        dataState = makeDemoData();
-        $("userEmail").textContent = "UI REVIEW";
-        $("projectStatus").textContent = "Fallback тестовых данных";
+        appView.classList.add("hidden");
+        deniedView.classList.remove("hidden");
+        deniedView.querySelector(".auth-subtitle").textContent = "Ошибка доступа: " + (err && err.message ? err.message : String(err));
+        return;
       }
       renderPage(ui.page);
       return;
