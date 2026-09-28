@@ -762,7 +762,7 @@ svg{display:block}
 }
 .working-summary thead .floor-parent{
   white-space:nowrap!important;
-  padding:0 4px!important;
+  padding:0 8px!important;
 }
 .filter-icon{
   width:12px;
