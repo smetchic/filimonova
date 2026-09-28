@@ -750,3 +750,29 @@ svg{display:block}
 
 /* Hierarchy toggles must not shift table header/viewport */
 .engineering-scroll{scrollbar-gutter:stable}
+
+
+/* Specification summary refinements */
+.spec-work{padding-top:4px!important}
+.working-summary thead .qty-col,
+.working-summary thead .vol-col{
+  white-space:normal!important;
+  line-height:12.5px!important;
+  padding:2px 4px!important;
+}
+.working-summary thead .floor-parent{
+  white-space:nowrap!important;
+  padding:0 4px!important;
+}
+.filter-icon{
+  width:12px;
+  height:12px;
+  display:block;
+  pointer-events:none;
+}
+.column-filter-trigger{
+  display:grid;
+  place-items:center;
+  color:#7A7D84;
+}
+.column-filter-trigger.active{color:#245FC7}
