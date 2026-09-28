@@ -946,3 +946,35 @@ svg{display:block}
   position:static!important;
   display:inline-block;
 }
+
+
+/* GPR period controls */
+.gpr-period{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  margin-left:12px;
+  white-space:nowrap;
+}
+.gpr-period-label{
+  color:#777B84;
+}
+.gpr-period-select,
+.gpr-period-year{
+  height:25px;
+  border:1px solid #D4D4D8;
+  border-radius:5px;
+  background:#fff;
+  color:#38383E;
+  font:inherit;
+  font-size:11.5px;
+  padding:0 6px;
+  outline:none;
+}
+.gpr-period-select{width:58px}
+.gpr-period-year{width:68px}
+.gpr-period-select:focus,
+.gpr-period-year:focus{
+  border-color:#7FA8E8;
+  box-shadow:0 0 0 1px #7FA8E8;
+}
