@@ -806,7 +806,7 @@
     if (pageKey === "estimates") {
       if (tab === 0) return buildEstimateContext(tab);
       if (tab === 1) return '<span class="context-caption">Текущая цена</span><span class="context-muted">НДС по объекту 0 %, участвует в формулах</span>';
-      if (tab === 2) return '<span class="context-caption">ГПР</span><span class="context-muted">Помесячный финансовый план · без недель и дней</span><span class="spacer"></span><button class="context-link" type="button" data-gpr-action="spread">Разнести по месяцам</button><button class="context-link" type="button" data-gpr-action="display">Отображение</button><button class="context-link" type="button" data-gpr-action="excel">Экспорт Excel</button>';
+      if (tab === 2) return '<span class="context-caption">ГПР</span><span class="context-muted">Помесячный финансовый план · без недель и дней</span>' + gprPeriodControlsHtml() + '<span class="spacer"></span><button class="context-link" type="button" data-gpr-action="spread">Разнести по месяцам</button><button class="context-link" type="button" data-gpr-action="display">Отображение</button><button class="context-link" type="button" data-gpr-action="excel">Экспорт Excel</button>';
       if (tab === 3) return '<span class="context-caption">Сверка</span><span class="context-muted">Ручные связи имеют приоритет</span>';
       return '<span class="context-caption">Журнал</span><span class="context-muted">Записи создаются из контрольных экранов</span>';
     }
@@ -1334,15 +1334,43 @@
     select("temporary");
   }
 
+  function gprPeriod() {
+    if (!ui.gprPeriod) {
+      try { ui.gprPeriod = JSON.parse(localStorage.getItem("filimonova.gpr.period") || "null"); }
+      catch(_) { ui.gprPeriod = null; }
+      if (!ui.gprPeriod) ui.gprPeriod={startMonth:12,startYear:2026,endMonth:5,endYear:2027};
+    }
+    return ui.gprPeriod;
+  }
+
+  function gprPeriodControlsHtml() {
+    const p=gprPeriod();
+    const names=["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
+    function monthOptions(selected){
+      return names.map(function(name,i){return '<option value="'+(i+1)+'" '+(selected===i+1?'selected':'')+'>'+name+'</option>';}).join("");
+    }
+    return '<span class="gpr-period"><span class="gpr-period-label">Период:</span><span>с</span>'+
+      '<select class="gpr-period-select" data-gpr-period="startMonth" aria-label="Месяц начала">'+monthOptions(Number(p.startMonth))+'</select>'+
+      '<input class="gpr-period-year" data-gpr-period="startYear" type="number" min="2000" max="2100" step="1" value="'+Number(p.startYear)+'" aria-label="Год начала">'+
+      '<span>по</span>'+
+      '<select class="gpr-period-select" data-gpr-period="endMonth" aria-label="Месяц окончания">'+monthOptions(Number(p.endMonth))+'</select>'+
+      '<input class="gpr-period-year" data-gpr-period="endYear" type="number" min="2000" max="2100" step="1" value="'+Number(p.endYear)+'" aria-label="Год окончания"></span>';
+  }
+
   function gprMonths() {
-    return [
-      {key:"2026-12",year:"2026",month:"Дек",label:"Дек 2026",index:1},
-      {key:"2027-01",year:"2027",month:"Янв",label:"Янв 2027",index:1},
-      {key:"2027-02",year:"2027",month:"Фев",label:"Фев 2027",index:1},
-      {key:"2027-03",year:"2027",month:"Мар",label:"Мар 2027",index:1},
-      {key:"2027-04",year:"2027",month:"Апр",label:"Апр 2027",index:1},
-      {key:"2027-05",year:"2027",month:"Май",label:"Май 2027",index:1}
-    ];
+    const p=gprPeriod();
+    const names=["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
+    let sy=Number(p.startYear),sm=Number(p.startMonth),ey=Number(p.endYear),em=Number(p.endMonth);
+    let start=sy*12+(sm-1),end=ey*12+(em-1);
+    if(end<start){end=start;ey=sy;em=sm;}
+    const out=[];
+    const maxMonths=120;
+    for(let n=start;n<=end && out.length<maxMonths;n++){
+      const year=Math.floor(n/12),monthIndex=n%12;
+      const mm=String(monthIndex+1).padStart(2,"0");
+      out.push({key:year+"-"+mm,year:String(year),month:names[monthIndex],label:names[monthIndex]+" "+year,index:1});
+    }
+    return out;
   }
 
   function gprAssignments() {
@@ -1545,6 +1573,30 @@
     if(spread) spread.onclick=openGprAllocationModal;
     if(display) display.onclick=openGprDisplay;
     if(excel) excel.onclick=function(){alert("Экспорт ГПР формируется только в Excel (.xlsx).");};
+
+    document.querySelectorAll("[data-gpr-period]").forEach(function(control){
+      control.onchange=function(){
+        const p=gprPeriod();
+        const field=control.dataset.gprPeriod;
+        const value=Number(control.value);
+        if(!Number.isFinite(value)) return;
+        p[field]=value;
+
+        const start=Number(p.startYear)*12+(Number(p.startMonth)-1);
+        const end=Number(p.endYear)*12+(Number(p.endMonth)-1);
+        if(end<start){
+          if(field==="startMonth" || field==="startYear"){
+            p.endMonth=p.startMonth;
+            p.endYear=p.startYear;
+          }else{
+            p.startMonth=p.endMonth;
+            p.startYear=p.endYear;
+          }
+        }
+        localStorage.setItem("filimonova.gpr.period",JSON.stringify(p));
+        renderPage("estimates",2);
+      };
+    });
   }
 
   function renderSupplySummary() {
