@@ -1684,10 +1684,21 @@
 
   function rerenderContent() {
     const tab = ui.tabs[ui.page] || 0;
+    const oldScroller = document.querySelector("#workArea .engineering-scroll");
+    const scrollState = oldScroller ? {left:oldScroller.scrollLeft,top:oldScroller.scrollTop} : null;
+
     ui.currentGroupKeys = [];
     renderContent(ui.page,tab);
     wireTableControls();
     wireServiceControls();
+
+    if (scrollState) {
+      const nextScroller = document.querySelector("#workArea .engineering-scroll");
+      if (nextScroller) {
+        nextScroller.scrollLeft = scrollState.left;
+        nextScroller.scrollTop = scrollState.top;
+      }
+    }
   }
 
   function renderPage(pageKey,tabIndex) {
