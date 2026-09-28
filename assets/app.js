@@ -1289,8 +1289,9 @@
   }
 
   function renderSupplySummary() {
-    const levels = levelCodes();
-    const rows = buildWorkingSummaryRows();
+    let rows = buildWorkingSummaryRows().filter(function(r){ return passesSearch([r.mark,r.name]); })
+      .filter(function(r){return rowPassesColumnFilters({mark:r.mark,name:r.name});});
+    rows=sortRows(rows,{mark:function(r){return r.mark;},name:function(r){return r.name;}});
     ui.currentGroupKeys = [];
     let body = "";
 
@@ -1308,77 +1309,102 @@
       return '<tr class="group-row group-toggle" data-group-key="'+esc(key)+'">' +
         '<td colspan="3" class="group-title spec-group-title" style="padding-left:'+(8+depth*14)+'px"><span class="group-arrow">'+groupArrow(key)+'</span>'+esc(label)+'</td>' +
         '<td class="num">'+fmt0(v.qty)+'</td><td class="num">'+fmt(v.vol)+'</td>' +
-        '<td class="num">0</td><td class="num">0</td>' +
-        '<td class="num">0</td><td class="num">0</td>' +
-        '<td class="num">0</td><td class="num">0</td>' +
-        '<td class="num">'+fmt0(v.qty)+'</td><td class="num">'+fmt(v.vol)+'</td><td></td></tr>';
+        '<td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">0</td>' +
+        '<td class="num">0</td><td class="num">0</td><td class="num">'+fmt0(v.qty)+'</td><td class="num">'+fmt(v.vol)+'</td><td></td></tr>';
     }
 
-    let filtered = rows.filter(function(r){ return passesSearch([r.mark,r.name]); });
-    if (!filtered.length) body = tableMessage("Нет строк по текущему поиску.",14);
+    if (!rows.length) body = tableMessage("Нет строк по текущему фильтру.",14);
     else {
       const root = "supply:root";
-      body += group("Всего по дому",filtered,root,0);
+      body += group("Всего по дому",rows,root,0);
       if (!ui.collapsed.has(root)) {
         ["Цоколь","Выше 0.000"].forEach(function(zone) {
-          const zr = filtered.filter(function(r){return r.zone===zone;});
+          const zr = rows.filter(function(r){return r.zone===zone;});
           if (!zr.length) return;
           const zk = "supply:zone:"+zone;
           body += group(zone,zr,zk,1);
           if (ui.collapsed.has(zk)) return;
-          const names = Array.from(new Set(zr.map(function(r){return r.sectionName;})));
-          names.forEach(function(name) {
+          Array.from(new Set(zr.map(function(r){return r.sectionName;}))).forEach(function(name) {
             const sr = zr.filter(function(r){return r.sectionName===name;});
             const sk = "supply:section:"+zone+":"+name;
             body += group(name,sr,sk,2);
             if (ui.collapsed.has(sk)) return;
             sr.forEach(function(r,index) {
-              const q = Number(r.bySection["Секция 1"]||0)+Number(r.bySection["Секция 2"]||0);
-              const v = q*Number(r.volumePerPiece||0);
-              body += '<tr class="data-row"><td class="sticky-1">'+(index+1)+'</td><td class="sticky-2">'+esc(r.mark)+'</td><td class="sticky-3">'+esc(r.name)+'</td>' +
-                '<td class="num">'+fmt0(q)+'</td><td class="num">'+fmt(v)+'</td>' +
-                '<td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">0</td>' +
-                '<td class="num">0</td><td class="num">0</td>' +
-                '<td class="num">'+fmt0(q)+'</td><td class="num">'+fmt(v)+'</td><td class="status-cell">Не поставлялось</td></tr>';
+              const q = Number(r.bySection["Секция 1"]||0)+Number(r.bySection["Секция 2"]||0),v=q*Number(r.volumePerPiece||0);
+              body += '<tr class="data-row" data-material-id="'+esc(r.catalogItemId||"")+'"><td class="sticky-1 center">'+(index+1)+'</td>'+
+                filterCell("mark",r.mark,esc(r.mark),"sticky-2")+filterCell("name",r.name,esc(r.name),"sticky-3")+
+                '<td class="num">'+fmt0(q)+'</td><td class="num">'+fmt(v)+'</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">'+fmt0(q)+'</td><td class="num">'+fmt(v)+'</td><td class="status-cell">Не поставлялось</td></tr>';
             });
           });
         });
       }
     }
 
-    const head = '<thead><tr>' +
-      '<th class="sticky-1" rowspan="2">№</th><th class="sticky-2" rowspan="2">Марка</th><th class="sticky-3" rowspan="2">Наименование</th>' +
-      '<th colspan="2">По проекту</th><th colspan="2">Поставлено</th><th colspan="2">На объекте</th><th colspan="2">Смонтировано</th><th colspan="2">Осталось поставить</th><th rowspan="2">Статус</th></tr>' +
+    const head = '<thead><tr><th class="sticky-1" rowspan="2">№</th>'+
+      '<th class="sticky-2 filterable-head" rowspan="2">'+filterHeader("Марка","mark")+'</th>'+
+      '<th class="sticky-3 filterable-head" rowspan="2">'+filterHeader("Наименование","name")+'</th>'+
+      '<th colspan="2">По проекту</th><th colspan="2">Поставлено</th><th colspan="2">На объекте</th><th colspan="2">Смонтировано</th><th colspan="2">Осталось поставить</th><th rowspan="2">Статус</th></tr>'+
       '<tr><th>шт.</th><th>м³</th><th>шт.</th><th>м³</th><th>шт.</th><th>м³</th><th>шт.</th><th>м³</th><th>шт.</th><th>м³</th></tr></thead>';
-
     $("workArea").className = "work-area table-work";
-    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table supply-table">' + head + '<tbody>' + body + '</tbody></table></div></div>';
+    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table supply-table" data-table-key="supply-summary">' + head + '<tbody>' + body + '</tbody></table></div></div>';
   }
 
   function renderSupplyDocuments() {
     $("workArea").className = "work-area table-work";
+    const head='<thead><tr>'+
+      '<th class="filterable-head">'+filterHeader("Дата поступления","date")+'</th>'+
+      '<th class="filterable-head">'+filterHeader("Тип","type")+'</th>'+
+      '<th class="filterable-head">'+filterHeader("№ ТТН","ttn")+'</th>'+
+      '<th class="filterable-head">'+filterHeader("Файл","file")+'</th>'+
+      '<th>Позиций</th><th>Шт.</th><th>м³</th><th>Без НДС</th><th>НДС</th><th>С НДС</th><th>Состояние</th></tr></thead>';
     $("workArea").innerHTML =
       '<div class="engineering-shell"><div class="local-action-row"><button class="local-text-action" type="button">+ Добавить накладную</button></div>' +
-      '<div class="engineering-scroll"><table class="eng-table compact-registry"><thead><tr><th>Дата</th><th>Тип</th><th>№ ТТН</th><th>Поставщик</th><th>Позиций</th><th>Статус</th></tr></thead>' +
-      '<tbody>' + tableMessage("Накладных пока нет. Проектная номенклатура уже загружена.",6) + '</tbody></table></div></div>';
+      '<div class="engineering-scroll"><table class="eng-table supply-doc-table" data-table-key="supply-documents">'+head+
+      '<tbody>' + tableMessage("Накладных пока нет. Фактические поступления не подменяются тестовыми документами.",11) + '</tbody></table></div></div>';
   }
 
   function renderSupplierPrice() {
-    const rows = buildWorkingSummaryRows().filter(function(r){ return passesSearch([r.mark,r.name]); });
-    ui.currentGroupKeys = [];
-    let body = "";
-    rows.forEach(function(r,index) {
-      const q = Number(r.bySection["Секция 1"]||0)+Number(r.bySection["Секция 2"]||0);
-      body += '<tr class="data-row"><td class="sticky-1">'+(index+1)+'</td><td class="sticky-2">'+esc(r.mark)+'</td><td class="sticky-3">'+esc(r.name)+'</td>' +
-        '<td class="num">'+fmt0(q)+'</td><td class="num">'+fmt(r.volumePerPiece)+'</td><td class="num">'+fmt(q*r.volumePerPiece)+'</td>' +
-        '<td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="status-cell">Нет цены</td></tr>';
-    });
-    if (!body) body = tableMessage("Нет строк по текущему поиску.",11);
-    $("workArea").className = "work-area table-work";
-    $("workArea").innerHTML =
-      '<div class="engineering-shell"><div class="local-action-row"><button class="local-text-action" type="button">Импорт прайса</button></div><div class="engineering-scroll"><table class="eng-table price-table">' +
-      '<thead><tr><th class="sticky-1" rowspan="2">№</th><th class="sticky-2" rowspan="2">Марка</th><th class="sticky-3" rowspan="2">Наименование</th><th rowspan="2">Всего, шт.</th>' +
-      '<th colspan="2">Объём, м³</th><th colspan="2">Стоимость за 1 шт.</th><th colspan="2">Стоимость за 1 м³</th><th rowspan="2">Прайс</th></tr>' +
+    let rows=buildWorkingSummaryRows().filter(function(r){return passesSearch([r.mark,r.name,"Нет цены"]);})
+      .filter(function(r){return rowPassesColumnFilters({mark:r.mark,name:r.name,price:"Нет цены"});});
+    rows=sortRows(rows,{mark:function(r){return r.mark;},name:function(r){return r.name;},price:function(){return "Нет цены";}});
+    ui.currentGroupKeys=[];
+    let body="";
+    function vector(list){
+      let qty=0,vol=0;list.forEach(function(r){const q=Number(r.bySection["Секция 1"]||0)+Number(r.bySection["Секция 2"]||0);qty+=q;vol+=q*Number(r.volumePerPiece||0);});
+      return {qty:qty,vol:vol};
+    }
+    function group(label,list,key,depth){
+      registerGroup(key);const v=vector(list);
+      return '<tr class="group-row group-toggle" data-group-key="'+esc(key)+'"><td colspan="3" class="group-title spec-group-title" style="padding-left:'+(8+depth*14)+'px"><span class="group-arrow">'+groupArrow(key)+'</span>'+esc(label)+'</td>'+
+        '<td class="num">'+fmt0(v.qty)+'</td><td></td><td class="num">'+fmt(v.vol)+'</td><td></td><td></td><td></td><td></td><td></td></tr>';
+    }
+    if(!rows.length) body=tableMessage("Нет строк по текущему фильтру.",11);
+    else{
+      const root="price:root";body+=group("Всего по дому",rows,root,0);
+      if(!ui.collapsed.has(root)){
+        ["Цоколь","Выше 0.000"].forEach(function(zone){
+          const zr=rows.filter(function(r){return r.zone===zone;});if(!zr.length)return;
+          const zk="price:zone:"+zone;body+=group(zone,zr,zk,1);if(ui.collapsed.has(zk))return;
+          Array.from(new Set(zr.map(function(r){return r.sectionName;}))).forEach(function(name){
+            const sr=zr.filter(function(r){return r.sectionName===name;});const sk="price:section:"+zone+":"+name;
+            body+=group(name,sr,sk,2);if(ui.collapsed.has(sk))return;
+            sr.forEach(function(r,index){
+              const q=Number(r.bySection["Секция 1"]||0)+Number(r.bySection["Секция 2"]||0);
+              body+='<tr class="data-row" data-material-id="'+esc(r.catalogItemId||"")+'"><td class="sticky-1 center">'+(index+1)+'</td>'+
+                filterCell("mark",r.mark,esc(r.mark),"sticky-2")+filterCell("name",r.name,esc(r.name),"sticky-3")+
+                '<td class="num">'+fmt0(q)+'</td><td class="num">'+fmt(r.volumePerPiece)+'</td><td class="num">'+fmt(q*r.volumePerPiece)+'</td>'+
+                '<td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td>'+
+                filterCell("price","Нет цены",'<span class="price-state none">Нет цены</span>',"status-cell")+'</tr>';
+            });
+          });
+        });
+      }
+    }
+    const stats='<span>Рабочая сводка: '+rows.length+' · связано с прайсом: 0 · без цены: '+rows.length+'</span>';
+    $("workArea").className="work-area table-work";
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="local-action-row"><button class="local-text-action" type="button">Импорт прайса</button><span class="local-meta">'+stats+'</span></div><div class="engineering-scroll"><table class="eng-table price-table" data-table-key="supplier-price">'+
+      '<thead><tr><th class="sticky-1" rowspan="2">№</th><th class="sticky-2 filterable-head" rowspan="2">'+filterHeader("Марка","mark")+'</th><th class="sticky-3 filterable-head" rowspan="2">'+filterHeader("Наименование","name")+'</th><th rowspan="2">Всего, шт.</th>'+
+      '<th colspan="2">Объём, м³</th><th colspan="2">Стоимость за 1 шт.</th><th colspan="2">Стоимость за 1 м³</th><th class="filterable-head" rowspan="2">'+filterHeader("Прайс","price")+'</th></tr>'+
       '<tr><th>за ед.</th><th>всего</th><th>за ед.</th><th>всего</th><th>за ед.</th><th>всего</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
 
@@ -1446,16 +1472,32 @@
   }
 
   function renderRecon() {
-    const marks = new Set(dataState.catalogItems.map(function(x){return x.mark;}));
-    const rows = dataState.estimateRows.filter(function(r){return r.row_type==="material" && passesSearch([r.position,r.basis,r.name]);});
-    let body = rows.map(function(r) {
-      const e = dataState.estimates.find(function(x){return x.id===r.estimate_id;});
-      const linked = marks.has(r.basis);
-      return '<tr><td>'+esc(e ? e.number : "")+'</td><td>'+esc(r.position)+'</td><td>'+esc(r.basis)+'</td><td>'+esc(r.name)+'</td><td>'+ (linked ? '<span class="soft-status ok">Точное совпадение марки</span>' : '<span class="soft-status warn">Без связи</span>') +'</td></tr>';
+    const qm=quantityMap();
+    let rows=dataState.estimateRows.filter(function(r){return r.row_type==="material" && passesSearch([r.position,r.basis,r.name]);});
+    rows=rows.filter(function(r){return rowPassesColumnFilters({position:r.position,basis:r.basis,name:r.name});});
+    rows=sortRows(rows,{position:function(r){return r.position;},basis:function(r){return r.basis;},name:function(r){return r.name;}});
+    let body=rows.map(function(r){
+      const e=dataState.estimates.find(function(x){return x.id===r.estimate_id;});
+      const item=dataState.catalogItems.find(function(x){return x.mark===r.basis;});
+      const srows=item?dataState.specRows.filter(function(x){return x.catalog_item_id===item.id;}):[];
+      let projectQty=0;srows.forEach(function(sr){const m=qm.get(sr.id);if(m)m.forEach(function(v){projectQty+=Number(v||0);});});
+      const diff=projectQty-Number(r.quantity||0),linked=!!item;
+      return '<tr class="data-row" '+(item?'data-material-id="'+esc(item.id)+'"':'data-material-mark="'+esc(r.basis||"")+'"')+'>'+
+        '<td class="center">'+esc(srows[0]?srows[0].position_no:"—")+'</td><td>'+esc(item?item.mark:"—")+'</td><td>'+esc(item?item.name:"—")+'</td><td class="num">'+(linked?fmt0(projectQty):"—")+'</td>'+
+        '<td class="center">'+esc(e?e.number:"")+'</td>'+filterCell("position",r.position,esc(r.position),"center")+filterCell("basis",r.basis,esc(r.basis),"")+
+        '<td>'+esc(item?item.mark:r.basis)+'</td>'+filterCell("name",r.name,esc(r.name),"")+'<td class="num">'+fmt(r.quantity)+'</td>'+
+        '<td class="num '+(diff<0?"warning":"")+'">'+(linked?fmt(diff):"—")+'</td>'+
+        '<td><span class="soft-status '+(linked?"ok":"warn")+'">'+(linked?"Связано":"Без связи")+'</span></td><td>Авто</td><td>'+(linked && diff===0?"Нет":linked?"Количество":"Связь")+'</td><td class="center">□</td><td><span class="link">Изменить</span></td></tr>';
     }).join("");
-    if (!body) body = tableMessage("Нет строк по текущему поиску.",5);
-    $("workArea").className = "work-area table-work";
-    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table compact-registry"><thead><tr><th>Смета</th><th>Поз.</th><th>Обоснование</th><th>Наименование</th><th>Состояние</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    if(!body)body=tableMessage("Нет строк по текущему фильтру.",16);
+    $("workArea").className="work-area table-work";
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table recon-table" data-table-key="estimate-recon"><thead><tr><th colspan="4">Спецификация</th><th colspan="6">Смета</th><th rowspan="2">Разница</th><th rowspan="2">Сопоставление</th><th rowspan="2">Способ</th><th rowspan="2">Расхождение</th><th rowspan="2">Журнал</th><th rowspan="2">Действия</th></tr>'+
+      '<tr><th>Поз. спецификации</th><th>Марка</th><th>Наименование по спецификации</th><th>Проект, шт.</th><th>№ сметы</th><th class="filterable-head">'+filterHeader("Поз. сметы","position")+'</th><th class="filterable-head">'+filterHeader("Обоснование","basis")+'</th><th>Принятое обоснование</th><th class="filterable-head">'+filterHeader("Наименование по смете","name")+'</th><th>Смета, шт.</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+  }
+
+  function renderEstimateJournal() {
+    $("workArea").className="work-area table-work";
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table journal-table" data-table-key="estimate-journal"><thead><tr><th>№ сметы</th><th>Раздел</th><th>Поз. сметы</th><th>Обоснование</th><th>Расхождение</th><th>Комментарий</th><th>Состояние</th><th>Действия</th></tr></thead><tbody>'+tableMessage("В журнал ещё не добавлены контрольные записи.",8)+'</tbody></table></div></div>';
   }
 
   function renderHome() {
@@ -1484,7 +1526,7 @@
       if (tab === 1) return renderCurrentPricePlaceholder();
       if (tab === 2) return renderGprPlaceholder();
       if (tab === 3) return renderRecon();
-      return renderSimple("Журнал смет");
+      return renderEstimateJournal();
     }
     if (pageKey === "supply") {
       if (tab === 0) return renderSupplySummary();
@@ -1581,7 +1623,7 @@
       rerenderContent();
     });
     if (expand) expand.addEventListener("click",function() {
-      ui.currentGroupKeys.forEach(function(k){ui.collapsed.delete(k);});
+      ui.collapsed.clear();
       rerenderContent();
     });
   }
