@@ -635,6 +635,18 @@
     try{return JSON.parse(localStorage.getItem(key)||"null");}catch(_){return null;}
   }
 
+  function updateStickyHeaderOffsets(table) {
+    if (!table || !table.tHead) return;
+    let top = 0;
+    Array.from(table.tHead.rows).forEach(function(row) {
+      Array.from(row.cells).forEach(function(cell) {
+        cell.style.top = Math.round(top) + "px";
+      });
+      const h = row.getBoundingClientRect().height;
+      if (Number.isFinite(h) && h > 0) top += h;
+    });
+  }
+
   function updateStickyOffsets(table,widths) {
     /* Sticky offsets must be based only on the rendered sticky identity columns.
        Colgroup widths are not reliable here because grouped headers can make the
@@ -676,6 +688,7 @@
     }
     Array.from(cg.children).forEach(function(col,i){col.style.width=widths[i]+"px";});
     updateStickyOffsets(table,widths);
+    updateStickyHeaderOffsets(table);
 
     table.querySelectorAll("thead th").forEach(function(th){
       if(Number(th.dataset.logicalSpan||th.colSpan||1)!==1) return;
@@ -689,6 +702,7 @@
           widths[index]=Math.max(28,Math.min(520,start+ev.clientX-startX));
           cg.children[index].style.width=widths[index]+"px";
           updateStickyOffsets(table,widths);
+          updateStickyHeaderOffsets(table);
         }
         function up(){document.removeEventListener("mousemove",move);document.removeEventListener("mouseup",up);saveTableWidths(table,widths);}
         document.addEventListener("mousemove",move);document.addEventListener("mouseup",up);
@@ -698,6 +712,7 @@
         widths[index]=intrinsicColumnWidth(table,index);
         cg.children[index].style.width=widths[index]+"px";
         updateStickyOffsets(table,widths);
+        updateStickyHeaderOffsets(table);
         saveTableWidths(table,widths);
       });
     });
