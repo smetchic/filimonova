@@ -710,3 +710,24 @@ svg{display:block}
 .material-est-table th,.material-est-table td{height:28px;padding:0 7px;border-color:#E4E4E7}
 .material-est-table th{background:#F7F7F8;color:#52525B;font-weight:500}
 .material-tech{font-size:10.5px;border-color:#E4E4E7}
+
+
+/* Current price: formula row fixed, table gets its own two-axis scroll area */
+.work-area.table-work.current-price-work{
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+  overflow:hidden;
+}
+.current-price-work .formula-strip{flex:0 0 38px}
+.current-price-work .engineering-shell{
+  flex:1 1 auto;
+  height:auto;
+  min-height:0;
+}
+.current-price-work .engineering-scroll{
+  flex:1 1 auto;
+  min-height:0;
+  overflow:auto;
+  scrollbar-gutter:stable;
+}
