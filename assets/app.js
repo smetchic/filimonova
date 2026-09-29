@@ -3121,7 +3121,7 @@
         '<td><span class="soft-status '+statusClass+'">'+status+'</span></td>'+
         '<td>'+method+'</td>'+
         '<td>'+esc(discrepancy)+'</td>'+
-        '<td class="center">□</td>'+
+        '<td class="center"><input class="table-checkbox" type="checkbox" aria-label="Запись в журнале"></td>'+
         '<td><button class="table-text-action" type="button" data-recon-edit="'+esc(r.id)+'">Изменить</button></td>'+
       '</tr>';
     }).join("");
