@@ -1638,3 +1638,47 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   border-color:#3978C5!important;
   color:#fff!important;
 }
+
+/* Manual reconciliation candidates use a real table: one record = one row. */
+#reconciliationEditorModal .recon-candidate-table{
+  width:100%;border-collapse:collapse;table-layout:fixed;font-size:12px;
+}
+#reconciliationEditorModal .recon-candidate-table th{
+  position:sticky;top:0;z-index:2;background:#F7F8FA;
+  color:#6B7078;font-size:10px;font-weight:500;text-align:left;
+  padding:6px 8px;border-bottom:1px solid #D9DDE3;
+}
+#reconciliationEditorModal .recon-candidate-table td{
+  padding:7px 8px;border-bottom:1px solid #E1E4E8;
+  vertical-align:middle;line-height:15px;overflow-wrap:anywhere;
+}
+#reconciliationEditorModal .recon-col-pick{width:48px}
+#reconciliationEditorModal .recon-col-est{width:68px}
+#reconciliationEditorModal .recon-col-pos{width:56px}
+#reconciliationEditorModal .recon-col-basis{width:150px}
+#reconciliationEditorModal .recon-col-name{width:auto}
+#reconciliationEditorModal .recon-col-qty{width:72px}
+#reconciliationEditorModal .recon-pick-cell{text-align:center}
+#reconciliationEditorModal .recon-pick-cell input[type="radio"]{
+  appearance:none!important;-webkit-appearance:none!important;
+  position:static!important;display:inline-grid!important;place-items:center!important;
+  width:14px!important;height:14px!important;margin:0!important;
+  opacity:1!important;visibility:visible!important;pointer-events:auto!important;
+  border:1px solid #8B9199!important;border-radius:3px!important;background:#fff!important;
+  cursor:pointer!important;
+}
+#reconciliationEditorModal .recon-pick-cell input[type="radio"]:checked{
+  background:#3978C5!important;border-color:#3978C5!important;
+}
+#reconciliationEditorModal .recon-pick-cell input[type="radio"]:checked::after{
+  content:"";width:7px;height:4px;border-left:1.5px solid #fff;border-bottom:1.5px solid #fff;
+  transform:rotate(-45deg) translateY(-1px);
+}
+#reconciliationEditorModal .recon-candidate-row{cursor:pointer;background:#fff}
+#reconciliationEditorModal .recon-candidate-row:hover{background:#F7F9FC}
+#reconciliationEditorModal .recon-candidate-row.is-selected{background:#DCEBFF}
+#reconciliationEditorModal .recon-num{white-space:nowrap;font-variant-numeric:tabular-nums}
+#reconciliationEditorModal .recon-table-note{
+  display:block;margin-top:2px;font-size:9.5px;font-weight:400;color:#68758A;white-space:nowrap;
+}
+#reconciliationEditorModal .recon-table-note.occupied{color:#9A5A25}
