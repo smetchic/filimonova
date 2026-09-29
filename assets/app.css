@@ -1372,6 +1372,41 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   color:var(--text);font:inherit;font-size:12px;outline:none
 }
 
+/* АВР, журнал 6-КС и С-29 */
+.execution-select{
+  height:25px;
+  max-width:190px;
+  border:1px solid var(--line-strong,#D4D4D8);
+  border-radius:6px;
+  background:#fff;
+  padding:0 24px 0 7px;
+  font:inherit;
+  color:#30313a;
+}
+.context-link:disabled{color:#a1a1aa;cursor:default;text-decoration:none}
+.execution-work{display:flex!important;flex-direction:column;gap:7px;min-height:0}
+.execution-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;flex:0 0 auto}
+.s29-table{min-width:1280px}
+.execution-work .execution-metrics:has(+ .execution-table .s29-table){grid-template-columns:repeat(5,minmax(0,1fr))}
+.execution-metric{min-height:65px;padding:9px 10px;background:#fff;border:1px solid #E4E4E7;border-radius:8px}
+.execution-metric span,.execution-metric small{display:block;color:#71717A}
+.execution-metric span{font-size:10.5px}.execution-metric strong{display:block;margin-top:2px;font-size:18px;line-height:22px;font-weight:600;color:#18181B}.execution-metric small{margin-top:2px;font-size:10px}
+.execution-metric.ok strong{color:#15803D}.execution-metric.warn strong{color:#A16207}.execution-metric.danger strong{color:#B42318}
+.execution-table{min-height:0;flex:1}
+.execution-table-title{height:34px;display:flex;align-items:center;gap:8px;padding:0 8px;border-bottom:1px solid #E4E4E7;background:#fff}
+.execution-table-title strong{font-size:12px;font-weight:600}.execution-table-title span{font-size:11px;color:#71717A}
+.row-type{display:inline-grid;place-items:center;width:22px;height:20px;border-radius:4px;background:#EFF6FF;color:#2563EB;font-size:10px}
+.row-type.work{background:#ECEDEF;color:#71717A}
+.execution-status{display:inline-flex;align-items:center;height:22px;padding:0 7px;border-radius:5px;background:#F4F4F5;color:#71717A;font-size:10.5px;white-space:nowrap}
+.execution-status.in_use{background:#EFF6FF;color:#2563EB}.execution-status.signed{background:#EDF7F0;color:#15803D}
+.registry-actions{display:flex;align-items:center;gap:9px;white-space:nowrap}
+.inline-action{border:0;background:transparent;padding:2px 0;color:#2563EB;font:inherit;cursor:pointer}.inline-action:hover{text-decoration:underline}.inline-action:disabled{color:#A1A1AA}
+.execution-registry th:last-child,.execution-registry td:last-child{min-width:230px}
+.execution-confirm-card{width:min(520px,calc(100vw - 28px));height:auto}.execution-confirm-card .spec-import-foot{min-height:46px}
+.group-level-2 td{padding-left:22px!important;background:#F4F4F5!important}
+.ks-table th,.ks-table td{min-width:92px}.ks-table th:nth-child(4),.ks-table td:nth-child(4){min-width:260px}
+@media(max-width:1100px){.execution-metrics,.execution-work .execution-metrics:has(+ .execution-table .s29-table){grid-template-columns:repeat(2,minmax(0,1fr))}}
+
 .table-checkbox{
   width:14px;height:14px;margin:0;vertical-align:middle;
   accent-color:#2f6fd6;cursor:pointer
