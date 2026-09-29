@@ -3154,8 +3154,39 @@
     const drivers=Number(c.drivers_amount||0);
     const transport=Number(c.transport_amount||0);
     const materials=Number(c.materials_amount||0);
+    const forecast=Number(P.forecast||1);
 
-    // Exactly the same linear calculation as "Текущая цена", but for one estimate row.
+    // Material row: only its own material + transport cost is brought to the
+    // price date 01.10.2026 by the forecast index for that date.
+    if(row.row_type==="material"){
+      const direct=materials+transport;
+      const afterForecast=direct*forecast;
+      return {
+        mode:"material",
+        qty:qty,
+        salary:0,
+        machines:0,
+        drivers:0,
+        transport:transport,
+        materials:materials,
+        wageBase:0,
+        direct:direct,
+        ohr:0,
+        profit:0,
+        temporary:0,
+        winter:0,
+        soc:0,
+        travel:0,
+        returnTemp:0,
+        contractor:direct,
+        competition:1,
+        forecast:forecast,
+        total:afterForecast,
+        unit:qty!==0 ? afterForecast/qty : 0
+      };
+    }
+
+    // Work row: exactly the same calculation chain as "Текущая цена".
     const wageBase=salary+drivers;
     const direct=salary+machines+transport+materials;
     const ohr=wageBase*1.0931;
@@ -3167,10 +3198,11 @@
     const returnTemp=-temporary*0.15;
     const contractor=direct+ohr+profit+temporary+winter+soc+travel+returnTemp;
     const afterCompetition=contractor*Number(P.competition||1);
-    const afterForecast=afterCompetition*Number(P.forecast||1);
+    const afterForecast=afterCompetition*forecast;
     const unit=qty!==0 ? afterForecast/qty : 0;
 
     return {
+      mode:"work",
       qty:qty,
       salary:salary,
       machines:machines,
@@ -3188,7 +3220,7 @@
       returnTemp:returnTemp,
       contractor:contractor,
       competition:Number(P.competition||1),
-      forecast:Number(P.forecast||1),
+      forecast:forecast,
       total:afterForecast,
       unit:unit
     };
@@ -3288,6 +3320,23 @@
 
   function gprFormulaPartsPrice(a,row) {
     const c=a.current||{};
+    if(c.mode==="material"){
+      return [
+        {text:"материалы "+gprMoneyText(c.materials),cls:"c1"},
+        {text:" + ",cls:"op"},
+        {text:"транспорт "+gprMoneyText(c.transport),cls:"c1"},
+        {text:" = ",cls:"op"},
+        {text:gprMoneyText(c.direct),cls:"c1"},
+        {text:" × ",cls:"op"},
+        {text:"прогнозный на 01.10.2026 "+Number(c.forecast||1).toFixed(4).replace(".",","),cls:"c3"},
+        {text:" = ",cls:"op"},
+        {text:gprMoneyText(c.total),cls:"c1"},
+        {text:" ÷ ",cls:"op"},
+        {text:gprNumberText(c.qty,6),cls:"c1"},
+        {text:" = ",cls:"op"},
+        {text:gprMoneyText(a.unit),cls:"result"}
+      ];
+    }
     const parts=[
       {text:"ЗП "+gprMoneyText(c.salary),cls:"c1"},
       {text:" + ",cls:"op"},
@@ -3343,10 +3392,14 @@
   }
 
   function gprFormulaPartsTotal(months,values,total) {
+    const nonZero=months
+      .map(function(mon){return Number(values[mon.key]||0);})
+      .filter(function(value){return Math.abs(value)>0.0049;});
+    if(!nonZero.length) return [];
     const parts=[];
-    months.forEach(function(mon,i){
+    nonZero.forEach(function(value,i){
       if(i) parts.push({text:" + ",cls:"op"});
-      parts.push({text:mon.label+" "+gprMoneyText(values[mon.key]||0),cls:"c"+((i%3)+1)});
+      parts.push({text:gprMoneyText(value),cls:"c"+((i%3)+1)});
     });
     parts.push({text:" = ",cls:"op"});
     parts.push({text:gprMoneyText(total),cls:"result"});
