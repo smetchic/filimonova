@@ -1481,3 +1481,34 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 #workArea table thead th.filterable-head{
   position:sticky!important;
 }
+
+/* Manual reconciliation: compact movable inspector, table stays visible behind it. */
+#reconciliationEditorModal.spec-import-backdrop{
+  background:rgba(20,24,30,.12);
+  align-items:flex-start;
+  justify-content:center;
+  padding-top:72px;
+  pointer-events:none;
+}
+#reconciliationEditorModal .recon-edit-modal{
+  width:min(760px,calc(100vw - 40px));
+  max-height:min(620px,calc(100vh - 100px));
+  pointer-events:auto;
+}
+#reconciliationEditorModal .spec-import-head{cursor:move;user-select:none}
+#reconciliationEditorModal .spec-import-head.dragging{cursor:grabbing}
+#reconciliationEditorModal .recon-source-card{padding:8px 12px}
+#reconciliationEditorModal .recon-estimate-choice{
+  grid-template-columns:22px 62px 62px minmax(280px,1fr) 64px;
+  min-height:48px;
+}
+#reconciliationEditorModal .recon-estimate-choice .recon-choice-name{
+  display:flex;flex-direction:column;gap:2px;
+}
+#reconciliationEditorModal .recon-estimate-choice .recon-choice-name strong{
+  font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+#reconciliationEditorModal .recon-estimate-choice .recon-choice-name small{
+  font-size:10.5px;color:#71717A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+#reconciliationEditorModal .recon-choice-occupied{opacity:.68}
