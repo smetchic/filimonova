@@ -363,7 +363,8 @@ svg{display:block}
   background:#FAFAFA
 }
 
-/* Estimates sticky identification zone */
+/* Estimates — shared engineering column policy.
+   Keep identifiers readable, units compact and long names from stretching the whole grid. */
 .est-table .e-sticky-1{
   position:sticky;left:0;width:42px;min-width:42px;max-width:42px;z-index:6
 }
@@ -371,10 +372,10 @@ svg{display:block}
   position:sticky;left:42px;width:72px;min-width:72px;max-width:72px;z-index:6
 }
 .est-table .e-sticky-3{
-  position:sticky;left:114px;width:140px;min-width:140px;max-width:140px;z-index:6
+  position:sticky;left:114px;width:190px;min-width:190px;max-width:190px;z-index:6
 }
 .est-table .e-sticky-4{
-  position:sticky;left:254px;width:320px;min-width:320px;max-width:320px;z-index:6;
+  position:sticky;left:304px;width:420px;min-width:420px;max-width:420px;z-index:6;
   box-shadow:1px 0 0 var(--line-strong)
 }
 .est-table thead .e-sticky-1,
@@ -385,14 +386,33 @@ svg{display:block}
   position:sticky;
   left:0;
   z-index:7;
-  min-width:574px;
-  max-width:574px;
+  min-width:724px;
+  max-width:724px;
   background:var(--group)!important;
   box-shadow:1px 0 0 var(--line-strong)
 }
 .est-table th:nth-child(n+5),
 .est-table td:nth-child(n+5){min-width:82px}
-.est-table th:nth-child(4),.est-table td:nth-child(4){white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.est-table th:nth-child(5),.est-table td:nth-child(5){width:92px;min-width:92px;max-width:92px}
+.est-table th:nth-child(4),.est-table td:nth-child(4),
+.ks-table th:nth-child(4),.ks-table td:nth-child(4){
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+}
+.est-table td[data-filter-field="name"],
+.ks-table td[data-filter-field="name"]{cursor:zoom-in}
+.est-table td[data-filter-field="name"].cell-text-expanded,
+.ks-table td[data-filter-field="name"].cell-text-expanded{
+  white-space:normal!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+  height:auto;
+  line-height:1.35;
+  cursor:zoom-out
+}
+.ks-table th:nth-child(2),.ks-table td:nth-child(2){width:72px;min-width:72px;max-width:72px}
+.ks-table th:nth-child(3),.ks-table td:nth-child(3){width:190px;min-width:190px;max-width:190px}
+.ks-table th:nth-child(4),.ks-table td:nth-child(4){width:420px;min-width:420px;max-width:420px}
+.ks-table th:nth-child(5),.ks-table td:nth-child(5){width:92px;min-width:92px;max-width:92px}
 
 /* Supply / price */
 .supply-table th,.supply-table td{min-width:72px}
