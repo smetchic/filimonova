@@ -613,7 +613,7 @@
 
   function forceLogicalColumnWidth(table,index,width) {
     // Global EngineeringTable rule: a user-resized logical column owns its width.
-    if(!table || !table.classList.contains("eng-table")) return;
+    if(!table || !(table.classList.contains("eng-table") || table.classList.contains("spec-table"))) return;
     const px=Math.max(12,Number(width)||12)+"px";
     if(table.tHead) Array.from(table.tHead.rows).forEach(function(row){
       Array.from(row.cells).forEach(function(cell){
