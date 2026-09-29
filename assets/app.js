@@ -3083,98 +3083,91 @@
 
   function renderRecon() {
     if(!ui.reconLinkFilter) ui.reconLinkFilter="all";
-    let rows=dataState.estimateRows.filter(function(r){
-      return r.row_type==="material" &&
-        passesSearch([r.position,estimateDisplayBasis(r),estimateDisplayName(r),r.basis,r.name]);
-    });
-    rows=rows.filter(function(r){
-      return rowPassesColumnFilters({position:r.position,basis:estimateDisplayBasis(r),name:estimateDisplayName(r)});
-    });
-    // Reconciliation is ordered by the visible specification position number.
-    // Linked rows come first in numeric/natural position order; unlinked estimate rows follow.
-    function reconPositionSortKey(r){
-      const srows=linkedSpecRowsForEstimateRow(r);
-      if(!srows.length) return {linked:false,value:""};
-      const values=srows.map(function(sr){return String(sr.position_no==null?"":sr.position_no);})
-        .filter(Boolean)
-        .sort(function(a,b){return a.localeCompare(b,"ru",{numeric:true,sensitivity:"base"});});
-      return {linked:true,value:values[0]||""};
-    }
-    rows.sort(function(a,b){
-      const ak=reconPositionSortKey(a), bk=reconPositionSortKey(b);
-      if(ak.linked!==bk.linked) return ak.linked?-1:1;
-      if(ak.linked){
-        const pos=ak.value.localeCompare(bk.value,"ru",{numeric:true,sensitivity:"base"});
-        if(pos) return pos;
-      }
-      const ea=dataState.estimates.find(function(x){return x.id===a.estimate_id;});
-      const eb=dataState.estimates.find(function(x){return x.id===b.estimate_id;});
-      const en=String(ea?ea.number:"").localeCompare(String(eb?eb.number:""),"ru",{numeric:true});
-      if(en) return en;
-      return Number(a.sort_order||0)-Number(b.sort_order||0);
-    });
 
     const claimCount=new Map();
     dataState.reconciliationLinks.forEach(function(l){
       claimCount.set(l.specification_row_id,(claimCount.get(l.specification_row_id)||0)+1);
     });
 
-    if(ui.reconLinkFilter==="unlinked"){
-      rows=rows.filter(function(r){return !dataState.reconciliationLinks.some(function(l){return l.estimate_row_id===r.id;});});
-    } else if(ui.reconLinkFilter==="linked"){
-      rows=rows.filter(function(r){return dataState.reconciliationLinks.some(function(l){return l.estimate_row_id===r.id;});});
-    }
+    // The reconciliation grid is specification-first. Every project position exists
+    // in the grid even when no estimate row is linked to it.
+    let specRows=specJoinedRows().slice().sort(function(a,b){
+      return String(a.position_no||"").localeCompare(String(b.position_no||""),"ru",{numeric:true,sensitivity:"base"});
+    });
 
-    function reconHasIssue(r){
-      const links=dataState.reconciliationLinks.filter(function(l){return l.estimate_row_id===r.id;});
-      if(!links.length) return true;
-      const srows=linkedSpecRowsForEstimateRow(r);
-      if(links.some(function(l){return (claimCount.get(l.specification_row_id)||0)>1;})) return true;
-      const estimatePieces=estimateQuantityPieces(r,srows);
-      const projectQty=srows.reduce(function(sum,x){return sum+Number(x.total||0);},0);
+    const viewRows=[];
+    specRows.forEach(function(sr){
+      const links=dataState.reconciliationLinks.filter(function(l){return l.specification_row_id===sr.id;});
+      const estimateRows=links.map(function(l){
+        return dataState.estimateRows.find(function(r){return r.id===l.estimate_row_id;});
+      }).filter(Boolean);
+      if(!estimateRows.length) viewRows.push({spec:sr,estimate:null,link:null});
+      else estimateRows.forEach(function(r){
+        viewRows.push({spec:sr,estimate:r,link:links.find(function(l){return l.estimate_row_id===r.id;})||null});
+      });
+    });
+
+    let filtered=viewRows.filter(function(v){
+      const r=v.estimate, sr=v.spec;
+      const searchValues=[sr.position_no,sr.mark,sr.name];
+      if(r) searchValues.push(r.position,estimateDisplayBasis(r),estimateDisplayName(r),r.basis,r.name);
+      if(!passesSearch(searchValues)) return false;
+      if(!r) return !columnFilters.position && !columnFilters.basis && !columnFilters.name;
+      return rowPassesColumnFilters({position:r.position,basis:estimateDisplayBasis(r),name:estimateDisplayName(r)});
+    });
+
+    function viewIssue(v){
+      const r=v.estimate, sr=v.spec;
+      if(!r) return true;
+      if((claimCount.get(sr.id)||0)>1) return true;
+      const linkedGroup=linkedSpecRowsForEstimateRow(r);
+      const estimatePieces=estimateQuantityPieces(r,linkedGroup);
+      const projectQty=linkedGroup.reduce(function(sum,x){return sum+Number(x.total||0);},0);
       if(estimatePieces==null || Math.abs(projectQty-estimatePieces)>1e-9) return true;
-      const items=Array.from(new Map(srows.map(function(x){
-        const item=dataState.catalogItems.find(function(ci){return ci.id===x.catalog_item_id;});
-        return [x.catalog_item_id,item];
-      })).values()).filter(Boolean);
-      const names=Array.from(new Set(items.map(function(x){return x.name;})));
-      return names.length===1 && importNorm(names[0])!==importNorm(String(estimateSourceValue(r,"name")||""));
+      return importNorm(sr.name)!==importNorm(String(estimateSourceValue(r,"name")||""));
     }
-    if(ui.reconLinkFilter==="issues") rows=rows.filter(reconHasIssue);
+    if(ui.reconLinkFilter==="unlinked") filtered=filtered.filter(function(v){return !v.estimate;});
+    else if(ui.reconLinkFilter==="linked") filtered=filtered.filter(function(v){return !!v.estimate;});
+    else if(ui.reconLinkFilter==="issues") filtered=filtered.filter(viewIssue);
 
-    let body=rows.map(function(r){
+    let body=filtered.map(function(v){
+      const sr=v.spec, r=v.estimate;
+      const projectQty=Number(sr.total||0);
+      if(!r){
+        return '<tr class="data-row recon-unlinked-spec" data-spec-row="'+esc(sr.id)+'">'+
+          '<td class="center">'+esc(sr.position_no||"")+'</td>'+
+          '<td>'+esc(sr.mark||"")+'</td>'+
+          '<td>'+esc(sr.name||"")+'</td>'+
+          '<td class="num">'+fmt0(projectQty)+'</td>'+
+          '<td></td><td></td><td></td><td></td><td></td><td></td>'+
+          '<td></td>'+
+          '<td><span class="soft-status warn">Без связи</span></td>'+
+          '<td></td><td></td><td></td><td></td>'+
+        '</tr>';
+      }
+
       const e=dataState.estimates.find(function(x){return x.id===r.estimate_id;});
-      const links=dataState.reconciliationLinks.filter(function(l){return l.estimate_row_id===r.id;});
-      const srows=linkedSpecRowsForEstimateRow(r);
-      const projectQty=srows.reduce(function(sum,x){return sum+Number(x.total||0);},0);
-      const estimatePieces=estimateQuantityPieces(r,srows);
-      const diff=estimatePieces==null ? null : projectQty-estimatePieces;
-      const items=Array.from(new Map(srows.map(function(x){
-        const item=dataState.catalogItems.find(function(ci){return ci.id===x.catalog_item_id;});
-        return [x.catalog_item_id,item];
-      })).values()).filter(Boolean);
-      const marks=Array.from(new Set(items.map(function(x){return x.mark;})));
-      const names=Array.from(new Set(items.map(function(x){return x.name;})));
-      const linked=links.length>0;
-      const conflict=links.some(function(l){return (claimCount.get(l.specification_row_id)||0)>1;});
-      const method=links.some(function(l){return l.link_method==="manual";}) ? "Manual" : linked ? "Auto" : "—";
+      const linkedGroup=linkedSpecRowsForEstimateRow(r);
+      const groupProjectQty=linkedGroup.reduce(function(sum,x){return sum+Number(x.total||0);},0);
+      const estimatePieces=estimateQuantityPieces(r,linkedGroup);
+      const diff=estimatePieces==null ? null : groupProjectQty-estimatePieces;
+      const conflict=(claimCount.get(sr.id)||0)>1;
+      const method=v.link && v.link.link_method==="manual" ? "Manual" : "Auto";
       const sourceName=String(estimateSourceValue(r,"name")||"");
-      const nameMismatch=linked && names.length===1 && importNorm(names[0])!==importNorm(sourceName);
+      const nameMismatch=importNorm(sr.name)!==importNorm(sourceName);
       const reasons=[];
       if(nameMismatch) reasons.push("Наименование");
-      if(linked && (estimatePieces==null || Math.abs(diff)>1e-9)) reasons.push("Количество");
-      const discrepancy=conflict ? "Конфликт" : linked ? (reasons.length?reasons.join(" + "):"Нет") : "—";
-      const status=conflict?"Конфликт":linked?"Связано":"Без связи";
-      const statusClass=conflict?"bad":linked?"ok":"warn";
-      const projectMark=marks.length===1?marks[0]:(marks.length?marks.join(" / "):"—");
-      const projectName=names.length===1?names[0]:(names.length?names.join(" / "):"—");
-      const accepted=linked?projectMark:r.basis;
+      if(estimatePieces==null || Math.abs(diff)>1e-9) reasons.push("Количество");
+      const discrepancy=conflict?"Конфликт":(reasons.length?reasons.join(" + "):"Нет");
+      const status=conflict?"Конфликт":"Связано";
+      const statusClass=conflict?"bad":"ok";
+      const accepted=sr.mark||r.basis||"";
 
-      return '<tr class="data-row" data-recon-row="'+esc(r.id)+'">'+
-        '<td class="center" title="'+esc(srows.map(function(x){return x.position_no;}).join(", "))+'">'+esc(reconPositionText(srows))+'</td>'+
-        '<td>'+esc(projectMark)+'</td>'+
-        '<td>'+esc(projectName)+'</td>'+
-        '<td class="num">'+(linked?fmt0(projectQty):"—")+'</td>'+
+      return '<tr class="data-row" data-recon-row="'+esc(r.id)+'" data-spec-row="'+esc(sr.id)+'">'+
+        '<td class="center">'+esc(sr.position_no||"")+'</td>'+
+        '<td>'+esc(sr.mark||"")+'</td>'+
+        '<td>'+esc(sr.name||"")+'</td>'+
+        '<td class="num">'+fmt0(projectQty)+'</td>'+
         '<td class="center">'+esc(e?e.number:"")+'</td>'+
         filterCell("position",r.position,esc(r.position),"center")+
         filterCell("basis",r.basis,esc(r.basis),"")+
@@ -3192,7 +3185,7 @@
 
     if(!body)body=tableMessage("Нет строк по текущему фильтру.",16);
     $("workArea").className="work-area table-work";
-    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table recon-table" data-table-key="estimate-recon-v4"><thead><tr><th colspan="4">Спецификация</th><th colspan="6">Смета</th><th rowspan="2">Разница</th><th rowspan="2">Сопоставление</th><th rowspan="2">Способ</th><th rowspan="2">Расхождение</th><th rowspan="2">Журнал</th><th rowspan="2">Действия</th></tr>'+
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table recon-table" data-table-key="estimate-recon-v5"><thead><tr><th colspan="4">Спецификация</th><th colspan="6">Смета</th><th rowspan="2">Разница</th><th rowspan="2">Сопоставление</th><th rowspan="2">Способ</th><th rowspan="2">Расхождение</th><th rowspan="2">Журнал</th><th rowspan="2">Действия</th></tr>'+
       '<tr><th>Поз. спецификации</th><th>Марка</th><th>Наименование по спецификации</th><th>Проект, шт.</th><th>№ сметы</th><th class="filterable-head">'+filterHeader("Поз. сметы","position")+'</th><th class="filterable-head">'+filterHeader("Обоснование","basis")+'</th><th>Принятое обоснование</th><th class="filterable-head">'+filterHeader("Наименование по смете","name")+'</th><th>Смета, шт.</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
 
