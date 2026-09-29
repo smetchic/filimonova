@@ -2241,7 +2241,7 @@
     const modal=supplierMatchEditorModal();modal.dataset.catalogId=catalogId;
     modal.querySelector(".supplier-match-source").innerHTML='<span>Проектная номенклатура</span><strong>'+esc(project.mark)+' · '+esc(project.name)+'</strong><small>Проект: '+fmt0(project.qty)+' шт.'+(project.volume!=null?' · '+fmt(project.volume)+' м³/шт.':'')+'</small>';
     modal.querySelector(".supplier-link-remove").classList.toggle("hidden",!model.link);
-    modal.querySelector(".supplier-match-list").innerHTML='<table class="eng-table recon-candidate-table supplier-match-candidate-table"><thead><tr><th>Выбор</th><th>Строка прайса</th><th>Марка поставщика</th><th>Наименование поставщика</th><th>Кол-во по прайсу</th><th>Объём за ед.</th><th>Цена за 1 шт.</th><th>Цена за 1 м³</th><th>Состояние</th></tr></thead><tbody>'+ranked.map(function(c,index){const s=c.row,r=s.raw_data||{},ps=Array.isArray(r.prices)?r.prices:[],piece=ps.find(function(p){return (p.price_basis||"piece")==="piece";}),qty=r.qty_house==null?null:Number(r.qty_house),vol=Number(r.unit_volume_m3||0),owner=(dataState.supplierPriceLinks||[]).find(function(x){return x.supplier_item_id===s.supplier_item_id;});const disabled=owner&&owner.catalog_item_id!==catalogId;return '<tr class="supplier-candidate-row'+(linked===s.supplier_item_id?' is-selected':'')+'"><td class="center"><input type="radio" name="supplier-candidate" data-supplier-candidate="'+esc(s.supplier_item_id||'')+'" '+(linked===s.supplier_item_id?'checked':'')+' '+(disabled?'disabled':'')+'></td><td class="center">'+esc(s.source_row_no)+'</td><td><strong>'+esc(r.source_mark||'')+'</strong>'+(index===0?'<small class="recon-table-note">Предлагаем</small>':'')+'</td><td>'+esc(r.source_name||'')+'</td><td class="num">'+(qty==null?'—':fmt0(qty))+'</td><td class="num">'+(vol?fmt(vol):'—')+'</td><td class="num">'+(piece?money(piece.unit_price_gross):'—')+'</td><td class="num">'+(piece&&vol?money(Number(piece.unit_price_gross)/vol):'—')+'</td><td>'+(disabled?'Связано с другой позицией':linked===s.supplier_item_id?'Текущая связь':'Кандидат')+'</td></tr>';}).join('')+'</tbody></table>';
+    modal.querySelector(".supplier-match-list").innerHTML='<table class="eng-table recon-candidate-table supplier-match-candidate-table"><thead><tr><th>Выбор</th><th>Строка прайса</th><th>Марка поставщика</th><th>Наименование поставщика</th><th>Кол-во по прайсу</th><th>Объём за ед.</th><th>Цена за 1 шт.</th><th>Цена за 1 м³</th><th>Состояние</th></tr></thead><tbody>'+ranked.map(function(c,index){const s=c.row,r=s.raw_data||{},ps=Array.isArray(r.prices)?r.prices:[],piece=supplierApplicablePrice(ps.filter(function(p){return (p.price_basis||"piece")==="piece";})),qty=r.qty_house==null?null:Number(r.qty_house),vol=Number(r.unit_volume_m3||0),owner=(dataState.supplierPriceLinks||[]).find(function(x){return x.supplier_item_id===s.supplier_item_id;});const disabled=owner&&owner.catalog_item_id!==catalogId;return '<tr class="supplier-candidate-row'+(linked===s.supplier_item_id?' is-selected':'')+'"><td class="center"><input type="radio" name="supplier-candidate" data-supplier-candidate="'+esc(s.supplier_item_id||'')+'" '+(linked===s.supplier_item_id?'checked':'')+' '+(disabled?'disabled':'')+'></td><td class="center">'+esc(s.source_row_no)+'</td><td><strong>'+esc(r.source_mark||'')+'</strong>'+(index===0?'<small class="recon-table-note">Предлагаем</small>':'')+'</td><td>'+esc(r.source_name||'')+'</td><td class="num">'+(qty==null?'—':fmt0(qty))+'</td><td class="num">'+(vol?fmt(vol):'—')+'</td><td class="num">'+(piece?money(piece.unit_price_gross):'—')+'</td><td class="num">'+(piece&&vol?money(Number(piece.unit_price_gross)/vol):'—')+'</td><td>'+(disabled?'Связано с другой позицией':linked===s.supplier_item_id?'Текущая связь':'Кандидат')+'</td></tr>';}).join('')+'</tbody></table>';
     modal.querySelector(".recon-edit-state").textContent="";
     modal.querySelectorAll(".supplier-candidate-row").forEach(function(row){row.onclick=function(e){const radio=row.querySelector("input");if(radio.disabled)return;if(e.target!==radio)radio.checked=true;modal.querySelectorAll(".supplier-candidate-row").forEach(function(x){x.classList.toggle("is-selected",x.querySelector("input").checked);});};});
     modal.classList.add("open");
@@ -3846,6 +3846,17 @@
       '<tbody>'+body+'</tbody></table></div></div>';
   }
 
+  function supplierApplicablePrice(prices) {
+    const list=(prices||[]).slice().filter(function(p){return p && p.unit_price_gross!=null;}).sort(function(a,b){
+      return String(a.effective_from||"").localeCompare(String(b.effective_from||""));
+    });
+    if(!list.length) return null;
+    const now=new Date();
+    const today=String(now.getFullYear()).padStart(4,"0")+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0");
+    const active=list.filter(function(p){return !p.effective_from || String(p.effective_from).slice(0,10)<=today;});
+    return active.length ? active[active.length-1] : list[0];
+  }
+
   function supplierPriceModel(catalogItemId,projectVolume) {
     const items=dataState.supplierItems.filter(function(x){return x.catalog_item_id===catalogItemId;});
     const prices=items.flatMap(function(item){
@@ -3861,7 +3872,8 @@
     if(hasReview) state="Проверить";
     else if(!distinctPrices.length) state="Нет цены";
     else state=distinctPrices.length+" "+(distinctPrices.length===1?"цена":distinctPrices.length<5?"цены":"цен");
-    const singlePrice=distinctPrices.length===1 && !hasReview ? Number(distinctPrices[0].unit_price_gross||0) : null;
+    const applicable=supplierApplicablePrice(distinctPrices);
+    const singlePrice=applicable && !hasReview ? Number(applicable.unit_price_gross||0) : null;
     const volume=supplierVolume!=null?supplierVolume:Number(projectVolume||0);
     return {
       items:items,
@@ -3870,6 +3882,7 @@
       volume:volume,
       state:state,
       singlePrice:singlePrice,
+      effectiveFrom:applicable?applicable.effective_from:null,
       perM3:singlePrice!=null && supplierVolume>0 ? singlePrice/supplierVolume : null
     };
   }
@@ -3881,10 +3894,12 @@
     })).values());
     const review=["review","needs_review","ambiguous"].includes(item.link_state);
     const state=review?"Проверить":"Только поставщик";
-    const singlePrice=distinct.length===1 && !review ? Number(distinct[0].unit_price_gross||0) : null;
+    const applicable=supplierApplicablePrice(distinct);
+    const singlePrice=applicable && !review ? Number(applicable.unit_price_gross||0) : null;
     const volume=Number(item.unit_volume_m3||0);
     return {
       prices:distinct,state:state,singlePrice:singlePrice,volume:volume,
+      effectiveFrom:applicable?applicable.effective_from:null,
       perM3:singlePrice!=null && volume>0?singlePrice/volume:null
     };
   }
