@@ -573,6 +573,7 @@
     if(index===1){
       let max=0;
       rows.forEach(function(r){max=Math.max(max,measureEngineeringText(r.position||""));});
+      if(table.classList.contains("gpr-table")) max+=28;
       return max;
     }
     if(index===2){
@@ -2777,7 +2778,7 @@
   }
 
   function gprMaterialMonthQty(row,e,monthKey) {
-    const item=dataState.catalogItems.find(function(x){return x.mark===row.basis;});
+    const item=estimateProjectItem(row) || dataState.catalogItems.find(function(x){return x.mark===estimateDisplayBasis(row);});
     if(!item) return 0;
     const scope=estimateScope(e);
     let qty=0;
@@ -2842,8 +2843,16 @@
 
     dataState.estimates.filter(function(e){return ui.estimates[e.number]!==false;}).forEach(function(e){
       let erows=dataState.estimateRows.filter(function(r){return r.estimate_id===e.id;});
-      erows=erows.filter(function(r){return passesSearch([r.position,r.basis,r.name]) && rowPassesColumnFilters({position:r.position,basis:r.basis,name:r.name});});
-      erows=sortRows(erows,{position:function(r){return r.position;},basis:function(r){return r.basis;},name:function(r){return r.name;}});
+      erows=erows.filter(function(r){
+        const displayBasis=estimateDisplayBasis(r), displayName=estimateDisplayName(r);
+        return passesSearch([r.position,displayBasis,displayName,r.basis,r.name]) &&
+          rowPassesColumnFilters({position:r.position,basis:displayBasis,name:displayName});
+      });
+      erows=sortRows(erows,{
+        position:function(r){return r.position;},
+        basis:function(r){return estimateDisplayBasis(r);},
+        name:function(r){return estimateDisplayName(r);}
+      });
       if(!sortBucket()) erows.sort(function(x,y){return Number(x.sort_order||0)-Number(y.sort_order||0);});
       if(!erows.length && (currentSearch()||Object.keys(filterBucket()).length)) return;
 
@@ -2861,12 +2870,14 @@
 
         sRows.forEach(function(r){
           const a=gprRowAmounts(r,e,sRows,m);
-          const item=dataState.catalogItems.find(function(x){return x.mark===r.basis;});
-          body+='<tr class="data-row '+(r.row_type==="material"?'gpr-material-row':'gpr-work-row')+'" '+(r.row_type==="material"?'data-material-id="'+esc(item?item.id:"")+'" data-material-mark="'+esc(r.basis||"")+'"':'')+'>';
+          const item=estimateProjectItem(r);
+          const displayBasis=estimateDisplayBasis(r);
+          const displayName=estimateDisplayName(r);
+          body+='<tr class="data-row '+(r.row_type==="material"?'gpr-material-row':'gpr-work-row')+'" '+(r.row_type==="material"?'data-material-id="'+esc(item?item.id:"")+'" data-material-mark="'+esc(displayBasis||"")+'"':'')+'>';
           body+='<td class="e-sticky-1 center"><span class="type-mark">'+(r.row_type==="material"?"М":"Р")+'</span></td>';
           body+=filterCell("position",r.position,esc(r.position),"e-sticky-2 center");
-          body+=filterCell("basis",r.basis,esc(r.basis),"e-sticky-3");
-          body+=filterCell("name",r.name,esc(r.name),"e-sticky-4");
+          body+=filterCell("basis",displayBasis,esc(displayBasis),"e-sticky-3");
+          body+=filterCell("name",displayName,esc(displayName),"e-sticky-4");
           body+='<td class="center">'+esc(r.unit||"")+'</td><td class="num">'+fmt(r.quantity)+'</td><td class="num">'+money(a.unit)+'</td><td class="num">'+money(a.total)+'</td>';
           months.forEach(function(mon){body+='<td class="num gpr-month">'+money(a.months[mon.key])+'</td>';});
           body+='</tr>';
@@ -2886,7 +2897,7 @@
     const monthHead=months.map(function(mon){return '<th class="gpr-month-head">'+esc(mon.month)+'</th>';}).join("");
 
     $("workArea").className="work-area table-work";
-    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table est-table gpr-table" data-table-key="gpr-v2"><thead>'+
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table est-table gpr-table" data-table-key="gpr-v3"><thead>'+
       '<tr><th class="e-sticky-1" rowspan="2">Тип</th><th class="e-sticky-2 filterable-head" rowspan="2">'+filterHeader("Поз. см.","position")+'</th><th class="e-sticky-3 filterable-head" rowspan="2">'+filterHeader("Обоснование","basis")+'</th><th class="e-sticky-4 filterable-head" rowspan="2">'+filterHeader("Наименование","name")+'</th><th rowspan="2"><span class="column-header-stack"><span>Ед.</span><span>изм.</span></span></th><th rowspan="2">Кол-во</th><th rowspan="2">Цена на начало работ</th><th rowspan="2">Стоимость на начало работ</th>'+yearHead+'</tr>'+
       '<tr>'+monthHead+'</tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
