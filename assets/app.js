@@ -220,7 +220,7 @@
       fetchAllRows("reconciliation_links","id,estimate_row_id,specification_row_id,link_method,origin_mode",function(q){return q.eq("project_id",project.id);}),
       fetchAllRows("suppliers","id,name",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("name");}),
       fetchAllRows("supplier_items","id,supplier_id,catalog_item_id,source_mark,source_name,source_section,source_key,unit_volume_m3,link_method,link_state,source_import_row_id",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("source_mark");}),
-      fetchAllRows("supplier_prices","id,supplier_item_id,effective_from,price_basis,unit_price_gross,unit_volume_snapshot_m3,source_import_row_id",function(q){return q.eq("project_id",project.id).order("effective_from");})
+      fetchAllRows("supplier_prices_current","id,supplier_item_id,effective_from,price_basis,unit_price_gross,unit_volume_snapshot_m3,source_import_row_id,source_imported_at",function(q){return q.eq("project_id",project.id).order("effective_from");})
     ];
     const results = await Promise.all(requests);
     dataState = {
