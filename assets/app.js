@@ -218,7 +218,7 @@
     return all;
   }
 
-  async function loadProjectData(project) {
+  async function loadProjectDataFresh(project) {
     const requests = [
       fetchAllRows("catalog_items","id,mark,name,normalized_key",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("mark");}),
       fetchAllRows("specification_sections","id,building_section,zone,name,sort_order,is_stairs",function(q){return q.eq("project_id",project.id).order("sort_order");}),
@@ -308,6 +308,30 @@
       supplierSnapshotRows:results[39] || []
     };
   }
+
+  // Prevent duplicate full-project reloads. Supabase can emit INITIAL_SESSION while
+  // getSession() resolves, and overlapping reloads previously launched 80–120 REST
+  // requests at once, causing PostgREST timeout-manager kills and a visibly unstable UI.
+  let projectDataLoadPromise=null;
+  let projectDataLoadProjectId="";
+  async function loadProjectData(project) {
+    if(!project || !project.id) return loadProjectDataFresh(project);
+    if(projectDataLoadPromise && projectDataLoadProjectId===project.id) {
+      return projectDataLoadPromise;
+    }
+    projectDataLoadProjectId=project.id;
+    const promise=loadProjectDataFresh(project);
+    projectDataLoadPromise=promise;
+    try{
+      return await promise;
+    }finally{
+      if(projectDataLoadPromise===promise){
+        projectDataLoadPromise=null;
+        projectDataLoadProjectId="";
+      }
+    }
+  }
+
 
   function maps() {
     return {
@@ -4934,7 +4958,11 @@
     }
   }
 
-  client.auth.onAuthStateChange(function(_event,session) {
+  client.auth.onAuthStateChange(function(event,session) {
+    // getSession() below owns the initial bootstrap. Re-running the full project load
+    // for INITIAL_SESSION or routine token refreshes caused overlapping Supabase reads.
+    if(event==="INITIAL_SESSION") return;
+    if(event==="TOKEN_REFRESHED" && dataState.loaded) return;
     setTimeout(function(){renderSession(session);},0);
   });
 
