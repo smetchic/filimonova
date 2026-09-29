@@ -1791,3 +1791,70 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 @media(max-width:900px){
  #materialCardModal .material-v11 .mv-overview-two{grid-template-columns:1fr!important}
 }
+
+
+/* Estimate -> specification manual reconciliation: stable one-record-per-row table. */
+#reconciliationEditorModal .recon-spec-candidate-table{
+  width:100%;
+  border-collapse:collapse;
+  table-layout:fixed;
+  font-size:12px;
+}
+#reconciliationEditorModal .recon-spec-candidate-table th{
+  position:sticky;
+  top:0;
+  z-index:2;
+  background:#F7F8FA;
+  color:#6B7078;
+  font-size:10px;
+  font-weight:500;
+  text-align:left;
+  padding:6px 8px;
+  border-bottom:1px solid #D9DDE3;
+}
+#reconciliationEditorModal .recon-spec-candidate-table td{
+  padding:7px 8px;
+  border-bottom:1px solid #E1E4E8;
+  vertical-align:middle;
+  line-height:15px;
+  overflow-wrap:anywhere;
+}
+#reconciliationEditorModal .recon-spec-col-pick{width:52px}
+#reconciliationEditorModal .recon-spec-col-pos{width:76px}
+#reconciliationEditorModal .recon-spec-col-mark{width:150px}
+#reconciliationEditorModal .recon-spec-col-name{width:auto}
+#reconciliationEditorModal .recon-spec-col-qty{width:82px}
+#reconciliationEditorModal .recon-spec-candidate-row{cursor:pointer;background:#fff}
+#reconciliationEditorModal .recon-spec-candidate-row:hover{background:#F7F9FC}
+#reconciliationEditorModal .recon-spec-candidate-row.is-selected{background:#DCEBFF}
+#reconciliationEditorModal .recon-spec-pick-cell{text-align:center}
+#reconciliationEditorModal .recon-spec-pick-cell input[type="checkbox"]{
+  appearance:none!important;
+  -webkit-appearance:none!important;
+  position:static!important;
+  display:inline-grid!important;
+  place-items:center!important;
+  width:14px!important;
+  height:14px!important;
+  margin:0!important;
+  opacity:1!important;
+  visibility:visible!important;
+  pointer-events:auto!important;
+  border:1px solid #8B9199!important;
+  border-radius:3px!important;
+  background:#fff!important;
+  cursor:pointer!important;
+}
+#reconciliationEditorModal .recon-spec-pick-cell input[type="checkbox"]:checked{
+  background:#3978C5!important;
+  border-color:#3978C5!important;
+}
+#reconciliationEditorModal .recon-spec-pick-cell input[type="checkbox"]:checked::after{
+  content:"";
+  width:7px;
+  height:4px;
+  border-left:1.5px solid #fff;
+  border-bottom:1.5px solid #fff;
+  transform:rotate(-45deg) translateY(-1px);
+}
+#reconciliationEditorModal .recon-spec-mark{font-weight:600}
