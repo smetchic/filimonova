@@ -1512,3 +1512,60 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   font-size:10.5px;color:#71717A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 #reconciliationEditorModal .recon-choice-occupied{opacity:.68}
+
+/* Spec -> estimate manual link: explicit readable row grid. */
+#reconciliationEditorModal .recon-choice-header{
+  grid-template-columns:26px 76px 58px minmax(150px,1.1fr) minmax(210px,1.6fr) 72px;
+  gap:10px;
+  padding:6px 14px;
+  align-items:end;
+}
+#reconciliationEditorModal .recon-estimate-choice{
+  position:relative;
+  grid-template-columns:26px 76px 58px minmax(150px,1.1fr) minmax(210px,1.6fr) 72px;
+  gap:10px;
+  min-height:52px;
+  padding:7px 14px;
+  border:1px solid #E2E4E8;
+  border-top:0;
+  background:#fff;
+  align-items:center;
+}
+#reconciliationEditorModal .recon-estimate-choice input{width:15px;height:15px}
+#reconciliationEditorModal .recon-est-no,
+#reconciliationEditorModal .recon-est-pos,
+#reconciliationEditorModal .recon-est-qty{
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap;
+}
+#reconciliationEditorModal .recon-est-no{font-weight:600}
+#reconciliationEditorModal .recon-est-pos{font-weight:600;text-align:center}
+#reconciliationEditorModal .recon-est-basis,
+#reconciliationEditorModal .recon-est-name{
+  min-width:0;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  line-height:15px;
+}
+#reconciliationEditorModal .recon-est-name{font-weight:600}
+#reconciliationEditorModal .recon-est-qty{text-align:right;font-weight:600}
+#reconciliationEditorModal .recon-choice-suggested{
+  background:#F5F8FC;
+  box-shadow:inset 3px 0 0 #6F829A;
+}
+#reconciliationEditorModal .recon-estimate-choice.is-selected{
+  background:#E8F1FF!important;
+  border-color:#8CB3E8;
+  box-shadow:inset 4px 0 0 #3978C5;
+}
+#reconciliationEditorModal .recon-estimate-choice:hover{background:#F1F6FD}
+#reconciliationEditorModal .recon-suggested-label,
+#reconciliationEditorModal .recon-occupied-label{
+  position:absolute;
+  left:112px;
+  bottom:2px;
+  font-size:9.5px;
+  color:#667085;
+}
+#reconciliationEditorModal .recon-occupied-label{left:auto;right:90px;color:#9A5A25}
+#reconciliationEditorModal .recon-choice-occupied:not(.is-selected){opacity:.72}
