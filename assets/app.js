@@ -3297,7 +3297,8 @@
       const basis=estimateSourceValue(c.row,"basis")||"—";
       const name=estimateSourceValue(c.row,"name")||"—";
       return '<label class="recon-choice recon-estimate-choice'+(index===0?' recon-choice-suggested':'')+(c.occupied?' recon-choice-occupied':'')+'>'+
-        '<input type="radio" name="recon-estimate-candidate" data-recon-estimate="'+esc(c.row.id)+'">'+
+        '<span class="recon-choice-box" aria-hidden="true"></span>'+
+        '<input class="recon-choice-native" type="radio" name="recon-estimate-candidate" data-recon-estimate="'+esc(c.row.id)+'">'+
         '<span class="recon-est-no">№'+esc(c.estimate.number)+'</span>'+
         '<span class="recon-est-pos">'+esc(c.row.position)+'</span>'+
         '<span class="recon-est-basis" title="'+esc(basis)+'">'+esc(basis)+'</span>'+
@@ -3310,9 +3311,21 @@
     const saveBtn=modal.querySelector(".recon-edit-save");
     saveBtn.classList.add("is-disabled");
     saveBtn.setAttribute("aria-disabled","true");
-    modal.querySelectorAll("[data-recon-estimate]").forEach(function(input){
+    modal.querySelectorAll(".recon-estimate-choice").forEach(function(row){
+      const input=row.querySelector("[data-recon-estimate]");
+      row.addEventListener("click",function(ev){
+        if(ev.target.closest(".recon-choice-box") || ev.target===row || ev.target.closest("span,small,strong")){
+          input.checked=true;
+          input.dispatchEvent(new Event("change",{bubbles:true}));
+        }
+      });
       input.addEventListener("change",function(){
-        modal.querySelectorAll(".recon-estimate-choice").forEach(function(row){row.classList.toggle("is-selected",!!row.querySelector("input:checked"));});
+        modal.querySelectorAll(".recon-estimate-choice").forEach(function(candidate){
+          const checked=!!candidate.querySelector("[data-recon-estimate]:checked");
+          candidate.classList.toggle("is-selected",checked);
+          const box=candidate.querySelector(".recon-choice-box");
+          if(box){box.textContent=checked?"✓":"";box.setAttribute("aria-label",checked?"Выбрано":"Выбрать");}
+        });
         saveBtn.classList.remove("is-disabled");
         saveBtn.setAttribute("aria-disabled","false");
       });
