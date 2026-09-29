@@ -55,7 +55,10 @@
     estimateSections: [],
     estimateRows: [],
     estimateCosts: [],
-    reconciliationLinks: []
+    reconciliationLinks: [],
+    suppliers: [],
+    supplierItems: [],
+    supplierPrices: []
   };
 
   const pages = {
@@ -214,7 +217,10 @@
       fetchAllRows("estimate_sections","id,estimate_id,title,sort_order",function(q){return q.eq("project_id",project.id).order("sort_order");}),
       fetchAllRows("estimate_rows","id,estimate_id,section_id,row_type,position,basis,name,unit,quantity,sort_order,catalog_item_id,source_original",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("sort_order");}),
       fetchAllRows("estimate_row_costs","estimate_row_id,salary_unit,salary_amount,machines_unit,machines_amount,drivers_unit,drivers_amount,materials_unit,materials_amount,transport_unit,transport_amount,total_unit,total_amount",function(q){return q.eq("project_id",project.id);}),
-      fetchAllRows("reconciliation_links","id,estimate_row_id,specification_row_id,link_method,origin_mode",function(q){return q.eq("project_id",project.id);})
+      fetchAllRows("reconciliation_links","id,estimate_row_id,specification_row_id,link_method,origin_mode",function(q){return q.eq("project_id",project.id);}),
+      fetchAllRows("suppliers","id,name",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("name");}),
+      fetchAllRows("supplier_items","id,supplier_id,catalog_item_id,source_mark,source_name,source_section,source_key,unit_volume_m3,link_method,link_state,source_import_row_id",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("source_mark");}),
+      fetchAllRows("supplier_prices","id,supplier_item_id,effective_from,price_basis,unit_price_gross,unit_volume_snapshot_m3,source_import_row_id",function(q){return q.eq("project_id",project.id).order("effective_from");})
     ];
     const results = await Promise.all(requests);
     dataState = {
@@ -229,7 +235,10 @@
       estimateSections:results[5] || [],
       estimateRows:results[6] || [],
       estimateCosts:results[7] || [],
-      reconciliationLinks:results[8] || []
+      reconciliationLinks:results[8] || [],
+      suppliers:results[9] || [],
+      supplierItems:results[10] || [],
+      supplierPrices:results[11] || []
     };
   }
 
