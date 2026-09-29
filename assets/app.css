@@ -1985,3 +1985,30 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   overflow-wrap:normal!important;
   word-break:normal!important;
 }
+
+
+/* GPR allocation modal: two header rows are fixed 30px each.
+   Do not inherit the global wrapped-header padding; it created a visible band
+   between the year row and the month row. */
+.gpr-alloc-table thead th{
+  height:30px!important;
+  min-height:30px!important;
+  padding-top:0!important;
+  padding-bottom:0!important;
+  white-space:nowrap!important;
+  overflow-wrap:normal!important;
+  word-break:normal!important;
+  line-height:30px!important;
+  vertical-align:middle!important;
+  background:#F4F4F5!important;
+}
+.gpr-alloc-table thead tr:first-child th{
+  top:0!important;
+}
+.gpr-alloc-table thead tr:nth-child(2) th{
+  top:30px!important;
+}
+.gpr-alloc-table thead th[rowspan="2"]{
+  height:60px!important;
+  line-height:normal!important;
+}
