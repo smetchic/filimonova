@@ -3185,13 +3185,45 @@
     modal.querySelector(".recon-edit-caption").textContent=
       "Смета №"+estimate.number+" · поз. "+row.position+" · "+estimateSourceValue(row,"basis")+" · "+estimateSourceValue(row,"name");
     modal.querySelector(".recon-edit-state").textContent="";
-    modal.querySelector(".recon-edit-list").innerHTML=Array.from(groups.values())
-      .sort(function(a,b){return a.mark.localeCompare(b.mark,"ru");})
-      .map(function(g){
+    // Manual reconciliation candidate ranking.
+    // Source rows in estimate/specification normally follow approximately the same construction order,
+    // so relative row position is a useful tie-breaker, never an automatic persistent link.
+    const estimatePeers=dataState.estimateRows.filter(function(x){
+      return x.estimate_id===row.estimate_id && x.row_type==="material" &&
+        (!row.section_id || x.section_id===row.section_id);
+    }).sort(function(a,b){return Number(a.sort_order||0)-Number(b.sort_order||0);});
+    const estimateIndex=Math.max(0,estimatePeers.findIndex(function(x){return x.id===row.id;}));
+    const estimateRatio=estimatePeers.length>1 ? estimateIndex/(estimatePeers.length-1) : 0;
+    const orderedSpec=scoped.slice().sort(function(a,b){return Number(a.sort_order||a.position_no||0)-Number(b.sort_order||b.position_no||0);});
+    function tokenSimilarity(a,b){
+      const aa=new Set(importNorm(a).split(/[^a-zа-яё0-9]+/i).filter(Boolean));
+      const bb=new Set(importNorm(b).split(/[^a-zа-яё0-9]+/i).filter(Boolean));
+      if(!aa.size || !bb.size) return 0;
+      let common=0; aa.forEach(function(x){if(bb.has(x)) common++;});
+      return common/Math.max(aa.size,bb.size);
+    }
+    const ranked=Array.from(groups.values()).map(function(g){
+      const basis=estimateSourceValue(row,"basis");
+      const name=estimateSourceValue(row,"name");
+      let score=0;
+      if(importNorm(basis)===importNorm(g.mark)) score+=1000;
+      if(importNorm(name)===importNorm(g.name)) score+=500;
+      score+=tokenSimilarity(name,g.name)*160;
+      const indexes=g.rows.map(function(sr){return orderedSpec.findIndex(function(x){return x.id===sr.id;});}).filter(function(i){return i>=0;});
+      const specIndex=indexes.length?Math.min.apply(null,indexes):0;
+      const specRatio=orderedSpec.length>1 ? specIndex/(orderedSpec.length-1) : 0;
+      score+=(1-Math.min(1,Math.abs(estimateRatio-specRatio)))*120;
+      return {group:g,score:score};
+    }).sort(function(a,b){
+      return b.score-a.score || a.group.mark.localeCompare(b.group.mark,"ru");
+    });
+    modal.querySelector(".recon-edit-list").innerHTML=ranked
+      .map(function(candidate,index){
+        const g=candidate.group;
         const checked=g.rows.some(function(sr){return linkedIds.has(sr.id);});
-        return '<label class="recon-choice">'+
+        return '<label class="recon-choice'+(index===0?' recon-choice-suggested':'')+'>'+
           '<input type="checkbox" data-recon-catalog="'+esc(g.id)+'" '+(checked?'checked':'')+'>'+
-          '<span class="recon-choice-mark">'+esc(g.mark)+'</span>'+
+          '<span class="recon-choice-mark">'+esc(g.mark)+(index===0?'<small class="recon-suggested-label">Предлагаем</small>':'')+'</span>'+
           '<span class="recon-choice-name">'+esc(g.name)+'</span>'+
           '<span class="recon-choice-meta">'+g.rows.length+' поз. · '+fmt0(g.qty)+' шт.</span>'+
         '</label>';
@@ -3446,7 +3478,7 @@
     $("serviceLeft").innerHTML = buildServiceLeft(pageKey);
     // Project UI rule: page-level controls belong in the existing service row;
     // do not add local button bars above working tables.
-    if(pageKey==="estimates" && tab===3){
+    if((pageKey==="estimates" && tab===3) || pageKey==="recon"){
       if(!ui.reconLinkFilter) ui.reconLinkFilter="all";
       $("serviceRight").innerHTML =
         '<span class="context-muted">Сопоставление:</span>' +
