@@ -1473,3 +1473,11 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 #workArea .recon-table thead th[rowspan="2"]{
   vertical-align:middle!important;
 }
+
+/* Filterable header cells must stay sticky.
+   `position:relative` made the runtime sticky top offset physically move these cells down,
+   producing white gaps above every filtered column. Sticky itself is a containing block
+   for the absolute filter trigger, so it fixes both the gaps and escaped filter icons. */
+#workArea table thead th.filterable-head{
+  position:sticky!important;
+}
