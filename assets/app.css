@@ -1594,3 +1594,31 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   text-align:center;
   font-weight:600;
 }
+
+/* Reconciliation choice semantics: no row is selected until the user explicitly chooses it. */
+#reconciliationEditorModal .recon-estimate-choice,
+#reconciliationEditorModal .recon-estimate-choice:nth-child(even),
+#reconciliationEditorModal .recon-estimate-choice:nth-child(odd){
+  background:#fff!important;
+  box-shadow:none!important;
+}
+#reconciliationEditorModal .recon-estimate-choice.recon-choice-suggested{
+  background:#fff!important;
+  box-shadow:none!important;
+}
+#reconciliationEditorModal .recon-estimate-choice.is-selected{
+  background:#DCEBFF!important;
+  box-shadow:inset 4px 0 0 #2563A8!important;
+  border-color:#7FA9DB!important;
+}
+#reconciliationEditorModal .recon-estimate-choice:hover:not(.is-selected){
+  background:#F7F9FC!important;
+}
+#reconciliationEditorModal .recon-estimate-choice.recon-choice-occupied:not(.is-selected){
+  opacity:1!important;
+}
+#reconciliationEditorModal .recon-estimate-choice > input[type="radio"]{
+  display:block!important;
+  width:18px!important;height:18px!important;
+  opacity:1!important;visibility:visible!important;
+}
