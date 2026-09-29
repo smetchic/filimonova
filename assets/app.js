@@ -3115,7 +3115,7 @@
       erows=erows.filter(function(r){
         const displayBasis=estimateDisplayBasis(r), displayName=estimateDisplayName(r);
         return passesSearch([r.position,displayBasis,displayName,r.basis,r.name]) &&
-          rowPassesColumnFilters({position:r.position,basis:displayBasis,name:displayName});
+          rowPassesColumnFilters({basis:displayBasis,name:displayName});
       });
       erows=sortRows(erows,{
         position:function(r){return r.position;},
@@ -3167,7 +3167,7 @@
 
     $("workArea").className="work-area table-work";
     $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table est-table gpr-table" data-table-key="gpr-v3"><thead>'+
-      '<tr><th class="e-sticky-1" rowspan="2">Тип</th><th class="e-sticky-2 filterable-head" rowspan="2">'+filterHeader("Поз. см.","position")+'</th><th class="e-sticky-3 filterable-head" rowspan="2">'+filterHeader("Обоснование","basis")+'</th><th class="e-sticky-4 filterable-head" rowspan="2">'+filterHeader("Наименование","name")+'</th><th rowspan="2"><span class="column-header-stack"><span>Ед.</span><span>изм.</span></span></th><th rowspan="2">Кол-во</th><th rowspan="2">Цена на начало работ</th><th rowspan="2">Стоимость на начало работ</th>'+yearHead+'</tr>'+
+      '<tr><th class="e-sticky-1" rowspan="2">Тип</th><th class="e-sticky-2" rowspan="2">Поз. см.</th><th class="e-sticky-3 filterable-head" rowspan="2">'+filterHeader("Обоснование","basis")+'</th><th class="e-sticky-4 filterable-head" rowspan="2">'+filterHeader("Наименование","name")+'</th><th rowspan="2"><span class="column-header-stack"><span>Ед.</span><span>изм.</span></span></th><th rowspan="2">Кол-во</th><th rowspan="2">Цена на начало работ</th><th rowspan="2">Стоимость на начало работ</th>'+yearHead+'</tr>'+
       '<tr>'+monthHead+'</tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
 
