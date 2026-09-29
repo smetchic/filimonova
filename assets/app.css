@@ -1860,3 +1860,59 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   transform:rotate(-45deg) translateY(-1px);
 }
 #reconciliationEditorModal .recon-spec-mark{font-weight:600}
+
+
+/* Current price formula bar — Excel-like geometry without an extra name field. */
+.current-price-work .formula-strip{
+  height:38px!important;
+  display:grid!important;
+  grid-template-columns:86px 96px minmax(0,1fr)!important;
+  align-items:stretch!important;
+  border-top:1px solid var(--line)!important;
+  border-bottom:1px solid var(--line-strong)!important;
+  background:#fff!important;
+}
+.current-price-work .formula-address{
+  display:flex!important;
+  align-items:center!important;
+  padding:0 10px!important;
+  justify-content:flex-start!important;
+  border-right:1px solid var(--line-strong)!important;
+  color:#4F5258!important;
+  font-size:12px!important;
+  font-variant-numeric:tabular-nums;
+}
+.current-price-work .formula-controls{
+  display:grid;
+  grid-template-columns:30px 30px 36px;
+  align-items:center;
+  border-right:1px solid var(--line-strong);
+  color:#6B7078;
+}
+.current-price-work .formula-controls > *{
+  height:100%;
+  display:grid;
+  place-items:center;
+  border-right:1px solid #ECEEF1;
+}
+.current-price-work .formula-controls > *:last-child{border-right:0}
+.current-price-work .formula-cancel{font-size:20px;font-weight:300}
+.current-price-work .formula-accept{font-size:17px}
+.current-price-work .formula-fx{font:italic 18px Georgia,serif;font-weight:500;color:#34373C}
+.current-price-work .formula-expression{
+  display:flex!important;
+  align-items:center!important;
+  min-width:0!important;
+  padding:0 12px!important;
+  overflow:auto!important;
+  white-space:nowrap!important;
+  font-size:12px!important;
+}
+.current-price-work .formula-placeholder{color:#9A9DA4}
+.current-price-table .current-price-empty-row td{
+  height:28px;
+  background:#fff!important;
+  border-bottom:1px solid var(--line)!important;
+  color:transparent!important;
+  pointer-events:none;
+}
