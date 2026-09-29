@@ -3111,10 +3111,27 @@
     rows=rows.filter(function(r){
       return rowPassesColumnFilters({position:r.position,basis:estimateDisplayBasis(r),name:estimateDisplayName(r)});
     });
-    rows=sortRows(rows,{
-      position:function(r){return r.position;},
-      basis:function(r){return estimateDisplayBasis(r);},
-      name:function(r){return estimateDisplayName(r);}
+    // Reconciliation is project-first: its canonical row order follows the original
+    // specification order. Estimate order is only a fallback for rows without a link.
+    const specOrder=new Map();
+    dataState.specRows.slice().sort(function(a,b){
+      return Number(a.sort_order||0)-Number(b.sort_order||0) ||
+        String(a.position_no||"").localeCompare(String(b.position_no||""),"ru",{numeric:true});
+    }).forEach(function(sr,index){specOrder.set(sr.id,index);});
+    function reconSpecOrder(r){
+      const indexes=dataState.reconciliationLinks
+        .filter(function(l){return l.estimate_row_id===r.id;})
+        .map(function(l){return specOrder.has(l.specification_row_id)?specOrder.get(l.specification_row_id):Number.MAX_SAFE_INTEGER;});
+      return indexes.length?Math.min.apply(null,indexes):Number.MAX_SAFE_INTEGER;
+    }
+    rows.sort(function(a,b){
+      const ao=reconSpecOrder(a), bo=reconSpecOrder(b);
+      if(ao!==bo) return ao-bo;
+      const ea=dataState.estimates.find(function(x){return x.id===a.estimate_id;});
+      const eb=dataState.estimates.find(function(x){return x.id===b.estimate_id;});
+      const en=String(ea?ea.number:"").localeCompare(String(eb?eb.number:""),"ru",{numeric:true});
+      if(en) return en;
+      return Number(a.sort_order||0)-Number(b.sort_order||0);
     });
 
     const claimCount=new Map();
