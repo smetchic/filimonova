@@ -3112,7 +3112,10 @@
       const searchValues=[sr.position_no,sr.mark,sr.name];
       if(r) searchValues.push(r.position,estimateDisplayBasis(r),estimateDisplayName(r),r.basis,r.name);
       if(!passesSearch(searchValues)) return false;
-      if(!r) return !columnFilters.position && !columnFilters.basis && !columnFilters.name;
+      if(!r){
+        const filters=filterBucket();
+        return !((filters.position&&filters.position.size)||(filters.basis&&filters.basis.size)||(filters.name&&filters.name.size));
+      }
       return rowPassesColumnFilters({position:r.position,basis:estimateDisplayBasis(r),name:estimateDisplayName(r)});
     });
 
