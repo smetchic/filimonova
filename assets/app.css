@@ -1364,15 +1364,10 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 }
 
 
-/* Reconciliation quick status filter */
-.recon-quick-filter{
-  min-height:38px;display:flex;align-items:center;gap:6px;padding:5px 8px;
-  background:#fff;border:1px solid var(--line);border-bottom:0;font-size:12px
+
+/* Compact control inside the existing right-side service row. */
+.service-select{
+  height:26px;min-width:104px;padding:0 24px 0 7px;
+  border:1px solid var(--line-strong);border-radius:4px;background:#fff;
+  color:var(--text);font:inherit;font-size:12px;outline:none
 }
-.recon-quick-filter span{margin-right:2px;color:var(--muted)}
-.recon-quick-filter button{
-  height:27px;padding:0 10px;border:1px solid var(--line-strong);border-radius:5px;
-  background:#fff;color:var(--text);font:inherit;cursor:pointer
-}
-.recon-quick-filter button:hover{background:#f3f4f6}
-.recon-quick-filter button.active{background:#2f3338;border-color:#2f3338;color:#fff}
