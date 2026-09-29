@@ -1248,3 +1248,42 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
     padding-bottom:5px;
   }
 }
+
+
+/* Supplier specification import */
+.supplier-import-modal{width:min(760px,calc(100vw - 28px))}
+.supplier-import-fields{
+  min-height:58px;
+  display:grid;
+  grid-template-columns:minmax(220px,1fr) 190px max-content;
+  align-items:end;
+  gap:10px;
+  padding:9px 12px;
+  border-bottom:1px solid #E4E4E7;
+}
+.supplier-import-fields label{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  font-size:10.5px;
+  color:#71717A;
+}
+.supplier-import-fields input[type="text"],
+.supplier-import-fields input[type="date"]{
+  height:30px;
+  border:1px solid #D7D7DB;
+  border-radius:5px;
+  background:#fff;
+  padding:0 8px;
+  font:inherit;
+  color:#2F3036;
+}
+.supplier-spec-file{display:none}
+.price-state.ok{color:#426550;background:#F2F8F4;border-color:#CDDDD2}
+.price-state.review{color:#9A4F23;background:#FFF7ED;border-color:#F0D0AA}
+.price-state.supplier{color:#535F75;background:#F2F5FA;border-color:#D4DBE7}
+.supplier-only-row td{background:#FCFCFD}
+@media(max-width:760px){
+  .supplier-import-fields{grid-template-columns:1fr}
+}
