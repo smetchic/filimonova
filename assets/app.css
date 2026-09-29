@@ -2177,3 +2177,14 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   font-variant-numeric:tabular-nums;
   white-space:nowrap!important;
 }
+
+
+/* GPR formula color semantics:
+   blue = source quantity/base value, green = price/factor,
+   amber = forecast index, violet = calculated result. */
+.gpr-formula-token{font-weight:500}
+.gpr-formula-op{color:#6B7078;font-weight:400}
+.gpr-formula-c1{color:#3F72C6}
+.gpr-formula-c2{color:#2F8A61}
+.gpr-formula-c3{color:#B27622}
+.gpr-formula-result{color:#8057B3;font-weight:650}
