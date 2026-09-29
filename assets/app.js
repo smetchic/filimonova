@@ -3292,39 +3292,34 @@
     modal.querySelector(".recon-source-name").textContent=sr.name||"—";
     modal.querySelector(".recon-target-head strong").textContent="Строки сметы — выбираем";
     modal.querySelector(".recon-target-head span").textContent="Отметьте строку слева и нажмите «Сохранить»";
-    modal.querySelector(".recon-choice-header").innerHTML="<span>Выбор</span><span>Смета</span><span>Поз.</span><span>Обоснование</span><span>Наименование</span><span>Кол-во</span>";
-    modal.querySelector(".recon-edit-list").innerHTML=ranked.map(function(c,index){
-      const basis=estimateSourceValue(c.row,"basis")||"—";
-      const name=estimateSourceValue(c.row,"name")||"—";
-      return '<label class="recon-choice recon-estimate-choice'+(index===0?' recon-choice-suggested':'')+(c.occupied?' recon-choice-occupied':'')+'>'+
-        '<span class="recon-choice-box" aria-hidden="true"></span>'+
-        '<input class="recon-choice-native" type="radio" name="recon-estimate-candidate" data-recon-estimate="'+esc(c.row.id)+'">'+
-        '<span class="recon-est-no">№'+esc(c.estimate.number)+'</span>'+
-        '<span class="recon-est-pos">'+esc(c.row.position)+'</span>'+
-        '<span class="recon-est-basis" title="'+esc(basis)+'">'+esc(basis)+'</span>'+
-        '<span class="recon-est-name" title="'+esc(name)+'">'+esc(name)+'</span>'+
-        '<span class="recon-est-qty">'+esc(c.row.quantity==null?"—":fmt(c.row.quantity))+' шт.</span>'+
-        (index===0?'<small class="recon-suggested-label">Предлагаем</small>':'')+
-        (c.occupied?'<small class="recon-occupied-label">Уже есть связь</small>':'')+
-      '</label>';
-    }).join("") || '<div class="table-message">Подходящих строк сметы не найдено.</div>';
+    const list=modal.querySelector(".recon-edit-list");
+    list.innerHTML='<table class="recon-candidate-table"><colgroup><col class="recon-col-pick"><col class="recon-col-est"><col class="recon-col-pos"><col class="recon-col-basis"><col class="recon-col-name"><col class="recon-col-qty"></colgroup><thead><tr><th>Выбор</th><th>Смета</th><th>Поз.</th><th>Обоснование</th><th>Наименование</th><th>Кол-во</th></tr></thead><tbody>'+
+      ranked.map(function(c,index){
+        const basis=estimateSourceValue(c.row,"basis")||"—";
+        const name=estimateSourceValue(c.row,"name")||"—";
+        return '<tr class="recon-candidate-row'+(c.occupied?' is-occupied':'')+'" data-candidate-row>'+
+          '<td class="recon-pick-cell"><input type="radio" name="recon-estimate-candidate" data-recon-estimate="'+esc(c.row.id)+'" aria-label="Выбрать строку сметы №'+esc(c.estimate.number)+' позиция '+esc(c.row.position)+'"></td>'+
+          '<td>№'+esc(c.estimate.number)+(index===0?'<small class="recon-table-note">Предлагаем</small>':'')+'</td>'+
+          '<td class="recon-num">'+esc(c.row.position)+'</td>'+
+          '<td title="'+esc(basis)+'">'+esc(basis)+'</td>'+
+          '<td title="'+esc(name)+'">'+esc(name)+(c.occupied?'<small class="recon-table-note occupied">Уже есть связь</small>':'')+'</td>'+
+          '<td class="recon-num">'+esc(c.row.quantity==null?"—":fmt(c.row.quantity))+' шт.</td>'+
+        '</tr>';
+      }).join("")+
+    '</tbody></table>';
+    modal.querySelector(".recon-choice-header").innerHTML="";
+    modal.querySelector(".recon-choice-header").style.display="none";
     const saveBtn=modal.querySelector(".recon-edit-save");
     saveBtn.classList.add("is-disabled");
     saveBtn.setAttribute("aria-disabled","true");
-    modal.querySelectorAll(".recon-estimate-choice").forEach(function(row){
+    list.querySelectorAll("[data-candidate-row]").forEach(function(row){
       const input=row.querySelector("[data-recon-estimate]");
       row.addEventListener("click",function(ev){
-        if(ev.target.closest(".recon-choice-box") || ev.target===row || ev.target.closest("span,small,strong")){
-          input.checked=true;
-          input.dispatchEvent(new Event("change",{bubbles:true}));
-        }
+        if(ev.target!==input){input.checked=true;input.dispatchEvent(new Event("change",{bubbles:true}));}
       });
       input.addEventListener("change",function(){
-        modal.querySelectorAll(".recon-estimate-choice").forEach(function(candidate){
-          const checked=!!candidate.querySelector("[data-recon-estimate]:checked");
-          candidate.classList.toggle("is-selected",checked);
-          const box=candidate.querySelector(".recon-choice-box");
-          if(box){box.textContent=checked?"✓":"";box.setAttribute("aria-label",checked?"Выбрано":"Выбрать");}
+        list.querySelectorAll("[data-candidate-row]").forEach(function(r){
+          r.classList.toggle("is-selected",!!r.querySelector("[data-recon-estimate]:checked"));
         });
         saveBtn.classList.remove("is-disabled");
         saveBtn.setAttribute("aria-disabled","false");
