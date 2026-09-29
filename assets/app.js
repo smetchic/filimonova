@@ -612,7 +612,8 @@
   }
 
   function forceLogicalColumnWidth(table,index,width) {
-    if(!table || !(table.classList.contains("est-table") || table.classList.contains("ks-table"))) return;
+    // Global EngineeringTable rule: a user-resized logical column owns its width.
+    if(!table || !table.classList.contains("eng-table")) return;
     const px=Math.max(12,Number(width)||12)+"px";
     if(table.tHead) Array.from(table.tHead.rows).forEach(function(row){
       Array.from(row.cells).forEach(function(cell){
@@ -640,7 +641,8 @@
   }
 
   function lockTableToColumnSum(table,widths) {
-    if(!table || !(table.classList.contains("est-table") || table.classList.contains("ks-table"))) return;
+    // Prevent the browser from compensating a resized column by changing neighbours.
+    if(!table || !table.classList.contains("eng-table")) return;
     const total=Math.max(1,widths.reduce(function(sum,w){return sum+(Number(w)||0);},0));
     table.style.setProperty("width",total+"px","important");
     table.style.setProperty("min-width",total+"px","important");
@@ -3059,6 +3061,23 @@
       rows=rows.filter(function(r){return dataState.reconciliationLinks.some(function(l){return l.estimate_row_id===r.id;});});
     }
 
+    function reconHasIssue(r){
+      const links=dataState.reconciliationLinks.filter(function(l){return l.estimate_row_id===r.id;});
+      if(!links.length) return true;
+      const srows=linkedSpecRowsForEstimateRow(r);
+      if(links.some(function(l){return (claimCount.get(l.specification_row_id)||0)>1;})) return true;
+      const estimatePieces=estimateQuantityPieces(r,srows);
+      const projectQty=srows.reduce(function(sum,x){return sum+Number(x.total||0);},0);
+      if(estimatePieces==null || Math.abs(projectQty-estimatePieces)>1e-9) return true;
+      const items=Array.from(new Map(srows.map(function(x){
+        const item=dataState.catalogItems.find(function(ci){return ci.id===x.catalog_item_id;});
+        return [x.catalog_item_id,item];
+      })).values()).filter(Boolean);
+      const names=Array.from(new Set(items.map(function(x){return x.name;})));
+      return names.length===1 && importNorm(names[0])!==importNorm(String(estimateSourceValue(r,"name")||""));
+    }
+    if(ui.reconLinkFilter==="issues") rows=rows.filter(reconHasIssue);
+
     let body=rows.map(function(r){
       const e=dataState.estimates.find(function(x){return x.id===r.estimate_id;});
       const links=dataState.reconciliationLinks.filter(function(l){return l.estimate_row_id===r.id;});
@@ -3109,7 +3128,7 @@
 
     if(!body)body=tableMessage("Нет строк по текущему фильтру.",16);
     $("workArea").className="work-area table-work";
-    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table recon-table" data-table-key="estimate-recon-v2"><thead><tr><th colspan="4">Спецификация</th><th colspan="6">Смета</th><th rowspan="2">Разница</th><th rowspan="2">Сопоставление</th><th rowspan="2">Способ</th><th rowspan="2">Расхождение</th><th rowspan="2">Журнал</th><th rowspan="2">Действия</th></tr>'+
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table recon-table" data-table-key="estimate-recon-v3"><thead><tr><th colspan="4">Спецификация</th><th colspan="6">Смета</th><th rowspan="2">Разница</th><th rowspan="2">Сопоставление</th><th rowspan="2">Способ</th><th rowspan="2">Расхождение</th><th rowspan="2">Журнал</th><th rowspan="2">Действия</th></tr>'+
       '<tr><th>Поз. спецификации</th><th>Марка</th><th>Наименование по спецификации</th><th>Проект, шт.</th><th>№ сметы</th><th class="filterable-head">'+filterHeader("Поз. сметы","position")+'</th><th class="filterable-head">'+filterHeader("Обоснование","basis")+'</th><th>Принятое обоснование</th><th class="filterable-head">'+filterHeader("Наименование по смете","name")+'</th><th>Смета, шт.</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
 
@@ -3433,6 +3452,7 @@
         '<span class="context-muted">Сопоставление:</span>' +
         '<select class="service-select" data-recon-link-select aria-label="Фильтр сопоставления">' +
           '<option value="all"'+(ui.reconLinkFilter==="all"?' selected':'')+'>Все</option>' +
+          '<option value="issues"'+(ui.reconLinkFilter==="issues"?' selected':'')+'>Только расхождения</option>' +
           '<option value="unlinked"'+(ui.reconLinkFilter==="unlinked"?' selected':'')+'>Без связи</option>' +
           '<option value="linked"'+(ui.reconLinkFilter==="linked"?' selected':'')+'>Связано</option>' +
         '</select>';
