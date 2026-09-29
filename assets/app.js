@@ -3298,7 +3298,10 @@
 
   function renderKs6() {
     const docs=(dataState.avrDocuments||[]).slice().sort(function(a,b){return String(a.period_month).localeCompare(String(b.period_month));});
-    const sources=docs.map(function(doc){return {doc:doc,version:sourceVersionForDocument(doc)};}).filter(function(x){return !!x.version;});
+    const sources=executionPeriods().map(function(period){
+      const doc=docs.find(function(x){return periodKey(x.period_month)===period;})||null;
+      return {period:period,doc:doc,version:doc?sourceVersionForDocument(doc):null};
+    });
     const factByVersionRow=new Map();
     (dataState.avrRows||[]).forEach(function(x){factByVersionRow.set(x.version_id+":"+x.estimate_row_id,Number(x.quantity||0));});
     const estimates=dataState.estimates.filter(function(e){return ui.estimates[e.number]!==false;});
@@ -3309,12 +3312,12 @@
       if(!rows.length&&currentSearch()) return;
       const key="ks6:"+e.id;registerGroup(key);
       const totalEstimate=rows.reduce(function(s,r){return s+Number(r.quantity||0);},0);
-      const monthTotals=sources.map(function(x){return rows.reduce(function(s,r){return s+(factByVersionRow.get(x.version.id+":"+r.id)||0);},0);});
+      const monthTotals=sources.map(function(x){return x.version?rows.reduce(function(s,r){return s+(factByVersionRow.get(x.version.id+":"+r.id)||0);},0):0;});
       const accrued=monthTotals.reduce(function(s,v){return s+v;},0);
       body+='<tr class="group-row group-toggle" data-group-key="'+key+'"><td colspan="5"><span class="group-arrow">'+groupArrow(key)+'</span>'+esc("Смета №"+e.number+" · "+e.name)+'</td><td class="num">'+exFmt(totalEstimate)+'</td>'+monthTotals.map(function(v){return '<td class="num">'+exFmt(v)+'</td>';}).join("")+'<td class="num">'+exFmt(accrued)+'</td><td class="num '+(totalEstimate-accrued<0?'warning-num':'')+'">'+exFmt(totalEstimate-accrued)+'</td></tr>';
       if(ui.collapsed.has(key)) return;
       rows.forEach(function(r){
-        const values=sources.map(function(x){return factByVersionRow.get(x.version.id+":"+r.id)||0;});
+        const values=sources.map(function(x){return x.version?(factByVersionRow.get(x.version.id+":"+r.id)||0):0;});
         const sum=values.reduce(function(s,v){return s+v;},0);const rest=Number(r.quantity||0)-sum;
         body+='<tr class="data-row"><td class="center"><span class="row-type '+(r.row_type==="work"?'work':'material')+'">'+(r.row_type==="work"?'Р':'М')+'</span></td><td>'+esc(r.position)+'</td><td>'+esc(estimateDisplayBasis(r))+'</td><td>'+esc(estimateDisplayName(r))+'</td><td>'+esc(r.unit)+'</td><td class="num">'+exFmt(r.quantity)+'</td>'+values.map(function(v){return '<td class="num">'+exFmt(v)+'</td>';}).join("")+'<td class="num">'+exFmt(sum)+'</td><td class="num '+(rest<0?'warning-num':'')+'">'+(rest<0?'<span class="warning-icon">⚠</span>':'')+exFmt(rest)+'</td></tr>';
       });
@@ -3322,7 +3325,7 @@
     const columnCount=8+sources.length;
     if(!body) body=tableMessage("Нет строк по текущему фильтру.",columnCount);
     $("workArea").className="work-area table-work";
-    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table ks-table" data-table-key="ks6"><thead><tr><th>Тип</th><th class="filterable-head">'+filterHeader("Поз. сметы","position")+'</th><th class="filterable-head">'+filterHeader("Обоснование","basis")+'</th><th class="filterable-head">'+filterHeader("Наименование","name")+'</th><th>Ед. изм.</th><th>По смете</th>'+sources.map(function(x){return '<th>'+esc(periodLabel(x.doc.period_month,true))+'</th>';}).join("")+'<th>Запроцентовано</th><th>Остаток</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table ks-table" data-table-key="ks6"><thead><tr><th>Тип</th><th class="filterable-head">'+filterHeader("Поз. сметы","position")+'</th><th class="filterable-head">'+filterHeader("Обоснование","basis")+'</th><th class="filterable-head">'+filterHeader("Наименование","name")+'</th><th>Ед. изм.</th><th>По смете</th>'+sources.map(function(x){return '<th>'+esc(periodLabel(x.period,true))+'</th>';}).join("")+'<th>Запроцентовано</th><th>Остаток</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
 
   function selectedS29Document() {
