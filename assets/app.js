@@ -186,32 +186,47 @@
     setStatus(signupStatus, "");
   }
 
+  async function fetchAllRows(table,columns,configure) {
+    const pageSize=1000;
+    let from=0;
+    const all=[];
+    while(true) {
+      let query=client.from(table).select(columns);
+      if(configure) query=configure(query);
+      const result=await query.range(from,from+pageSize-1);
+      if(result.error) throw result.error;
+      const rows=result.data||[];
+      all.push.apply(all,rows);
+      if(rows.length<pageSize) break;
+      from+=pageSize;
+    }
+    return all;
+  }
+
   async function loadProjectData(project) {
     const requests = [
-      client.from("catalog_items").select("id,mark,name,normalized_key").eq("project_id",project.id).is("archived_at",null).order("mark"),
-      client.from("specification_sections").select("id,building_section,zone,name,sort_order,is_stairs").eq("project_id",project.id).order("sort_order"),
-      client.from("specification_rows").select("id,section_id,catalog_item_id,position_no,designation,project_volume_m3,sort_order").eq("project_id",project.id).is("archived_at",null).order("position_no"),
-      client.from("specification_quantities").select("specification_row_id,level_code,level_order,quantity").eq("project_id",project.id).order("level_order"),
-      client.from("estimates").select("id,number,name,status,building_section,zone,is_stairs").eq("project_id",project.id).eq("status","active").order("number"),
-      client.from("estimate_sections").select("id,estimate_id,title,sort_order").eq("project_id",project.id).order("sort_order"),
-      client.from("estimate_rows").select("id,estimate_id,section_id,row_type,position,basis,name,unit,quantity,sort_order,catalog_item_id").eq("project_id",project.id).is("archived_at",null).order("sort_order"),
-      client.from("estimate_row_costs").select("estimate_row_id,salary_unit,salary_amount,machines_unit,machines_amount,drivers_unit,drivers_amount,materials_unit,materials_amount,transport_unit,transport_amount,total_unit,total_amount").eq("project_id",project.id)
+      fetchAllRows("catalog_items","id,mark,name,normalized_key",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("mark");}),
+      fetchAllRows("specification_sections","id,building_section,zone,name,sort_order,is_stairs",function(q){return q.eq("project_id",project.id).order("sort_order");}),
+      fetchAllRows("specification_rows","id,section_id,catalog_item_id,position_no,designation,project_volume_m3,sort_order",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("position_no");}),
+      fetchAllRows("specification_quantities","specification_row_id,level_code,level_order,quantity",function(q){return q.eq("project_id",project.id).order("level_order").order("specification_row_id");}),
+      fetchAllRows("estimates","id,number,name,status,building_section,zone,is_stairs",function(q){return q.eq("project_id",project.id).eq("status","active").order("number");}),
+      fetchAllRows("estimate_sections","id,estimate_id,title,sort_order",function(q){return q.eq("project_id",project.id).order("sort_order");}),
+      fetchAllRows("estimate_rows","id,estimate_id,section_id,row_type,position,basis,name,unit,quantity,sort_order,catalog_item_id",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("sort_order");}),
+      fetchAllRows("estimate_row_costs","estimate_row_id,salary_unit,salary_amount,machines_unit,machines_amount,drivers_unit,drivers_amount,materials_unit,materials_amount,transport_unit,transport_amount,total_unit,total_amount",function(q){return q.eq("project_id",project.id);})
     ];
     const results = await Promise.all(requests);
-    const failed = results.find(function(x) { return x.error; });
-    if (failed) throw failed.error;
     dataState = {
       loaded:true,
       source:"supabase",
       project:project,
-      catalogItems:results[0].data || [],
-      specSections:results[1].data || [],
-      specRows:results[2].data || [],
-      specQuantities:results[3].data || [],
-      estimates:results[4].data || [],
-      estimateSections:results[5].data || [],
-      estimateRows:results[6].data || [],
-      estimateCosts:results[7].data || []
+      catalogItems:results[0] || [],
+      specSections:results[1] || [],
+      specRows:results[2] || [],
+      specQuantities:results[3] || [],
+      estimates:results[4] || [],
+      estimateSections:results[5] || [],
+      estimateRows:results[6] || [],
+      estimateCosts:results[7] || []
     };
   }
 
