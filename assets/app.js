@@ -581,21 +581,21 @@
       return Math.min(720,max);
     }
     if(index===3){
-      // Work names are deliberately excluded: the estimate name column is sized
-      // from material rows only, so long work descriptions never stretch the grid.
+      // Size from canonical project material nomenclature, not raw estimate text.
+      // This avoids unlinked/legacy material descriptions stretching the column.
       let max=measureEngineeringText("Наименование",28);
-      rows.filter(function(r){return r.row_type==="material";}).forEach(function(r){
-        max=Math.max(max,measureEngineeringText(estimateDisplayName(r)||""));
+      (dataState.catalogItems||[]).filter(function(item){return !item.archived_at;}).forEach(function(item){
+        max=Math.max(max,measureEngineeringText(item.name||""));
       });
-      return Math.min(720,max);
+      return Math.min(340,max);
     }
     if(index===4){
-      // Same rule as the name column: units of work rows do not participate.
+      // Units of work rows do not participate; material units are short ("шт").
       let max=measureEngineeringText("Ед. изм.");
       rows.filter(function(r){return r.row_type==="material";}).forEach(function(r){
         max=Math.max(max,measureEngineeringText(r.unit||""));
       });
-      return Math.min(720,max);
+      return Math.min(110,max);
     }
     return null;
   }
@@ -2570,7 +2570,7 @@
     '</thead>';
 
     $("workArea").className = "work-area table-work";
-    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table est-table" data-table-key="estimate-main-v4">' + head + '<tbody>' + body + '</tbody></table></div></div>';
+    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table est-table" data-table-key="estimate-main-v5">' + head + '<tbody>' + body + '</tbody></table></div></div>';
   }
 
   function currentPriceModel() {
