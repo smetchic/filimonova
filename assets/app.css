@@ -1303,3 +1303,21 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   max-width:none!important;
 }
 .est-table{min-width:0!important;width:max-content!important}
+
+
+/* Estimates: sticky identity zone temporarily disabled.
+   Keep classes for markup compatibility, but all estimate columns scroll normally. */
+.est-table .e-sticky-1,
+.est-table .e-sticky-2,
+.est-table .e-sticky-3,
+.est-table .e-sticky-4,
+.est-table thead .e-sticky-1,
+.est-table thead .e-sticky-2,
+.est-table thead .e-sticky-3,
+.est-table thead .e-sticky-4,
+.est-table .est-group-title{
+  position:static!important;
+  left:auto!important;
+  z-index:auto!important;
+  box-shadow:none!important;
+}
