@@ -1893,7 +1893,7 @@
 
   function isHierarchical(pageKey, tab) {
     if (pageKey === "spec") return true;
-    if (pageKey === "estimates") return tab === 0 || tab === 2;
+    if (pageKey === "estimates") return tab === 0;
     if (pageKey === "supply") return tab === 0 || tab === 2;
     if (pageKey === "avr") return tab === 2;
     return false;
@@ -3446,7 +3446,7 @@
     $("serviceLeft").innerHTML = buildServiceLeft(pageKey);
     // Project UI rule: page-level controls belong in the existing service row;
     // do not add local button bars above working tables.
-    if(pageKey==="estimates" && tab===2){
+    if(pageKey==="estimates" && tab===3){
       if(!ui.reconLinkFilter) ui.reconLinkFilter="all";
       $("serviceRight").innerHTML =
         '<span class="context-muted">Сопоставление:</span>' +
