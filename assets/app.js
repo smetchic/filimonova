@@ -611,6 +611,34 @@
     return 28;
   }
 
+  function forceLogicalColumnWidth(table,index,width) {
+    if(!table || !(table.classList.contains("est-table") || table.classList.contains("ks-table"))) return;
+    const px=Math.max(12,Number(width)||12)+"px";
+    if(table.tHead) Array.from(table.tHead.rows).forEach(function(row){
+      Array.from(row.cells).forEach(function(cell){
+        if(Number(cell.dataset.logicalStart)===index && Number(cell.dataset.logicalSpan||1)===1) {
+          cell.style.setProperty("width",px,"important");
+          cell.style.setProperty("min-width",px,"important");
+          cell.style.setProperty("max-width",px,"important");
+        }
+      });
+    });
+    Array.from(table.tBodies).forEach(function(body){
+      Array.from(body.rows).forEach(function(row){
+        let c=0;
+        Array.from(row.cells).forEach(function(cell){
+          const span=cell.colSpan||1;
+          if(span===1 && c===index) {
+            cell.style.setProperty("width",px,"important");
+            cell.style.setProperty("min-width",px,"important");
+            cell.style.setProperty("max-width",px,"important");
+          }
+          c+=span;
+        });
+      });
+    });
+  }
+
   function installResizeAutofit(table) {
     if(!table || !table.tHead) return;
     const grid=logicalHeaderGrid(table);
@@ -639,6 +667,7 @@
       col.style.minWidth=widths[i]+"px";
       col.style.maxWidth=widths[i]+"px";
     });
+    widths.forEach(function(w,i){forceLogicalColumnWidth(table,i,w);});
     updateStickyOffsets(table,widths);
     updateStickyHeaderOffsets(table);
 
@@ -655,6 +684,7 @@
           cg.children[index].style.width=widths[index]+"px";
           cg.children[index].style.minWidth=widths[index]+"px";
           cg.children[index].style.maxWidth=widths[index]+"px";
+          forceLogicalColumnWidth(table,index,widths[index]);
           updateStickyOffsets(table,widths);
           updateStickyHeaderOffsets(table);
         }
@@ -667,6 +697,7 @@
         cg.children[index].style.width=widths[index]+"px";
         cg.children[index].style.minWidth=widths[index]+"px";
         cg.children[index].style.maxWidth=widths[index]+"px";
+        forceLogicalColumnWidth(table,index,widths[index]);
         updateStickyOffsets(table,widths);
         updateStickyHeaderOffsets(table);
         saveTableWidths(table,widths);
