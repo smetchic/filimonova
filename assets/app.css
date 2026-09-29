@@ -1684,3 +1684,18 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 #reconciliationEditorModal .recon-table-note.occupied{color:#9A5A25}
 
 #reconciliationEditorModal .recon-col-accepted{width:135px}
+
+/* Estimate header: vertical sticky only.
+   Horizontal frozen columns remain disabled; legacy e-sticky classes must not
+   turn THEAD cells static, otherwise Type/Position scroll above the header. */
+#workArea .est-table thead th,
+#workArea .est-table thead th.e-sticky-1,
+#workArea .est-table thead th.e-sticky-2,
+#workArea .est-table thead th.e-sticky-3,
+#workArea .est-table thead th.e-sticky-4{
+  position:sticky!important;
+  left:auto!important;
+  right:auto!important;
+  z-index:12!important;
+  background:#F4F4F5!important;
+}
