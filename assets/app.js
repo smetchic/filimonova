@@ -1873,8 +1873,8 @@
       return '<span class="context-muted">Контекст текущего представления</span>';
     }
     if (pageKey === "supply") {
-      if (tab === 1) return '<span class="context-caption">Документы поставки</span><span>Белые ТТН фиксируют фактическое поступление сразу; зелёные ТТН документально подтверждают его.</span><span class="spacer"></span><span class="context-muted">Двойной клик по строке — редактировать</span>';
-      if (tab === 2) return '<span class="context-caption">Прайс поставщика</span><span>Позиции проекта сгруппированы по Рабочей сводке.</span><span class="spacer"></span><span class="context-muted">Состояние цены фильтруется в колонке «Прайс»</span>';
+      if (tab === 1) return '<span class="context-caption">Документы поставки</span><span>Белые ТТН фиксируют фактическое поступление сразу; зелёные ТТН документально подтверждают его.</span><span class="spacer"></span><span class="context-muted">Накладные будут подключены к данным поставки</span>';
+      if (tab === 2) return '<span class="context-caption">Прайс поставщика</span><span>Позиции проекта сгруппированы по Рабочей сводке.</span><span class="spacer"></span><button class="context-link" data-supplier-import-open type="button">Импорт спецификации поставщика</button>';
       return '<span class="context-muted">Данные по всему объекту</span>';
     }
     return '<span class="context-muted">Контекст страницы</span>';
@@ -2798,8 +2798,7 @@
       '<th class="filterable-head">'+filterHeader("Файл","file")+'</th>'+
       '<th>Позиций</th><th>Шт.</th><th>м³</th><th>Без НДС</th><th>НДС</th><th>С НДС</th><th>Состояние</th></tr></thead>';
     $("workArea").innerHTML =
-      '<div class="engineering-shell"><div class="local-action-row"><button class="local-text-action" type="button">+ Добавить накладную</button></div>' +
-      '<div class="engineering-scroll"><table class="eng-table supply-doc-table" data-table-key="supply-documents">'+head+
+      '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table supply-doc-table" data-table-key="supply-documents">'+head+
       '<tbody>' + tableMessage("Накладных пока нет. Фактические поступления не подменяются тестовыми документами.",11) + '</tbody></table></div></div>';
   }
 
@@ -2932,12 +2931,10 @@
     const noPriceRows=rows.filter(function(r){return r._price.state==="Нет цены";}).length;
     const stats='<span>Рабочая сводка: '+rows.length+' · связано с прайсом: '+linkedProjectRows+' · без цены: '+noPriceRows+(supplierOnly.length?' · только у поставщика: '+supplierOnly.length:'')+'</span>';
     $("workArea").className="work-area table-work";
-    $("workArea").innerHTML='<div class="engineering-shell"><div class="local-action-row"><button class="local-text-action" data-supplier-import-open type="button">Импорт спецификации поставщика</button><span class="local-meta">'+stats+'</span></div><div class="engineering-scroll"><table class="eng-table price-table" data-table-key="supplier-price-v2">'+
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table price-table" data-table-key="supplier-price-v2">'+
       '<thead><tr><th class="sticky-1" rowspan="2">№</th><th class="sticky-2 filterable-head" rowspan="2">'+filterHeader("Марка","mark")+'</th><th class="sticky-3 filterable-head" rowspan="2">'+filterHeader("Наименование","name")+'</th><th rowspan="2">Всего, шт.</th>'+
       '<th colspan="2">Объём, м³</th><th colspan="2">Стоимость за 1 шт.</th><th colspan="2">Стоимость за 1 м³</th><th class="filterable-head" rowspan="2">'+filterHeader("Прайс","price")+'</th></tr>'+
       '<tr><th>за ед.</th><th>всего</th><th>за ед.</th><th>всего</th><th>за ед.</th><th>всего</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
-    const importBtn=document.querySelector("[data-supplier-import-open]");
-    if(importBtn) importBtn.onclick=openSupplierImportModal;
   }
 
   function renderMontage(tab) {
@@ -3331,6 +3328,8 @@
   }
 
   function wireContextControls() {
+    const supplierImport=document.querySelector("[data-supplier-import-open]");
+    if(supplierImport) supplierImport.onclick=openSupplierImportModal;
     document.querySelectorAll('#contextRow input[data-filter-group="spec"]').forEach(function(input) {
       input.addEventListener("click",function(e) {
         const id=input.dataset.filterId;
