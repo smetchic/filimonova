@@ -1321,3 +1321,23 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   z-index:auto!important;
   box-shadow:none!important;
 }
+
+
+/* Global temporary rule: no horizontally frozen/sticky table columns.
+   Header rows may remain sticky vertically; all left-side data columns scroll normally. */
+.spec-table .sticky-1,.spec-table .sticky-2,.spec-table .sticky-3,
+.spec-table .group-title,.spec-table .spec-group-title,
+.eng-table .sticky-1,.eng-table .sticky-2,.eng-table .sticky-3,.eng-table .sticky-4,
+.eng-table .e-sticky-1,.eng-table .e-sticky-2,.eng-table .e-sticky-3,.eng-table .e-sticky-4,
+.eng-table .gpr-sticky,.eng-table .est-group-title,
+.supply-table .sticky-1,.supply-table .sticky-2,.supply-table .sticky-3,.supply-table .sticky-4,
+.price-table .sticky-1,.price-table .sticky-2,.price-table .sticky-3,.price-table .sticky-4,
+.montage-table .sticky-1,.montage-table .sticky-2,.montage-table .sticky-3,.montage-table .sticky-4,
+.ks-table .sticky-1,.ks-table .sticky-2,.ks-table .sticky-3,.ks-table .sticky-4,
+.avr-table .sticky-1,.avr-table .sticky-2,.avr-table .sticky-3,.avr-table .sticky-4{
+  position:static!important;
+  left:auto!important;
+  right:auto!important;
+  z-index:auto!important;
+  box-shadow:none!important;
+}
