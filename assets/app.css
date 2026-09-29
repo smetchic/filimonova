@@ -564,7 +564,7 @@ svg{display:block}
 }
 
 /* Search-aligned column filters */
-.filterable-head{}
+.filterable-head{position:relative}
 .header-label{display:inline-block;max-width:calc(100% - 26px);overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
 .column-filter-trigger{
   position:absolute;right:2px;top:50%;transform:translateY(-50%);
