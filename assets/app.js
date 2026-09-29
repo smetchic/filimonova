@@ -2069,7 +2069,16 @@
     if (pageKey === "spec") return buildSpecContext(tab);
     if (pageKey === "estimates") {
       if (tab === 0) return buildEstimateContext(tab);
-      if (tab === 1) return '<span class="context-caption">Текущая цена</span><span class="context-muted">НДС по объекту 0 %, участвует в формулах</span>';
+      if (tab === 1) {
+        const selected=dataState.estimates.filter(function(e){return ui.estimates[e.number]!==false;});
+        const nums=selected.map(function(e){return "№"+e.number;});
+        const note=!nums.length
+          ? "Нет выбранных смет для расчёта"
+          : nums.length===1
+            ? "Текущая цена рассчитана по смете "+nums[0]
+            : "Текущая цена рассчитана по сметам "+nums.join(", ");
+        return '<span class="context-caption">Текущая цена</span><span class="context-muted">'+esc(note)+'</span>';
+      }
       if (tab === 2) return '<span class="context-caption">ГПР</span><span class="context-muted">Помесячный финансовый план · без недель и дней</span>' + gprPeriodControlsHtml() + '<span class="spacer"></span><button class="context-link" type="button" data-gpr-action="spread">Разнести по месяцам</button><button class="context-link" type="button" data-gpr-action="display">Отображение</button><button class="context-link" type="button" data-gpr-action="excel">Экспорт Excel</button>';
     }
     if (pageKey === "recon") {
@@ -2672,7 +2681,7 @@
     let rows=model.filter(function(r){return r.kind==="group" || passesSearch([r.name]);})
       .filter(function(r){return r.kind==="group" || rowPassesColumnFilters({name:r.name});});
     let no=0;
-    const body=rows.map(function(r){
+    let body=rows.map(function(r){
       if(r.kind==="group") return '<tr class="group-only"><td class="center"></td><td colspan="7">'+esc(r.name)+'</td></tr>';
       no++;
       const cls=r.kind==="subtotal"?"subtotal":r.kind==="final"?"final":"";
@@ -2680,11 +2689,14 @@
       let k="";
       if(r.id==="forecastK") k='<input class="forecast-input" value="'+Number((ui.currentPrice||{}).forecast||1.0552).toFixed(4).replace(".",",")+'" aria-label="Прогнозный индекс">';
       else if(r.k!=null) k=Number(r.k).toFixed(4).replace(".",",");
-      return '<tr class="'+cls+' data-row" data-formula-row="'+r.id+'"><td class="center">'+no+'</td>'+filterCell("name",r.name,esc(r.name),"")+'<td class="num" data-formula-cell="'+r.id+':pct">'+pct+'</td><td class="num rate-cell" data-formula-cell="'+r.id+':k">'+k+'</td><td class="num formula-amount" data-formula-cell="'+r.id+'">'+money(r.v)+'</td><td class="num muted">'+currentRefValue(r,"forecast")+'</td><td class="num muted">'+currentRefValue(r,"competition")+'</td><td class="num muted">'+currentRefValue(r,"both")+'</td></tr>';
+      return '<tr class="'+cls+' data-row" data-formula-row="'+r.id+'" data-current-row-no="'+no+'"><td class="center">'+no+'</td>'+filterCell("name",r.name,esc(r.name),"")+'<td class="num" data-formula-cell="'+r.id+':pct">'+pct+'</td><td class="num rate-cell" data-formula-cell="'+r.id+':k">'+k+'</td><td class="num formula-amount" data-formula-cell="'+r.id+'">'+money(r.v)+'</td><td class="num muted">'+currentRefValue(r,"forecast")+'</td><td class="num muted">'+currentRefValue(r,"competition")+'</td><td class="num muted">'+currentRefValue(r,"both")+'</td></tr>';
+    }).join("");
+    body+=Array.from({length:6},function(){
+      return '<tr class="current-price-empty-row" aria-hidden="true"><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
     }).join("");
     $("workArea").className="work-area table-work current-price-work";
-    $("workArea").innerHTML='<div class="formula-strip"><div class="formula-address">—</div><div class="formula-name"><b>fx</b><span>Выберите расчётную строку</span></div><div class="formula-expression"></div></div>'+
-      '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table current-price-table" data-table-key="current-price"><thead><tr><th rowspan="2">№</th><th class="filterable-head" rowspan="2">'+filterHeader("Наименование","name")+'</th><th rowspan="2">%</th><th rowspan="2">К-т</th><th rowspan="2">Текущая стоимость</th><th colspan="3">Справочно</th></tr><tr><th>с прогнозным</th><th>с конкурсным</th><th>с прогнозным и конкурсным</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    $("workArea").innerHTML='<div class="formula-strip"><div class="formula-address">—</div><div class="formula-controls" aria-hidden="true"><span class="formula-cancel">×</span><span class="formula-accept">✓</span><b class="formula-fx">fx</b></div><div class="formula-expression"><span class="formula-placeholder">Выберите расчётную строку</span></div></div>'+
+      '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table current-price-table" data-table-key="current-price-v2"><thead><tr><th rowspan="2">№</th><th class="filterable-head" rowspan="2">'+filterHeader("Наименование","name")+'</th><th rowspan="2">%</th><th rowspan="2">К-т</th><th rowspan="2">Текущая стоимость</th><th colspan="3">Справочно</th></tr><tr><th>с прогнозным</th><th>с конкурсным</th><th>с прогнозным и конкурсным</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
     const byId=new Map(model.map(function(x){return [x.id,x];}));
     function select(id){
       const r=byId.get(id);if(!r)return;
@@ -2696,8 +2708,8 @@
         const cell=document.querySelector('[data-formula-cell="'+CSS.escape(ref)+'"]');
         if(cell) cell.classList.add(refClasses[i%4]);
       });
-      document.querySelector(".formula-address").textContent="E"+(model.indexOf(r)+3);
-      document.querySelector(".formula-name span").textContent=r.name;
+      const selectedRow=document.querySelector('[data-formula-row="'+CSS.escape(id)+'"]');
+      document.querySelector(".formula-address").textContent=selectedRow&&selectedRow.dataset.currentRowNo?selectedRow.dataset.currentRowNo:"—";
       document.querySelector(".formula-expression").innerHTML=currentFormulaHtml(r);
     }
     document.querySelectorAll("[data-formula-row]").forEach(function(row){row.onclick=function(){select(row.dataset.formulaRow);};});
@@ -4494,6 +4506,7 @@
 
     $("contextRow").innerHTML = buildContext(pageKey,tab);
     $("serviceLeft").innerHTML = buildServiceLeft(pageKey,tab);
+    $("serviceRow").classList.toggle("hidden",pageKey==="estimates" && tab===1);
     // Project UI rule: page-level controls belong in the existing service row;
     // do not add local button bars above working tables.
     if(pageKey==="recon" && tab===0){
