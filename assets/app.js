@@ -3007,15 +3007,25 @@
     return '<span class="gpr-period-summary"><span class="gpr-period-label">Период:</span><strong>'+esc(period)+'</strong><span>·</span><span class="gpr-period-label">Прогноз:</span><strong>по месяцам</strong><span class="context-muted">нарастающий индекс до '+esc(last.toFixed(6).replace(".",","))+'</span></span>';
   }
 
+  let gprAssignmentState=null;
+
   function gprAssignments() {
     const plan=activeGprPlan();
+    if(
+      gprAssignmentState &&
+      gprAssignmentState.planId===(plan&&plan.id||"") &&
+      gprAssignmentState.rows===dataState.gprFloorAssignments &&
+      gprAssignmentState.months===dataState.gprMonths
+    ) return gprAssignmentState.map;
     const byMonth=new Map(gprAllMonths().map(function(m){return [m.id,m.key];}));
     const map={};
-    if(!plan) return map;
-    (dataState.gprFloorAssignments||[]).filter(function(a){return a.plan_id===plan.id;}).forEach(function(a){
-      const month=byMonth.get(a.month_id);
-      if(month) map[(a.building_section||"*")+"|"+a.level_code]=month;
-    });
+    if(plan){
+      (dataState.gprFloorAssignments||[]).filter(function(a){return a.plan_id===plan.id;}).forEach(function(a){
+        const month=byMonth.get(a.month_id);
+        if(month) map[(a.building_section||"*")+"|"+a.level_code]=month;
+      });
+    }
+    gprAssignmentState={planId:plan&&plan.id||"",rows:dataState.gprFloorAssignments,months:dataState.gprMonths,map:map};
     return map;
   }
 
@@ -3076,7 +3086,24 @@
     });
   }
 
+  let gprShareState=null;
+
   function gprMaterialMonthShare(row,e,monthKey) {
+    if(
+      !gprShareState ||
+      gprShareState.assignments!==dataState.gprFloorAssignments ||
+      gprShareState.links!==dataState.reconciliationLinks ||
+      gprShareState.quantities!==dataState.specQuantities
+    ){
+      gprShareState={
+        assignments:dataState.gprFloorAssignments,
+        links:dataState.reconciliationLinks,
+        quantities:dataState.specQuantities,
+        map:new Map()
+      };
+    }
+    const cacheKey=row.id+"|"+monthKey;
+    if(gprShareState.map.has(cacheKey)) return gprShareState.map.get(cacheKey);
     const rows=gprSpecRowsForEstimateMaterial(row,e);
     let total=0,monthQty=0;
     rows.forEach(function(sr){
@@ -3086,7 +3113,9 @@
         if(gprAssignedMonth(sr.section.building_section,level)===monthKey) monthQty+=q;
       });
     });
-    return total>0 ? monthQty/total : 0;
+    const share=total>0 ? monthQty/total : 0;
+    gprShareState.map.set(cacheKey,share);
+    return share;
   }
 
   function gprMaterialMonthQty(row,e,monthKey) {
@@ -3115,16 +3144,29 @@
     return Number(row.quantity||0)*(monthWeight/totalWeight);
   }
 
+  let gprPriceFactorState=null;
+
   function gprCurrentPriceFactor(m) {
-    const selectedIds=new Set(dataState.estimates.filter(function(e){return ui.estimates[e.number]!==false;}).map(function(e){return e.id;}));
+    const selected=dataState.estimates.filter(function(e){return ui.estimates[e.number]!==false;}).map(function(e){return e.id;}).sort();
+    const P=ui.currentPrice||{forecast:1.0552,competition:1};
+    const key=selected.join("|")+"|"+Number(P.forecast||1)+"|"+Number(P.competition||1);
+    if(
+      gprPriceFactorState &&
+      gprPriceFactorState.key===key &&
+      gprPriceFactorState.rows===dataState.estimateRows &&
+      gprPriceFactorState.costs===dataState.estimateCosts
+    ) return gprPriceFactorState.value;
+    const selectedIds=new Set(selected);
     const direct=(dataState.estimateRows||[]).filter(function(r){return selectedIds.has(r.estimate_id);}).reduce(function(sum,r){
       return sum+Number(rowCost(r,m).total_amount||0);
     },0);
     const model=currentPriceModel();
     const atStart=model.find(function(r){return r.id==="afterForecast";});
-    if(direct>0 && atStart && Number(atStart.v)>0) return Number(atStart.v)/direct;
-    const P=ui.currentPrice||{forecast:1.0552,competition:1};
-    return Number(P.competition||1)*Number(P.forecast||1);
+    const value=direct>0 && atStart && Number(atStart.v)>0
+      ? Number(atStart.v)/direct
+      : Number(P.competition||1)*Number(P.forecast||1);
+    gprPriceFactorState={key:key,rows:dataState.estimateRows,costs:dataState.estimateCosts,value:value};
+    return value;
   }
 
   function gprRowAmounts(row,e,estimateRows,m,monthList) {
@@ -3306,6 +3348,9 @@
       if(savePlan.error){state.textContent=savePlan.error.message;return;}
       await loadProjectData(dataState.project);
       gprSpecState=null;
+      gprAssignmentState=null;
+      gprShareState=null;
+      gprPriceFactorState=null;
       close();
       renderPage("estimates",2);
     };
@@ -3382,6 +3427,9 @@
       }
       await loadProjectData(dataState.project);
       gprSpecState=null;
+      gprAssignmentState=null;
+      gprShareState=null;
+      gprPriceFactorState=null;
       close();
       renderPage("estimates",2);
     };
