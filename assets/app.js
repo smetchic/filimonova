@@ -3109,18 +3109,11 @@
 
     if(!body)body=tableMessage("Нет строк по текущему фильтру.",16);
     $("workArea").className="work-area table-work";
-    $("workArea").innerHTML='<div class="recon-quick-filter"><span>Показывать:</span><button type="button" class="'+(ui.reconLinkFilter==="all"?"active":"")+'" data-recon-link-filter="all">Все</button><button type="button" class="'+(ui.reconLinkFilter==="unlinked"?"active":"")+'" data-recon-link-filter="unlinked">Без связи</button><button type="button" class="'+(ui.reconLinkFilter==="linked"?"active":"")+'" data-recon-link-filter="linked">Связано</button></div><div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table recon-table" data-table-key="estimate-recon-v2"><thead><tr><th colspan="4">Спецификация</th><th colspan="6">Смета</th><th rowspan="2">Разница</th><th rowspan="2">Сопоставление</th><th rowspan="2">Способ</th><th rowspan="2">Расхождение</th><th rowspan="2">Журнал</th><th rowspan="2">Действия</th></tr>'+
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table recon-table" data-table-key="estimate-recon-v2"><thead><tr><th colspan="4">Спецификация</th><th colspan="6">Смета</th><th rowspan="2">Разница</th><th rowspan="2">Сопоставление</th><th rowspan="2">Способ</th><th rowspan="2">Расхождение</th><th rowspan="2">Журнал</th><th rowspan="2">Действия</th></tr>'+
       '<tr><th>Поз. спецификации</th><th>Марка</th><th>Наименование по спецификации</th><th>Проект, шт.</th><th>№ сметы</th><th class="filterable-head">'+filterHeader("Поз. сметы","position")+'</th><th class="filterable-head">'+filterHeader("Обоснование","basis")+'</th><th>Принятое обоснование</th><th class="filterable-head">'+filterHeader("Наименование по смете","name")+'</th><th>Смета, шт.</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
 
-  document.addEventListener("click",function(e){
-    const btn=e.target && e.target.closest ? e.target.closest("[data-recon-link-filter]") : null;
-    if(!btn) return;
-    ui.reconLinkFilter=btn.dataset.reconLinkFilter||"all";
-    renderRecon();
-  });
-
-  function reconciliationEditorModal() {
+   function reconciliationEditorModal() {
     let modal=document.getElementById("reconciliationEditorModal");
     if(modal) return modal;
     modal=document.createElement("div");
@@ -3226,6 +3219,11 @@
   }
 
   function wireReconciliationControls() {
+    const linkSelect=document.querySelector("[data-recon-link-select]");
+    if(linkSelect) linkSelect.onchange=function(){
+      ui.reconLinkFilter=linkSelect.value||"all";
+      rerenderContent();
+    };
     document.querySelectorAll("[data-recon-edit]").forEach(function(btn){
       btn.onclick=function(){openReconciliationEditor(btn.dataset.reconEdit);};
     });
@@ -3427,9 +3425,22 @@
 
     $("contextRow").innerHTML = buildContext(pageKey,tab);
     $("serviceLeft").innerHTML = buildServiceLeft(pageKey);
-    $("serviceRight").innerHTML = isHierarchical(pageKey,tab)
-      ? '<button class="service-action" data-service="collapse" type="button">Свернуть всё</button><button class="service-action" data-service="expand" type="button">Развернуть всё</button>'
-      : "";
+    // Project UI rule: page-level controls belong in the existing service row;
+    // do not add local button bars above working tables.
+    if(pageKey==="estimates" && tab===2){
+      if(!ui.reconLinkFilter) ui.reconLinkFilter="all";
+      $("serviceRight").innerHTML =
+        '<span class="context-muted">Сопоставление:</span>' +
+        '<select class="service-select" data-recon-link-select aria-label="Фильтр сопоставления">' +
+          '<option value="all"'+(ui.reconLinkFilter==="all"?' selected':'')+'>Все</option>' +
+          '<option value="unlinked"'+(ui.reconLinkFilter==="unlinked"?' selected':'')+'>Без связи</option>' +
+          '<option value="linked"'+(ui.reconLinkFilter==="linked"?' selected':'')+'>Связано</option>' +
+        '</select>';
+    } else {
+      $("serviceRight").innerHTML = isHierarchical(pageKey,tab)
+        ? '<button class="service-action" data-service="collapse" type="button">Свернуть всё</button><button class="service-action" data-service="expand" type="button">Развернуть всё</button>'
+        : "";
+    }
 
     wireContextControls();
     ui.currentGroupKeys = [];
