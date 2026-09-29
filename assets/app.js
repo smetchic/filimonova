@@ -3144,30 +3144,56 @@
     return Number(row.quantity||0)*(monthWeight/totalWeight);
   }
 
-  let gprPriceFactorState=null;
+  function gprRowCurrentPrice(row,m) {
+    const c=rowCost(row,m);
+    const P=ui.currentPrice||{forecast:1.0552,competition:1,vat:0};
+    const qty=Number(row.quantity||0);
 
-  function gprCurrentPriceFactor(m) {
-    const selected=dataState.estimates.filter(function(e){return ui.estimates[e.number]!==false;}).map(function(e){return e.id;}).sort();
-    const P=ui.currentPrice||{forecast:1.0552,competition:1};
-    const key=selected.join("|")+"|"+Number(P.forecast||1)+"|"+Number(P.competition||1);
-    if(
-      gprPriceFactorState &&
-      gprPriceFactorState.key===key &&
-      gprPriceFactorState.rows===dataState.estimateRows &&
-      gprPriceFactorState.costs===dataState.estimateCosts
-    ) return gprPriceFactorState.value;
-    const selectedIds=new Set(selected);
-    const direct=(dataState.estimateRows||[]).filter(function(r){return selectedIds.has(r.estimate_id);}).reduce(function(sum,r){
-      return sum+Number(rowCost(r,m).total_amount||0);
-    },0);
-    const model=currentPriceModel();
-    const atStart=model.find(function(r){return r.id==="afterForecast";});
-    const value=direct>0 && atStart && Number(atStart.v)>0
-      ? Number(atStart.v)/direct
-      : Number(P.competition||1)*Number(P.forecast||1);
-    gprPriceFactorState={key:key,rows:dataState.estimateRows,costs:dataState.estimateCosts,value:value};
-    return value;
+    const salary=Number(c.salary_amount||0);
+    const machines=Number(c.machines_amount||0);
+    const drivers=Number(c.drivers_amount||0);
+    const transport=Number(c.transport_amount||0);
+    const materials=Number(c.materials_amount||0);
+
+    // Exactly the same linear calculation as "Текущая цена", but for one estimate row.
+    const wageBase=salary+drivers;
+    const direct=salary+machines+transport+materials;
+    const ohr=wageBase*1.0931;
+    const profit=wageBase*1.0563;
+    const temporary=wageBase*0.037*0.93;
+    const winter=wageBase*0.025740*0.93;
+    const soc=wageBase*0.34;
+    const travel=0;
+    const returnTemp=-temporary*0.15;
+    const contractor=direct+ohr+profit+temporary+winter+soc+travel+returnTemp;
+    const afterCompetition=contractor*Number(P.competition||1);
+    const afterForecast=afterCompetition*Number(P.forecast||1);
+    const unit=qty!==0 ? afterForecast/qty : 0;
+
+    return {
+      qty:qty,
+      salary:salary,
+      machines:machines,
+      drivers:drivers,
+      transport:transport,
+      materials:materials,
+      wageBase:wageBase,
+      direct:direct,
+      ohr:ohr,
+      profit:profit,
+      temporary:temporary,
+      winter:winter,
+      soc:soc,
+      travel:travel,
+      returnTemp:returnTemp,
+      contractor:contractor,
+      competition:Number(P.competition||1),
+      forecast:Number(P.forecast||1),
+      total:afterForecast,
+      unit:unit
+    };
   }
+
 
   function gprDisplayState() {
     if(!ui.gprDisplay){
@@ -3199,11 +3225,9 @@
   }
 
   function gprRowAmounts(row,e,estimateRows,m,monthList) {
-    const c=rowCost(row,m);
-    const factor=gprCurrentPriceFactor(m);
-    const baseUnit=Number(c.total_unit||0);
-    const unitAtStart=baseUnit*factor;
-    const totalAtStart=Number(row.quantity||0)*unitAtStart;
+    const current=gprRowCurrentPrice(row,m);
+    const unitAtStart=current.unit;
+    const totalAtStart=current.total;
     const months={},monthQty={},monthIndex={};
     let totalMonths=0;
     (monthList||gprMonths()).forEach(function(month){
@@ -3216,8 +3240,7 @@
       totalMonths+=amount;
     });
     return {
-      baseUnit:baseUnit,
-      factor:factor,
+      current:current,
       unit:unitAtStart,
       total:totalAtStart,
       totalMonths:totalMonths,
@@ -3263,14 +3286,30 @@
     return esc(JSON.stringify(parts||[]));
   }
 
-  function gprFormulaPartsPrice(a) {
-    return [
-      {text:"Базовая цена строки "+gprMoneyText(a.baseUnit),cls:"c1"},
-      {text:" × ",cls:"op"},
-      {text:"коэффициент расчёта текущей цены "+Number(a.factor||0).toFixed(4).replace(".",","),cls:"c2"},
-      {text:" = ",cls:"op"},
-      {text:gprMoneyText(a.unit),cls:"result"}
+  function gprFormulaPartsPrice(a,row) {
+    const c=a.current||{};
+    const parts=[
+      {text:"Прямые "+gprMoneyText(c.direct),cls:"c1"}
     ];
+    if(Number(c.wageBase||0)!==0){
+      parts.push({text:" + ",cls:"op"},{text:"ОХР "+gprMoneyText(c.ohr),cls:"c2"});
+      parts.push({text:" + ",cls:"op"},{text:"прибыль "+gprMoneyText(c.profit),cls:"c2"});
+      parts.push({text:" + ",cls:"op"},{text:"временные "+gprMoneyText(c.temporary),cls:"c3"});
+      parts.push({text:" + ",cls:"op"},{text:"зимние "+gprMoneyText(c.winter),cls:"c3"});
+      parts.push({text:" + ",cls:"op"},{text:"соцстрах "+gprMoneyText(c.soc),cls:"c2"});
+      if(Number(c.returnTemp||0)!==0){
+        parts.push({text:" − ",cls:"op"},{text:"возврат "+gprMoneyText(Math.abs(c.returnTemp)),cls:"c3"});
+      }
+    }
+    parts.push({text:" = ",cls:"op"},{text:gprMoneyText(c.contractor),cls:"c1"});
+    parts.push({text:" × ",cls:"op"},{text:"конкурсный "+Number(c.competition||1).toFixed(4).replace(".",","),cls:"c2"});
+    parts.push({text:" × ",cls:"op"},{text:"прогнозный "+Number(c.forecast||1).toFixed(4).replace(".",","),cls:"c3"});
+    parts.push({text:" = ",cls:"op"},{text:gprMoneyText(c.total),cls:"c1"});
+    if(Number(c.qty||0)!==0){
+      parts.push({text:" ÷ ",cls:"op"},{text:gprNumberText(c.qty,6),cls:"c1"});
+      parts.push({text:" = ",cls:"op"},{text:gprMoneyText(a.unit),cls:"result"});
+    }
+    return parts;
   }
 
   function gprFormulaPartsAmount(qty,unit,total) {
@@ -3354,7 +3393,7 @@
           body+='<td class="center">'+esc(r.unit||"")+'</td><td class="num">'+fmt(r.quantity)+'</td>';
 
           if(display.price){
-            body+='<td class="num gpr-value-cell" data-gpr-address="'+esc(estimateLabel+' · Цена на начало работ')+'" data-gpr-formula-json="'+gprFormulaData(gprFormulaPartsPrice(a))+'">'+money(a.unit)+'</td>';
+            body+='<td class="num gpr-value-cell" data-gpr-address="'+esc(estimateLabel+' · Цена на начало работ')+'" data-gpr-formula-json="'+gprFormulaData(gprFormulaPartsPrice(a,r))+'">'+money(a.unit)+'</td>';
           }
           if(display.amount){
             body+='<td class="num gpr-value-cell" data-gpr-address="'+esc(estimateLabel+' · Стоимость на начало работ')+'" data-gpr-formula-json="'+gprFormulaData(gprFormulaPartsAmount(r.quantity,a.unit,a.total))+'">'+money(a.total)+'</td>';
