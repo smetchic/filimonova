@@ -1577,19 +1577,6 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 #reconciliationEditorModal .recon-estimate-choice{
   grid-template-columns:52px 76px 58px minmax(150px,1.1fr) minmax(210px,1.6fr) 72px!important;
 }
-#reconciliationEditorModal .recon-estimate-choice > input[type="radio"]{
-  display:block!important;
-  appearance:auto!important;
-  -webkit-appearance:radio!important;
-  opacity:1!important;
-  visibility:visible!important;
-  position:static!important;
-  width:18px!important;
-  height:18px!important;
-  margin:0 auto!important;
-  accent-color:#3978C5;
-  cursor:pointer;
-}
 #reconciliationEditorModal .recon-choice-header > span:first-child{
   text-align:center;
   font-weight:600;
@@ -1617,37 +1604,8 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 #reconciliationEditorModal .recon-estimate-choice.recon-choice-occupied:not(.is-selected){
   opacity:1!important;
 }
-#reconciliationEditorModal .recon-estimate-choice > input[type="radio"]{
-  display:block!important;
-  width:18px!important;height:18px!important;
-  opacity:1!important;visibility:visible!important;
-}
 
 /* Custom reconciliation selector: independent from global native-input styling. */
-#reconciliationEditorModal .recon-choice-native{
-  position:absolute!important;
-  opacity:0!important;
-  width:1px!important;height:1px!important;
-  pointer-events:none!important;
-}
-#reconciliationEditorModal .recon-choice-box{
-  display:flex!important;
-  width:18px;height:18px;
-  margin:0 auto;
-  border:1.5px solid #7A8491;
-  border-radius:3px;
-  background:#fff;
-  align-items:center;justify-content:center;
-  box-sizing:border-box;
-  font-size:14px;font-weight:700;line-height:1;
-  color:#fff;
-  cursor:pointer;
-}
-#reconciliationEditorModal .recon-estimate-choice.is-selected .recon-choice-box{
-  background:#3978C5;
-  border-color:#3978C5;
-  color:#fff;
-}
 
 /* Final selector grid fix: hidden native radio must not consume a grid track. */
 #reconciliationEditorModal .recon-estimate-choice{position:relative!important}
@@ -1672,3 +1630,35 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 #reconciliationEditorModal .recon-est-basis{grid-column:4!important}
 #reconciliationEditorModal .recon-est-name{grid-column:5!important}
 #reconciliationEditorModal .recon-est-qty{grid-column:6!important}
+
+/* Single authoritative selector style. */
+#reconciliationEditorModal .recon-estimate-choice > .recon-choice-native{
+  position:absolute!important;
+  left:0!important;top:0!important;
+  width:1px!important;height:1px!important;
+  margin:0!important;padding:0!important;
+  opacity:0!important;visibility:hidden!important;
+  pointer-events:none!important;
+}
+#reconciliationEditorModal .recon-estimate-choice > .recon-choice-box{
+  display:flex!important;
+  grid-column:1!important;
+  position:static!important;
+  visibility:visible!important;
+  opacity:1!important;
+  width:14px!important;height:14px!important;
+  margin:0 auto!important;
+  border:1px solid #8B9199!important;
+  border-radius:2px!important;
+  background:#fff!important;
+  align-items:center!important;justify-content:center!important;
+  box-sizing:border-box!important;
+  font-size:11px!important;font-weight:700!important;line-height:1!important;
+  color:#fff!important;
+  cursor:pointer!important;
+}
+#reconciliationEditorModal .recon-estimate-choice.is-selected > .recon-choice-box{
+  background:#3978C5!important;
+  border-color:#3978C5!important;
+  color:#fff!important;
+}
