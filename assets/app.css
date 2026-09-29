@@ -2095,3 +2095,17 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   font-size:11.5px;
   white-space:nowrap;
 }
+
+
+.gpr-index-base{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  justify-content:flex-end;
+  width:100%;
+  font-variant-numeric:tabular-nums;
+}
+.gpr-index-base small{
+  color:#8A8D94;
+  font-size:10.5px;
+}
