@@ -631,7 +631,7 @@
       // Saved widths are the user's choice. Never expand them because cell text is long.
       widths=widths.map(function(w,i){
         const n=Number(w);
-        return Number.isFinite(n) && n>=28 ? n : tableColumnMinimum(table,i);
+        return Number.isFinite(n) && n>=12 ? n : tableColumnMinimum(table,i);
       });
     }
     Array.from(cg.children).forEach(function(col,i){col.style.width=widths[i]+"px";});
@@ -647,7 +647,7 @@
         e.preventDefault();e.stopPropagation();
         const startX=e.clientX,start=widths[index];
         function move(ev){
-          widths[index]=Math.max(28,Math.min(720,start+ev.clientX-startX));
+          widths[index]=Math.max(12,Math.min(720,start+ev.clientX-startX));
           cg.children[index].style.width=widths[index]+"px";
           updateStickyOffsets(table,widths);
           updateStickyHeaderOffsets(table);
