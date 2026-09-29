@@ -851,9 +851,9 @@
     function block(title,html,extra){return '<section class="mv-block '+(extra||"")+'"><div class="mv-block-title">'+title+'</div>'+html+'</section>';}
     function body(tab){
       const b=modal.querySelector(".material-body");
+      const fmt0=value=>numFmt.format(Number(value)||0);
+      const fmt=value=>numFmt.format(Number(value)||0);
       if(tab==="overview"){
-        const fmt0=value=>numFmt.format(Number(value)||0);
-        const fmt=value=>numFmt.format(Number(value)||0);
         const exec=block("Исполнение",'<div class="mv-overview-exec">'+
           kpi("Поставлено",fmt0(suppliedQty)+' шт. / '+fmt(suppliedM3)+' м³',st.qty?fmt(suppliedQty/st.qty*100)+'% от проектного количества':"")+
           kpi("Смонтировано",fmt0(mountedQty)+' шт. / '+fmt(mountedQty*volumePerPiece)+' м³',st.qty?fmt(mountedQty/st.qty*100)+'% от проекта':"")+
