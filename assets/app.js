@@ -1901,7 +1901,7 @@
       if (tab === 2) return '<span class="context-caption">ГПР</span><span class="context-muted">Помесячный финансовый план · без недель и дней</span>' + gprPeriodControlsHtml() + '<span class="spacer"></span><button class="context-link" type="button" data-gpr-action="spread">Разнести по месяцам</button><button class="context-link" type="button" data-gpr-action="display">Отображение</button><button class="context-link" type="button" data-gpr-action="excel">Экспорт Excel</button>';
     }
     if (pageKey === "recon") {
-      if (tab === 0) return '<span class="context-caption">Сметы ↔ Спецификация</span><span class="context-muted">Ручные связи имеют приоритет</span>';
+      if (tab === 0) return buildEstimateContext(0);
       return '<span class="context-caption">Журнал</span><span class="context-muted">Только записи, добавленные вручную из Сверки</span>';
     }
     if (pageKey === "montage") {
@@ -3149,6 +3149,16 @@
       if(estimatePieces==null || Math.abs(projectQty-estimatePieces)>1e-9) return true;
       return importNorm(sr.name)!==importNorm(String(estimateSourceValue(r,"name")||""));
     }
+    const estimateNumbers=dataState.estimates.map(function(e){return e.number;});
+    const allEstimatesVisible=estimateNumbers.every(function(n){return ui.estimates[n]!==false;});
+    if(!allEstimatesVisible){
+      filtered=filtered.filter(function(v){
+        if(!v.estimate) return false;
+        const e=dataState.estimates.find(function(x){return x.id===v.estimate.estimate_id;});
+        return !!e && ui.estimates[e.number]!==false;
+      });
+    }
+
     if(ui.reconLinkFilter==="unlinked") filtered=filtered.filter(function(v){return !v.estimate;});
     else if(ui.reconLinkFilter==="linked") filtered=filtered.filter(function(v){return !!v.estimate;});
     else if(ui.reconLinkFilter==="issues") filtered=filtered.filter(viewIssue);
