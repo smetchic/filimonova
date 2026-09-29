@@ -2080,7 +2080,7 @@
       v1 += a * Number(r.volumePerPiece || 0);
       v2 += b * Number(r.volumePerPiece || 0);
     });
-    out.push(s1+s2,v1+v2);
+    out.push(s1,v1,s2,v2);
     levels.forEach(function(code) {
       let a = 0, b = 0;
       rows.forEach(function(r) {
@@ -2089,6 +2089,7 @@
       });
       out.push(a,b);
     });
+    out.push(s1+s2);
     return out;
   }
 
@@ -2113,7 +2114,7 @@
 
     let body = "";
     if (!rows.length) {
-      body = tableMessage("Нет строк по текущему фильтру.",3+2+levels.length*2);
+      body = tableMessage("Нет строк по текущему фильтру.",3+4+levels.length*2+1);
     } else {
       const rootKey = "spec-summary:root";
       body += summaryGroupRow("Всего по дому",rows,rootKey,0,levels);
@@ -2137,12 +2138,13 @@
               body += '<td class="sticky-1 center">' + (index+1) + '</td>';
               body += filterCell("mark",r.mark,esc(r.mark),"sticky-2");
               body += filterCell("name",r.name,esc(r.name),"sticky-3");
-              const houseTotal=s1+s2;
-              body += '<td class="qty-col num">' + fmt0(houseTotal) + '</td><td class="vol-col num">' + fmt(houseTotal*r.volumePerPiece) + '</td>';
+              body += '<td class="qty-col num">' + fmt0(s1) + '</td><td class="vol-col num">' + fmt(s1*r.volumePerPiece) + '</td>';
+              body += '<td class="qty-col num">' + fmt0(s2) + '</td><td class="vol-col num">' + fmt(s2*r.volumePerPiece) + '</td>';
               levels.forEach(function(code) {
                 body += '<td class="summary-col num">' + fmt0((r.byLevel["Секция 1"] && r.byLevel["Секция 1"].get(code)) || 0) + '</td>';
                 body += '<td class="summary-col num">' + fmt0((r.byLevel["Секция 2"] && r.byLevel["Секция 2"].get(code)) || 0) + '</td>';
               });
+              body += '<td class="summary-col num strong-num">' + fmt0(s1+s2) + '</td>';
               body += '</tr>';
             });
           });
@@ -2157,11 +2159,12 @@
               const s2=Number(r.bySection["Секция 2"]||0);
               body += '<tr class="data-row" data-material-id="'+esc(r.catalogItemId||"")+'"><td class="sticky-1 center">'+(index+1)+'</td>'+
                 filterCell("mark",r.mark,esc(r.mark),"sticky-2")+filterCell("name",r.name,esc(r.name),"sticky-3")+
-                '<td class="qty-col num">'+fmt0(s1+s2)+'</td><td class="vol-col num">'+fmt((s1+s2)*r.volumePerPiece)+'</td>'+
+                '<td class="qty-col num">'+fmt0(s1)+'</td><td class="vol-col num">'+fmt(s1*r.volumePerPiece)+'</td>'+
+                '<td class="qty-col num">'+fmt0(s2)+'</td><td class="vol-col num">'+fmt(s2*r.volumePerPiece)+'</td>'+
                 levels.map(function(code){
                   return '<td class="summary-col num">'+fmt0((r.byLevel["Секция 1"]&&r.byLevel["Секция 1"].get(code))||0)+'</td>'+
                     '<td class="summary-col num">'+fmt0((r.byLevel["Секция 2"]&&r.byLevel["Секция 2"].get(code))||0)+'</td>';
-                }).join("")+'</tr>';
+                }).join("")+'<td class="summary-col num strong-num">'+fmt0(s1+s2)+'</td></tr>';
             });
           }
         }
@@ -2172,10 +2175,12 @@
       '<th class="sticky-1" rowspan="2">№</th>' +
       '<th class="sticky-2 filterable-head" rowspan="2">' + filterHeader("Марка","mark") + '</th>' +
       '<th class="sticky-3 filterable-head" rowspan="2">' + filterHeader("Наименование","name") + '</th>' +
-      '<th colspan="2">Итого</th>' +
+      '<th colspan="2">Секция 1</th><th colspan="2">Секция 2</th>' +
       levels.map(function(x){ return '<th colspan="2" class="floor-parent">' + esc(summaryLevelLabel(x)) + '</th>'; }).join("") +
+      '<th rowspan="2" class="summary-col">Итого, шт.</th>' +
       '</tr>';
     const head2 = '<tr>' +
+      '<th class="qty-col">Кол-во, шт.</th><th class="vol-col">Объём, м³</th>' +
       '<th class="qty-col">Кол-во, шт.</th><th class="vol-col">Объём, м³</th>' +
       levels.map(function(){ return '<th class="summary-col">1</th><th class="summary-col">2</th>'; }).join("") +
       '</tr>';
