@@ -1426,3 +1426,28 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 .journal-table .journal-name-cell{white-space:normal;line-height:15px}
 .journal-diff-text{background:#FDECEC;color:#A52A2A;padding:0 1px;border-radius:2px}
 .journal-table .journal-diff-number{color:#B42318;font-weight:600;background:#FFF7F6}
+
+/* Canonical EngineeringTable geometry.
+   Scroll belongs to the viewport; logical widths belong to COLGROUP.
+   Do not let legacy min-width/max-content rules compete with JS/colgroup. */
+#workArea .engineering-shell{min-width:0!important;max-width:100%!important;overflow:hidden!important}
+#workArea .engineering-scroll{
+  min-width:0!important;
+  max-width:100%!important;
+  overflow-x:auto!important;
+  overflow-y:auto!important;
+}
+#workArea .engineering-scroll > table.eng-table,
+#workArea .engineering-scroll > table.spec-table{
+  min-width:0!important;
+  max-width:none!important;
+  table-layout:fixed!important;
+}
+#workArea .engineering-scroll > table.eng-table th,
+#workArea .engineering-scroll > table.eng-table td,
+#workArea .engineering-scroll > table.spec-table th,
+#workArea .engineering-scroll > table.spec-table td{
+  min-width:0!important;
+  max-width:none;
+  box-sizing:border-box;
+}
