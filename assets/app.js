@@ -660,41 +660,20 @@
   }
 
   function forceLogicalColumnWidth(table,index,width) {
-    // Global EngineeringTable rule: a user-resized logical column owns its width.
-    if(!table || !(table.classList.contains("eng-table") || table.classList.contains("spec-table"))) return;
-    const px=Math.max(12,Number(width)||12)+"px";
-    if(table.tHead) Array.from(table.tHead.rows).forEach(function(row){
-      Array.from(row.cells).forEach(function(cell){
-        if(Number(cell.dataset.logicalStart)===index && Number(cell.dataset.logicalSpan||1)===1) {
-          cell.style.setProperty("width",px,"important");
-          cell.style.setProperty("min-width",px,"important");
-          cell.style.setProperty("max-width",px,"important");
-        }
-      });
-    });
-    Array.from(table.tBodies).forEach(function(body){
-      Array.from(body.rows).forEach(function(row){
-        let c=0;
-        Array.from(row.cells).forEach(function(cell){
-          const span=cell.colSpan||1;
-          if(span===1 && c===index) {
-            cell.style.setProperty("width",px,"important");
-            cell.style.setProperty("min-width",px,"important");
-            cell.style.setProperty("max-width",px,"important");
-          }
-          c+=span;
-        });
-      });
-    });
+    // Width ownership belongs exclusively to the generated COLGROUP.
+    // Never force widths on TH/TD: doing so conflicts with rowspan/colspan headers
+    // and breaks the scroll geometry of multi-level engineering tables.
+    return;
   }
 
   function lockTableToColumnSum(table,widths) {
-    // Prevent the browser from compensating a resized column by changing neighbours.
-    if(!table || !table.classList.contains("eng-table")) return;
+    if(!table) return;
     const total=Math.max(1,widths.reduce(function(sum,w){return sum+(Number(w)||0);},0));
-    table.style.setProperty("width",total+"px","important");
-    table.style.setProperty("min-width",total+"px","important");
-    table.style.setProperty("max-width",total+"px","important");
+    // One owner for horizontal geometry: COLGROUP + explicit table width.
+    // The parent .engineering-scroll owns scrolling.
+    table.style.setProperty("width",total+"px");
+    table.style.setProperty("min-width",total+"px");
+    table.style.removeProperty("max-width");
   }
 
   function installResizeAutofit(table) {
