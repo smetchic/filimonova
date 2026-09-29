@@ -365,8 +365,20 @@
   }
 
   function filterCell(field,value,content,extraClass) {
-    return '<td class="' + esc(extraClass || "") + '" data-filter-field="' + esc(field) + '" data-filter-value="' + esc(value == null ? "" : value) + '">' + content + '</td>';
+    const raw=value == null ? "" : String(value);
+    const title=(field==="name" || field==="basis") && raw ? ' title="' + esc(raw) + '"' : "";
+    return '<td class="' + esc(extraClass || "") + '" data-filter-field="' + esc(field) + '" data-filter-value="' + esc(raw) + '"' + title + '>' + content + '</td>';
   }
+
+  // Long estimate names stay compact by default. Double-clicking the name cell
+  // expands only that cell and does not trigger the material-card row action.
+  document.addEventListener("dblclick",function(e){
+    const cell=e.target && e.target.closest ? e.target.closest('td[data-filter-field="name"]') : null;
+    if(!cell || !cell.closest(".est-table,.ks-table")) return;
+    e.preventDefault();
+    e.stopPropagation();
+    cell.classList.toggle("cell-text-expanded");
+  },true);
 
   function ensureFilterPopup() {
     let pop = document.getElementById("columnFilterPopup");
