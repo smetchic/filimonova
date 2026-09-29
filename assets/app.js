@@ -3289,7 +3289,15 @@
   function gprFormulaPartsPrice(a,row) {
     const c=a.current||{};
     const parts=[
-      {text:"Прямые "+gprMoneyText(c.direct),cls:"c1"}
+      {text:"ЗП "+gprMoneyText(c.salary),cls:"c1"},
+      {text:" + ",cls:"op"},
+      {text:"машины "+gprMoneyText(c.machines),cls:"c1"},
+      {text:" + ",cls:"op"},
+      {text:"материалы "+gprMoneyText(c.materials),cls:"c1"},
+      {text:" + ",cls:"op"},
+      {text:"транспорт "+gprMoneyText(c.transport),cls:"c1"},
+      {text:" = ",cls:"op"},
+      {text:"прямые "+gprMoneyText(c.direct),cls:"c1"}
     ];
     if(Number(c.wageBase||0)!==0){
       parts.push({text:" + ",cls:"op"},{text:"ОХР "+gprMoneyText(c.ohr),cls:"c2"});
