@@ -1408,3 +1408,16 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
  .recon-choice{grid-template-columns:22px 62px 100px minmax(140px,1fr)}
  .recon-choice-meta{grid-column:4;text-align:left;padding-bottom:5px}
 }
+
+/* Global filter anchor invariant.
+   Horizontal sticky columns are disabled, but filterable TH must remain the
+   containing block for its absolute filter trigger. Otherwise the funnel
+   escapes into unrelated grouped/total headers ("phantom" filters). */
+#workArea table thead th.filterable-head{
+  position:relative!important;
+  left:auto!important;
+  right:auto!important;
+}
+#workArea table thead th:not(.filterable-head) > .column-filter-trigger{
+  display:none!important;
+}
