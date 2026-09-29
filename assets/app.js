@@ -48,7 +48,8 @@
       period: localStorage.getItem("filimonova.s29.period") || ""
     },
     columnFilters: {},
-    columnSort: {}
+    columnSort: {},
+    isAdmin: false
   };
 
   let dataState = {
@@ -242,7 +243,7 @@
       fetchAllRows("current_price_revisions","id,estimate_id,revision_no,settings_snapshot,is_current,created_at",function(q){return q.eq("project_id",project.id).order("created_at");}),
       fetchAllRows("current_price_row_results","id,revision_id,estimate_row_id,quantity,unit_price_at_start,total_with_vat,with_tender,with_forecast,with_tender_and_forecast,contractor_total",function(q){return q.eq("project_id",project.id);}),
       fetchAllRows("gpr_plans","id,name,status,start_month,end_month,created_at,updated_at",function(q){return q.eq("project_id",project.id).order("created_at");}),
-      fetchAllRows("gpr_months","id,plan_id,month,execution_index",function(q){return q.eq("project_id",project.id).order("month");}),
+      fetchAllRows("gpr_months","id,plan_id,month,monthly_index,execution_index,is_in_period",function(q){return q.eq("project_id",project.id).order("month");}),
       fetchAllRows("gpr_floor_assignments","id,plan_id,month_id,building_section,level_code",function(q){return q.eq("project_id",project.id);}),
       fetchAllRows("gpr_row_assignments","id,plan_id,month_id,estimate_row_id,quantity,source_mode,source_specification_row_id,source_level_code,parent_assignment_id",function(q){return q.eq("project_id",project.id);}),
       fetchAllRows("avr_documents","id,period_month,display_number,created_at,updated_at",function(q){return q.eq("project_id",project.id).order("period_month");}),
@@ -2310,7 +2311,7 @@
             : "Текущая цена рассчитана по сметам "+nums.join(", ");
         return '<span class="context-caption">Текущая цена</span><span class="context-muted">'+esc(note)+'</span>';
       }
-      if (tab === 2) return '<span class="context-caption">ГПР</span><span class="context-muted">Помесячный финансовый план · без недель и дней</span>' + gprPeriodControlsHtml() + '<span class="spacer"></span><button class="context-link" type="button" data-gpr-action="spread">Разнести по месяцам</button><button class="context-link" type="button" data-gpr-action="display">Отображение</button><button class="context-link" type="button" data-gpr-action="excel">Экспорт Excel</button>';
+      if (tab === 2) return '<span class="context-caption">ГПР</span><span class="context-muted">Помесячный финансовый план · без недель и дней</span>' + gprPeriodControlsHtml() + '<span class="spacer"></span>' + (ui.isAdmin?'<button class="context-link" type="button" data-gpr-action="settings">Параметры ГПР</button>':'') + '<button class="context-link" type="button" data-gpr-action="spread">Разнести по графику</button><button class="context-link" type="button" data-gpr-action="display">Отображение</button><button class="context-link" type="button" data-gpr-action="excel">Экспорт Excel</button>';
     }
     if (pageKey === "recon") {
       if (tab === 0) return buildSpecContext(0);
@@ -2952,51 +2953,75 @@
     select("temporary");
   }
 
-  function gprPeriod() {
-    if (!ui.gprPeriod) {
-      try { ui.gprPeriod = JSON.parse(localStorage.getItem("filimonova.gpr.period") || "null"); }
-      catch(_) { ui.gprPeriod = null; }
-      if (!ui.gprPeriod) ui.gprPeriod={startMonth:12,startYear:2026,endMonth:5,endYear:2027};
-    }
-    return ui.gprPeriod;
+
+  function gprMonthName(key,shortName) {
+    const names=["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+    const short=["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
+    const month=Number(String(key||"").slice(5,7));
+    return (shortName?short:names)[Math.max(0,month-1)] || "";
   }
 
-  function gprPeriodControlsHtml() {
-    const p=gprPeriod();
-    const names=["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
-    function monthOptions(selected){
-      return names.map(function(name,i){return '<option value="'+(i+1)+'" '+(selected===i+1?'selected':'')+'>'+name+'</option>';}).join("");
-    }
-    return '<span class="gpr-period"><span class="gpr-period-label">Период:</span><span>с</span>'+
-      '<select class="gpr-period-select" data-gpr-period="startMonth" aria-label="Месяц начала">'+monthOptions(Number(p.startMonth))+'</select>'+
-      '<input class="gpr-period-year" data-gpr-period="startYear" type="number" min="2000" max="2100" step="1" value="'+Number(p.startYear)+'" aria-label="Год начала">'+
-      '<span>по</span>'+
-      '<select class="gpr-period-select" data-gpr-period="endMonth" aria-label="Месяц окончания">'+monthOptions(Number(p.endMonth))+'</select>'+
-      '<input class="gpr-period-year" data-gpr-period="endYear" type="number" min="2000" max="2100" step="1" value="'+Number(p.endYear)+'" aria-label="Год окончания"></span>';
+  function activeGprPlan() {
+    return (dataState.gprPlans||[]).find(function(p){return p.status==="active";}) || (dataState.gprPlans||[])[0] || null;
+  }
+
+  function gprAllMonths() {
+    const plan=activeGprPlan();
+    if(!plan) return [];
+    return (dataState.gprMonths||[])
+      .filter(function(m){return m.plan_id===plan.id;})
+      .slice()
+      .sort(function(a,b){return String(a.month).localeCompare(String(b.month));})
+      .map(function(m){
+        const key=String(m.month||"").slice(0,7);
+        return Object.assign({},m,{
+          key:key,
+          year:key.slice(0,4),
+          month:gprMonthName(key,true),
+          fullMonth:gprMonthName(key,false),
+          label:gprMonthName(key,false)+" "+key.slice(0,4),
+          monthlyIndex:Number(m.monthly_index||1),
+          index:Number(m.execution_index||1)
+        });
+      });
   }
 
   function gprMonths() {
-    const p=gprPeriod();
-    const names=["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
-    let sy=Number(p.startYear),sm=Number(p.startMonth),ey=Number(p.endYear),em=Number(p.endMonth);
-    let start=sy*12+(sm-1),end=ey*12+(em-1);
-    if(end<start){end=start;ey=sy;em=sm;}
-    const out=[];
-    const maxMonths=120;
-    for(let n=start;n<=end && out.length<maxMonths;n++){
-      const year=Math.floor(n/12),monthIndex=n%12;
-      const mm=String(monthIndex+1).padStart(2,"0");
-      out.push({key:year+"-"+mm,year:String(year),month:names[monthIndex],label:names[monthIndex]+" "+year,index:1});
+    const plan=activeGprPlan();
+    const all=gprAllMonths();
+    if(!plan) return [];
+    let selected=all.filter(function(m){return !!m.is_in_period;});
+    if(!selected.length && plan.start_month && plan.end_month){
+      const start=String(plan.start_month).slice(0,7),end=String(plan.end_month).slice(0,7);
+      selected=all.filter(function(m){return m.key>=start && m.key<=end;});
     }
-    return out;
+    return selected;
+  }
+
+  function gprPeriodControlsHtml() {
+    const months=gprMonths();
+    const period=months.length
+      ? months[0].label+" — "+months[months.length-1].label
+      : "не установлен";
+    const last=months.length?Number(months[months.length-1].index||1):1;
+    return '<span class="gpr-period-summary"><span class="gpr-period-label">Период:</span><strong>'+esc(period)+'</strong><span>·</span><span class="gpr-period-label">Прогноз:</span><strong>по месяцам</strong><span class="context-muted">нарастающий индекс до '+esc(last.toFixed(6).replace(".",","))+'</span></span>';
   }
 
   function gprAssignments() {
-    if (!ui.gprAssignments) {
-      try { ui.gprAssignments = JSON.parse(localStorage.getItem("filimonova.gpr.assignments") || "{}"); }
-      catch(_) { ui.gprAssignments = {}; }
-    }
-    return ui.gprAssignments;
+    const plan=activeGprPlan();
+    const byMonth=new Map(gprAllMonths().map(function(m){return [m.id,m.key];}));
+    const map={};
+    if(!plan) return map;
+    (dataState.gprFloorAssignments||[]).filter(function(a){return a.plan_id===plan.id;}).forEach(function(a){
+      const month=byMonth.get(a.month_id);
+      if(month) map[(a.building_section||"*")+"|"+a.level_code]=month;
+    });
+    return map;
+  }
+
+  function gprAssignedMonth(section,level) {
+    const a=gprAssignments();
+    return a[(section||"*")+"|"+level] || a["*|"+level] || "";
   }
 
   function estimateScope(e) {
@@ -3006,77 +3031,105 @@
     return {section:section,zone:zone};
   }
 
-  let gprQtyIndexState=null;
+  let gprSpecState=null;
 
-  function gprQuantityIndex() {
-    const assignments=gprAssignments();
-    const assignmentsKey=JSON.stringify(assignments);
+  function gprSpecData() {
     if(
-      gprQtyIndexState &&
-      gprQtyIndexState.assignmentsKey===assignmentsKey &&
-      gprQtyIndexState.specRows===dataState.specRows &&
-      gprQtyIndexState.specSections===dataState.specSections &&
-      gprQtyIndexState.specQuantities===dataState.specQuantities
-    ) return gprQtyIndexState.map;
+      gprSpecState &&
+      gprSpecState.specRows===dataState.specRows &&
+      gprSpecState.specSections===dataState.specSections &&
+      gprSpecState.specQuantities===dataState.specQuantities &&
+      gprSpecState.links===dataState.reconciliationLinks
+    ) return gprSpecState;
 
-    const sections=new Map((dataState.specSections||[]).map(function(sec){return [sec.id,sec];}));
-    const rows=new Map((dataState.specRows||[]).map(function(sr){return [sr.id,sr];}));
-    const map=new Map();
-
-    function add(itemId,section,zone,month,qty) {
-      const key=itemId+"|"+(section||"*")+"|"+(zone||"*")+"|"+month;
-      map.set(key,(map.get(key)||0)+qty);
-    }
-
-    (dataState.specQuantities||[]).forEach(function(q){
-      const month=assignments[q.level_code];
-      if(!month) return;
-      const sr=rows.get(q.specification_row_id);
-      if(!sr || !sr.catalog_item_id) return;
-      const sec=sections.get(sr.section_id);
-      if(!sec) return;
-      const qty=Number(q.quantity||0);
-      if(!qty) return;
-
-      const section=sec.building_section||"";
-      const zone=sec.zone||"";
-      add(sr.catalog_item_id,"","",month,qty);
-      if(section) add(sr.catalog_item_id,section,"",month,qty);
-      if(zone) add(sr.catalog_item_id,"",zone,month,qty);
-      if(section && zone) add(sr.catalog_item_id,section,zone,month,qty);
+    const joined=specJoinedRows();
+    const byId=new Map(joined.map(function(r){return [r.id,r];}));
+    const links=new Map();
+    (dataState.reconciliationLinks||[]).forEach(function(l){
+      if(!links.has(l.estimate_row_id)) links.set(l.estimate_row_id,[]);
+      const sr=byId.get(l.specification_row_id);
+      if(sr) links.get(l.estimate_row_id).push(sr);
     });
-
-    gprQtyIndexState={
-      assignmentsKey:assignmentsKey,
+    gprSpecState={
       specRows:dataState.specRows,
       specSections:dataState.specSections,
       specQuantities:dataState.specQuantities,
-      map:map
+      links:dataState.reconciliationLinks,
+      joined:joined,
+      linked:links
     };
-    return map;
+    return gprSpecState;
+  }
+
+  function gprSpecRowsForEstimateMaterial(row,e) {
+    const state=gprSpecData();
+    const linked=state.linked.get(row.id)||[];
+    if(linked.length) return linked;
+    const item=estimateProjectItem(row);
+    if(!item) return [];
+    const scope=estimateScope(e);
+    return state.joined.filter(function(sr){
+      if(sr.catalog_item_id!==item.id) return false;
+      if(scope.section && sr.section.building_section!==scope.section) return false;
+      if(scope.zone && sr.section.zone!==scope.zone) return false;
+      return true;
+    });
+  }
+
+  function gprMaterialMonthShare(row,e,monthKey) {
+    const rows=gprSpecRowsForEstimateMaterial(row,e);
+    let total=0,monthQty=0;
+    rows.forEach(function(sr){
+      sr.quantities.forEach(function(qty,level){
+        const q=Number(qty||0);
+        total+=q;
+        if(gprAssignedMonth(sr.section.building_section,level)===monthKey) monthQty+=q;
+      });
+    });
+    return total>0 ? monthQty/total : 0;
   }
 
   function gprMaterialMonthQty(row,e,monthKey) {
-    const item=estimateProjectItem(row) || dataState.catalogItems.find(function(x){return x.mark===estimateDisplayBasis(row);});
-    if(!item) return 0;
-    const scope=estimateScope(e);
-    const key=item.id+"|"+(scope.section||"*")+"|"+(scope.zone||"*")+"|"+monthKey;
-    return Number(gprQuantityIndex().get(key)||0);
+    return Number(row.quantity||0)*gprMaterialMonthShare(row,e,monthKey);
+  }
+
+  function gprWorkMaterialRows(row,estimateRows) {
+    const ids=(dataState.estimateWorkLinks||[])
+      .filter(function(l){return l.work_row_id===row.id;})
+      .map(function(l){return l.material_row_id;});
+    if(ids.length){
+      const set=new Set(ids);
+      return estimateRows.filter(function(r){return r.row_type==="material" && set.has(r.id);});
+    }
+    return estimateRows.filter(function(r){return r.row_type==="material";});
   }
 
   function gprRowMonthQty(row,e,monthKey,estimateRows) {
     if(row.row_type==="material") return gprMaterialMonthQty(row,e,monthKey);
-    const materialRows=estimateRows.filter(function(x){return x.row_type==="material";});
-    const allMaterial=materialRows.reduce(function(sum,mr){return sum+Number(mr.quantity||0);},0);
-    if(!allMaterial) return 0;
-    const monthMaterial=materialRows.reduce(function(sum,mr){return sum+gprMaterialMonthQty(mr,e,monthKey);},0);
-    return Number(row.quantity||0)*(monthMaterial/allMaterial);
+    const materialRows=gprWorkMaterialRows(row,estimateRows);
+    const totalWeight=materialRows.reduce(function(sum,mr){return sum+Math.abs(Number(mr.quantity||0));},0);
+    if(!totalWeight) return 0;
+    const monthWeight=materialRows.reduce(function(sum,mr){
+      return sum+Math.abs(Number(mr.quantity||0))*gprMaterialMonthShare(mr,e,monthKey);
+    },0);
+    return Number(row.quantity||0)*(monthWeight/totalWeight);
+  }
+
+  function gprCurrentPriceFactor(m) {
+    const selectedIds=new Set(dataState.estimates.filter(function(e){return ui.estimates[e.number]!==false;}).map(function(e){return e.id;}));
+    const direct=(dataState.estimateRows||[]).filter(function(r){return selectedIds.has(r.estimate_id);}).reduce(function(sum,r){
+      return sum+Number(rowCost(r,m).total_amount||0);
+    },0);
+    const model=currentPriceModel();
+    const atStart=model.find(function(r){return r.id==="afterForecast";});
+    if(direct>0 && atStart && Number(atStart.v)>0) return Number(atStart.v)/direct;
+    const P=ui.currentPrice||{forecast:1.0552,competition:1};
+    return Number(P.competition||1)*Number(P.forecast||1);
   }
 
   function gprRowAmounts(row,e,estimateRows,m,monthList) {
     const c=rowCost(row,m);
-    const P=ui.currentPrice||{forecast:1.0552,competition:1};
-    const unitAtStart=Number(c.total_unit||0)*Number(P.competition||1)*Number(P.forecast||1);
+    const unitAtStart=Number(c.total_unit||0)*gprCurrentPriceFactor(m);
     const totalAtStart=Number(row.quantity||0)*unitAtStart;
     const months={};
     (monthList||gprMonths()).forEach(function(month){
@@ -3148,13 +3201,13 @@
           body+=filterCell("basis",displayBasis,esc(displayBasis),"e-sticky-3");
           body+=filterCell("name",displayName,esc(displayName),"e-sticky-4");
           body+='<td class="center">'+esc(r.unit||"")+'</td><td class="num">'+fmt(r.quantity)+'</td><td class="num">'+money(a.unit)+'</td><td class="num">'+money(a.total)+'</td>';
-          months.forEach(function(mon){body+='<td class="num gpr-month">'+money(a.months[mon.key])+'</td>';});
+          months.forEach(function(mon){body+='<td class="num gpr-month" title="Нарастающий прогнозный индекс: '+esc(Number(mon.index||1).toFixed(6).replace(".",","))+'">'+money(a.months[mon.key])+'</td>';});
           body+='</tr>';
         });
       });
     });
 
-    if(!body) body=tableMessage("Нет строк по текущему фильтру.",8+months.length);
+    if(!body) body=tableMessage(months.length?"Нет строк по текущему фильтру.":"Сначала задайте период ГПР.",8+months.length);
 
     const years=[];
     months.forEach(function(mon){
@@ -3163,16 +3216,107 @@
       y.count++;
     });
     const yearHead=years.map(function(y){return '<th class="gpr-year" colspan="'+y.count+'">'+esc(y.year)+'</th>';}).join("");
-    const monthHead=months.map(function(mon){return '<th class="gpr-month-head">'+esc(mon.month)+'</th>';}).join("");
+    const monthHead=months.map(function(mon){return '<th class="gpr-month-head" title="Индекс '+esc(Number(mon.index||1).toFixed(6).replace(".",","))+'">'+esc(mon.month)+'</th>';}).join("");
 
     $("workArea").className="work-area table-work";
-    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table est-table gpr-table" data-table-key="gpr-v3"><thead>'+
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table est-table gpr-table" data-table-key="gpr-v4"><thead>'+
       '<tr><th class="e-sticky-1" rowspan="2">Тип</th><th class="e-sticky-2" rowspan="2">Поз. см.</th><th class="e-sticky-3 filterable-head" rowspan="2">'+filterHeader("Обоснование","basis")+'</th><th class="e-sticky-4 filterable-head" rowspan="2">'+filterHeader("Наименование","name")+'</th><th rowspan="2"><span class="column-header-stack"><span>Ед.</span><span>изм.</span></span></th><th rowspan="2">Кол-во</th><th rowspan="2">Цена на начало работ</th><th rowspan="2">Стоимость на начало работ</th>'+yearHead+'</tr>'+
       '<tr>'+monthHead+'</tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
 
+  function openGprSettingsModal() {
+    if(!ui.isAdmin) return;
+    const plan=activeGprPlan(),months=gprAllMonths();
+    if(!plan || !months.length) return;
+    let modal=document.getElementById("gprSettingsModal");
+    if(!modal){
+      modal=document.createElement("div");
+      modal.id="gprSettingsModal";
+      modal.className="gpr-modal-backdrop";
+      document.body.appendChild(modal);
+    }
+    const rows=months.map(function(mon){
+      return '<tr data-gpr-settings-row="'+esc(mon.id)+'" data-month-key="'+esc(mon.key)+'">'+
+        '<td class="center"><input class="gpr-settings-check" type="checkbox" '+(mon.is_in_period?'checked':'')+' aria-label="Включить '+esc(mon.label)+'"></td>'+
+        '<td>'+esc(mon.label)+'</td>'+
+        '<td class="num"><input class="gpr-index-input" data-gpr-month-index="'+esc(mon.id)+'" value="'+esc(Number(mon.monthlyIndex||1).toFixed(6).replace(".",","))+'" inputmode="decimal" aria-label="Индекс '+esc(mon.label)+'"></td>'+
+        '<td class="num gpr-cumulative-cell" data-gpr-cumulative="'+esc(mon.id)+'">'+esc(Number(mon.index||1).toFixed(6).replace(".",","))+'</td>'+
+      '</tr>';
+    }).join("");
+    modal.innerHTML='<div class="gpr-modal gpr-settings-modal"><div class="gpr-modal-head"><strong>Параметры ГПР</strong><button type="button" class="gpr-modal-close">×</button></div>'+
+      '<div class="gpr-settings-note">Отметьте непрерывный период работ. Индекс месяца вводится вручную; индекс нарастающим итогом рассчитывается автоматически от Октября 2026.</div>'+
+      '<div class="gpr-modal-body"><div class="gpr-alloc-scroll"><table class="gpr-settings-table"><thead><tr><th>Период</th><th>Месяц</th><th>Индекс месяца</th><th>Индекс нарастающим итогом</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>'+
+      '<div class="gpr-modal-foot"><span class="gpr-settings-state"></span><button type="button" class="context-link gpr-cancel">Отмена</button><span class="spacer"></span><button type="button" class="context-link gpr-settings-save">Сохранить</button></div></div>';
+    modal.classList.add("open");
+
+    function close(){modal.classList.remove("open");}
+    function numberValue(input){
+      const n=Number(String(input.value||"").replace(",","."));
+      return Number.isFinite(n)&&n>0?n:null;
+    }
+    function recalc(){
+      let cumulative=1;
+      months.forEach(function(mon){
+        const input=modal.querySelector('[data-gpr-month-index="'+CSS.escape(mon.id)+'"]');
+        const n=numberValue(input);
+        if(n!=null) cumulative*=n;
+        const cell=modal.querySelector('[data-gpr-cumulative="'+CSS.escape(mon.id)+'"]');
+        if(cell) cell.textContent=(n==null?"—":cumulative.toFixed(6).replace(".",","));
+      });
+    }
+    modal.querySelectorAll(".gpr-index-input").forEach(function(input){input.oninput=recalc;});
+    recalc();
+    modal.querySelector(".gpr-modal-close").onclick=close;
+    modal.querySelector(".gpr-cancel").onclick=close;
+    modal.onclick=function(e){if(e.target===modal) close();};
+    modal.querySelector(".gpr-settings-save").onclick=async function(){
+      const state=modal.querySelector(".gpr-settings-state");
+      const checked=months.filter(function(mon){
+        const row=modal.querySelector('[data-gpr-settings-row="'+CSS.escape(mon.id)+'"]');
+        return row && row.querySelector(".gpr-settings-check").checked;
+      });
+      if(!checked.length){state.textContent="Выберите хотя бы один месяц.";return;}
+      const first=months.indexOf(checked[0]),last=months.indexOf(checked[checked.length-1]);
+      if(checked.length!==last-first+1){state.textContent="Период должен быть непрерывным.";return;}
+
+      let cumulative=1;
+      const payload=[];
+      for(const mon of months){
+        const input=modal.querySelector('[data-gpr-month-index="'+CSS.escape(mon.id)+'"]');
+        const monthly=numberValue(input);
+        if(monthly==null){state.textContent="Проверьте индекс для "+mon.label+".";return;}
+        cumulative*=monthly;
+        payload.push({
+          id:mon.id,
+          project_id:dataState.project.id,
+          plan_id:plan.id,
+          month:String(mon.month).slice(0,10),
+          monthly_index:monthly,
+          execution_index:cumulative,
+          is_in_period:checked.some(function(x){return x.id===mon.id;})
+        });
+      }
+      state.textContent="Сохраняю…";
+      const saveMonths=await client.from("gpr_months").upsert(payload,{onConflict:"id"});
+      if(saveMonths.error){state.textContent=saveMonths.error.message;return;}
+      const savePlan=await client.from("gpr_plans").update({
+        start_month:String(checked[0].month).slice(0,10),
+        end_month:String(checked[checked.length-1].month).slice(0,10)
+      }).eq("id",plan.id).eq("project_id",dataState.project.id);
+      if(savePlan.error){state.textContent=savePlan.error.message;return;}
+      await loadProjectData(dataState.project);
+      gprSpecState=null;
+      close();
+      renderPage("estimates",2);
+    };
+  }
+
   function openGprAllocationModal() {
-    const months=gprMonths(),levels=levelCodes(),existing=gprAssignments();
+    const plan=activeGprPlan(),months=gprMonths(),levels=levelCodes(),existing=gprAssignments();
+    if(!plan || !months.length){
+      if(ui.isAdmin) openGprSettingsModal();
+      return;
+    }
     let modal=document.getElementById("gprAllocationModal");
     if(!modal){
       modal=document.createElement("div");
@@ -3186,14 +3330,18 @@
       if(!y){y={year:mon.year,count:0};years.push(y);}
       y.count++;
     });
-    modal.innerHTML='<div class="gpr-modal"><div class="gpr-modal-head"><strong>Разнести по месяцам</strong><button type="button" class="gpr-modal-close">×</button></div>'+
+    function existingFor(level){
+      const a=existing["Секция 1|"+level]||"",b=existing["Секция 2|"+level]||"";
+      return a===b?a:(a||b);
+    }
+    modal.innerHTML='<div class="gpr-modal"><div class="gpr-modal-head"><strong>Разнести по графику</strong><button type="button" class="gpr-modal-close">×</button></div>'+
       '<div class="gpr-modal-body"><div class="gpr-alloc-scroll"><table class="gpr-alloc-table"><thead><tr><th rowspan="2">Этаж / уровень</th>'+years.map(function(y){return '<th colspan="'+y.count+'">'+esc(y.year)+'</th>';}).join("")+'</tr><tr>'+months.map(function(mon){return '<th>'+esc(mon.month)+'</th>';}).join("")+'</tr></thead><tbody>'+
       levels.map(function(level){
         return '<tr><td>'+esc(summaryLevelLabel(level))+'</td>'+months.map(function(mon){
-          return '<td><input type="checkbox" class="gpr-month-check" data-level="'+esc(level)+'" data-month="'+esc(mon.key)+'" '+(existing[level]===mon.key?'checked':'')+'></td>';
+          return '<td><input type="checkbox" class="gpr-month-check" data-level="'+esc(level)+'" data-month="'+esc(mon.key)+'" '+(existingFor(level)===mon.key?'checked':'')+'></td>';
         }).join("")+'</tr>';
       }).join("")+'</tbody></table></div></div>'+
-      '<div class="gpr-modal-foot"><button type="button" class="context-link gpr-cancel">Отмена</button><span class="spacer"></span><button type="button" class="context-link gpr-apply">Применить к графику</button></div></div>';
+      '<div class="gpr-modal-foot"><span class="gpr-allocation-state"></span><button type="button" class="context-link gpr-cancel">Отмена</button><span class="spacer"></span><button type="button" class="context-link gpr-apply">Применить к графику</button></div></div>';
     modal.classList.add("open");
 
     modal.querySelectorAll(".gpr-month-check").forEach(function(check){
@@ -3208,14 +3356,34 @@
     modal.querySelector(".gpr-modal-close").onclick=close;
     modal.querySelector(".gpr-cancel").onclick=close;
     modal.onclick=function(e){if(e.target===modal) close();};
-    modal.querySelector(".gpr-apply").onclick=function(){
-      const next={};
-      modal.querySelectorAll(".gpr-month-check:checked").forEach(function(check){next[check.dataset.level]=check.dataset.month;});
-      ui.gprAssignments=next;
-      gprQtyIndexState=null;
-      localStorage.setItem("filimonova.gpr.assignments",JSON.stringify(next));
+    modal.querySelector(".gpr-apply").onclick=async function(){
+      const state=modal.querySelector(".gpr-allocation-state");
+      const monthByKey=new Map(months.map(function(mon){return [mon.key,mon];}));
+      const rows=[];
+      modal.querySelectorAll(".gpr-month-check:checked").forEach(function(check){
+        const mon=monthByKey.get(check.dataset.month);
+        if(!mon) return;
+        ["Секция 1","Секция 2"].forEach(function(section){
+          rows.push({
+            project_id:dataState.project.id,
+            plan_id:plan.id,
+            month_id:mon.id,
+            building_section:section,
+            level_code:check.dataset.level
+          });
+        });
+      });
+      state.textContent="Сохраняю…";
+      const del=await client.from("gpr_floor_assignments").delete().eq("project_id",dataState.project.id).eq("plan_id",plan.id);
+      if(del.error){state.textContent=del.error.message;return;}
+      if(rows.length){
+        const ins=await client.from("gpr_floor_assignments").insert(rows);
+        if(ins.error){state.textContent=ins.error.message;return;}
+      }
+      await loadProjectData(dataState.project);
+      gprSpecState=null;
       close();
-      rerenderContent();
+      renderPage("estimates",2);
     };
   }
 
@@ -3229,6 +3397,7 @@
       document.body.appendChild(pop);
     }
     const btn=document.querySelector('[data-gpr-action="display"]');
+    if(!btn) return;
     const r=btn.getBoundingClientRect();
     pop.style.right=Math.max(8,window.innerWidth-r.right)+"px";
     pop.style.top=(r.bottom+5)+"px";
@@ -3236,36 +3405,14 @@
   }
 
   function wireGprControls() {
+    const settings=document.querySelector('[data-gpr-action="settings"]');
     const spread=document.querySelector('[data-gpr-action="spread"]');
     const display=document.querySelector('[data-gpr-action="display"]');
     const excel=document.querySelector('[data-gpr-action="excel"]');
+    if(settings) settings.onclick=openGprSettingsModal;
     if(spread) spread.onclick=openGprAllocationModal;
     if(display) display.onclick=openGprDisplay;
     if(excel) excel.onclick=function(){alert("Экспорт ГПР формируется только в Excel (.xlsx).");};
-
-    document.querySelectorAll("[data-gpr-period]").forEach(function(control){
-      control.onchange=function(){
-        const p=gprPeriod();
-        const field=control.dataset.gprPeriod;
-        const value=Number(control.value);
-        if(!Number.isFinite(value)) return;
-        p[field]=value;
-
-        const start=Number(p.startYear)*12+(Number(p.startMonth)-1);
-        const end=Number(p.endYear)*12+(Number(p.endMonth)-1);
-        if(end<start){
-          if(field==="startMonth" || field==="startYear"){
-            p.endMonth=p.startMonth;
-            p.endYear=p.startYear;
-          }else{
-            p.startMonth=p.endMonth;
-            p.startYear=p.endYear;
-          }
-        }
-        localStorage.setItem("filimonova.gpr.period",JSON.stringify(p));
-        renderPage("estimates",2);
-      };
-    });
   }
 
   function renderSupplySummary() {
@@ -4941,6 +5088,7 @@
       deniedView.classList.add("hidden");
       try {
         const admin = await isAdmin(session.user.id);
+        ui.isAdmin=!!admin;
         if (!admin) {
           appView.classList.add("hidden");
           deniedView.classList.remove("hidden");
@@ -4976,6 +5124,7 @@
 
     try {
       const admin = await isAdmin(session.user.id);
+      ui.isAdmin=!!admin;
       if (!admin) {
         appView.classList.add("hidden");
         deniedView.classList.remove("hidden");
