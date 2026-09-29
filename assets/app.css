@@ -2109,3 +2109,71 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   color:#8A8D94;
   font-size:10.5px;
 }
+
+
+/* GPR display/formula inspector */
+.work-area.table-work.gpr-work{
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+  overflow:hidden;
+}
+.gpr-work .gpr-formula-strip{
+  flex:0 0 38px;
+  height:38px!important;
+  display:grid!important;
+  grid-template-columns:minmax(190px,280px) 42px minmax(0,1fr)!important;
+  align-items:stretch!important;
+  border-top:1px solid var(--line)!important;
+  border-bottom:1px solid var(--line-strong)!important;
+  background:#fff!important;
+}
+.gpr-work .gpr-formula-strip .formula-address{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  padding:0 10px!important;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  border-right:1px solid var(--line-strong)!important;
+  color:#4F5258!important;
+  font-size:11.5px!important;
+}
+.gpr-formula-fx{
+  display:grid;
+  place-items:center;
+  border-right:1px solid var(--line-strong);
+  font:italic 18px Georgia,serif;
+  color:#34373C;
+}
+.gpr-work .gpr-formula-strip .formula-expression{
+  display:flex!important;
+  align-items:center!important;
+  min-width:0!important;
+  padding:0 12px!important;
+  overflow:auto!important;
+  white-space:nowrap!important;
+  font-size:12px!important;
+}
+.gpr-work .engineering-shell{
+  flex:1 1 auto;
+  height:auto;
+  min-height:0;
+}
+.gpr-value-cell{cursor:pointer}
+.gpr-value-cell.gpr-formula-active{
+  box-shadow:inset 0 0 0 2px #3B82F6!important;
+  background:#fff!important;
+}
+.gpr-table .gpr-index-head{
+  height:24px!important;
+  min-height:24px!important;
+  padding:0 5px!important;
+  line-height:24px!important;
+  text-align:center!important;
+  color:#666A72!important;
+  font-size:11px!important;
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap!important;
+}
