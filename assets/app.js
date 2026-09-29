@@ -2677,21 +2677,81 @@
       '<tbody>' + tableMessage("Накладных пока нет. Фактические поступления не подменяются тестовыми документами.",11) + '</tbody></table></div></div>';
   }
 
+  function supplierPriceModel(catalogItemId,projectVolume) {
+    const items=dataState.supplierItems.filter(function(x){return x.catalog_item_id===catalogItemId;});
+    const prices=items.flatMap(function(item){
+      return dataState.supplierPrices.filter(function(p){return p.supplier_item_id===item.id;});
+    });
+    const volumeValues=Array.from(new Set(items.map(function(x){return Number(x.unit_volume_m3||0);}).filter(function(v){return v>0;}).map(function(v){return v.toFixed(6);}))).map(Number);
+    const supplierVolume=volumeValues.length===1?volumeValues[0]:null;
+    const hasReview=items.some(function(x){return ["review","needs_review","ambiguous"].includes(x.link_state);}) || volumeValues.length>1;
+    const distinctPrices=Array.from(new Map(prices.map(function(p){
+      return [p.effective_from+"|"+p.price_basis+"|"+Number(p.unit_price_gross).toFixed(6),p];
+    })).values());
+    let state;
+    if(hasReview) state="Проверить";
+    else if(!distinctPrices.length) state="Нет цены";
+    else state=distinctPrices.length+" "+(distinctPrices.length===1?"цена":distinctPrices.length<5?"цены":"цен");
+    const singlePrice=distinctPrices.length===1 && !hasReview ? Number(distinctPrices[0].unit_price_gross||0) : null;
+    const volume=supplierVolume!=null?supplierVolume:Number(projectVolume||0);
+    return {
+      items:items,
+      prices:distinctPrices,
+      supplierVolume:supplierVolume,
+      volume:volume,
+      state:state,
+      singlePrice:singlePrice,
+      perM3:singlePrice!=null && supplierVolume>0 ? singlePrice/supplierVolume : null
+    };
+  }
+
+  function supplierOnlyPriceModel(item) {
+    const prices=dataState.supplierPrices.filter(function(p){return p.supplier_item_id===item.id;});
+    const distinct=Array.from(new Map(prices.map(function(p){
+      return [p.effective_from+"|"+p.price_basis+"|"+Number(p.unit_price_gross).toFixed(6),p];
+    })).values());
+    const review=["review","needs_review","ambiguous"].includes(item.link_state);
+    const state=review?"Проверить":"Только поставщик";
+    const singlePrice=distinct.length===1 && !review ? Number(distinct[0].unit_price_gross||0) : null;
+    const volume=Number(item.unit_volume_m3||0);
+    return {
+      prices:distinct,state:state,singlePrice:singlePrice,volume:volume,
+      perM3:singlePrice!=null && volume>0?singlePrice/volume:null
+    };
+  }
+
   function renderSupplierPrice() {
-    let rows=buildWorkingSummaryRows().filter(function(r){return passesSearch([r.mark,r.name,"Нет цены"]);})
-      .filter(function(r){return rowPassesColumnFilters({mark:r.mark,name:r.name,price:"Нет цены"});});
-    rows=sortRows(rows,{mark:function(r){return r.mark;},name:function(r){return r.name;},price:function(){return "Нет цены";}});
+    let rows=buildWorkingSummaryRows().map(function(r){
+      return Object.assign({},r,{_price:supplierPriceModel(r.catalogItemId,r.volumePerPiece)});
+    }).filter(function(r){
+      return passesSearch([r.mark,r.name,r._price.state]);
+    }).filter(function(r){
+      return rowPassesColumnFilters({mark:r.mark,name:r.name,price:r._price.state});
+    });
+    rows=sortRows(rows,{mark:function(r){return r.mark;},name:function(r){return r.name;},price:function(r){return r._price.state;}});
     ui.currentGroupKeys=[];
     let body="";
+
     function vector(list){
-      let qty=0,vol=0;list.forEach(function(r){const q=Number(r.bySection["Секция 1"]||0)+Number(r.bySection["Секция 2"]||0);qty+=q;vol+=q*Number(r.volumePerPiece||0);});
-      return {qty:qty,vol:vol};
+      let qty=0,vol=0,costPiece=0,costM3=0,pricedQty=0;
+      list.forEach(function(r){
+        const q=Number(r.bySection["Секция 1"]||0)+Number(r.bySection["Секция 2"]||0);
+        qty+=q;
+        vol+=q*Number(r._price.volume||0);
+        if(r._price.singlePrice!=null){costPiece+=q*r._price.singlePrice;pricedQty+=q;}
+        if(r._price.perM3!=null){costM3+=q*Number(r._price.volume||0)*r._price.perM3;}
+      });
+      return {qty:qty,vol:vol,costPiece:costPiece,costM3:costM3,pricedQty:pricedQty};
     }
+
     function group(label,list,key,depth){
       registerGroup(key);const v=vector(list);
       return '<tr class="group-row group-toggle" data-group-key="'+esc(key)+'"><td colspan="3" class="group-title spec-group-title" style="padding-left:'+(8+depth*14)+'px"><span class="group-arrow">'+groupArrow(key)+'</span>'+esc(label)+'</td>'+
-        '<td class="num">'+fmt0(v.qty)+'</td><td></td><td class="num">'+fmt(v.vol)+'</td><td></td><td></td><td></td><td></td><td></td></tr>';
+        '<td class="num">'+fmt0(v.qty)+'</td><td></td><td class="num">'+fmt(v.vol)+'</td>'+
+        '<td></td><td class="num">'+(v.pricedQty?money(v.costPiece):"")+'</td>'+
+        '<td></td><td class="num">'+(v.pricedQty?money(v.costM3):"")+'</td><td></td></tr>';
     }
+
     if(!rows.length) body=tableMessage("Нет строк по текущему фильтру.",11);
     else{
       const root="price:root";body+=group("Всего по дому",rows,root,0);
@@ -2704,22 +2764,54 @@
             body+=group(name,sr,sk,2);if(ui.collapsed.has(sk) || ui.collapseLeaves)return;
             sr.forEach(function(r,index){
               const q=Number(r.bySection["Секция 1"]||0)+Number(r.bySection["Секция 2"]||0);
+              const p=r._price;
               body+='<tr class="data-row" data-material-id="'+esc(r.catalogItemId||"")+'"><td class="sticky-1 center">'+(index+1)+'</td>'+
                 filterCell("mark",r.mark,esc(r.mark),"sticky-2")+filterCell("name",r.name,esc(r.name),"sticky-3")+
-                '<td class="num">'+fmt0(q)+'</td><td class="num">'+fmt(r.volumePerPiece)+'</td><td class="num">'+fmt(q*r.volumePerPiece)+'</td>'+
-                '<td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td>'+
-                filterCell("price","Нет цены",'<span class="price-state none">Нет цены</span>',"status-cell")+'</tr>';
+                '<td class="num">'+fmt0(q)+'</td><td class="num">'+fmt(p.volume)+'</td><td class="num">'+fmt(q*p.volume)+'</td>'+
+                '<td class="num">'+(p.singlePrice==null?"—":money(p.singlePrice))+'</td><td class="num">'+(p.singlePrice==null?"—":money(q*p.singlePrice))+'</td>'+
+                '<td class="num">'+(p.perM3==null?"—":money(p.perM3))+'</td><td class="num">'+(p.perM3==null?"—":money(q*p.volume*p.perM3))+'</td>'+
+                filterCell("price",p.state,'<span class="price-state '+(p.state==="Проверить"?"review":p.state==="Нет цены"?"none":"ok")+'">'+esc(p.state)+'</span>',"status-cell")+'</tr>';
             });
           });
         });
       }
     }
-    const stats='<span>Рабочая сводка: '+rows.length+' · связано с прайсом: 0 · без цены: '+rows.length+'</span>';
+
+    const supplierOnly=dataState.supplierItems.filter(function(item){
+      return !item.catalog_item_id && passesSearch([item.source_mark,item.source_name,item.link_state]);
+    }).filter(function(item){
+      const p=supplierOnlyPriceModel(item);
+      return rowPassesColumnFilters({mark:item.source_mark,name:item.source_name,price:p.state});
+    });
+
+    if(supplierOnly.length){
+      const key="price:supplier-only";
+      registerGroup(key);
+      body+='<tr class="group-row group-toggle" data-group-key="'+key+'"><td colspan="3" class="group-title spec-group-title" style="padding-left:8px"><span class="group-arrow">'+groupArrow(key)+'</span>Только у поставщика</td><td colspan="8"></td></tr>';
+      if(!ui.collapsed.has(key) && !ui.collapseLeaves){
+        supplierOnly.forEach(function(item,index){
+          const p=supplierOnlyPriceModel(item);
+          body+='<tr class="data-row supplier-only-row"><td class="sticky-1 center">'+(index+1)+'</td>'+
+            filterCell("mark",item.source_mark,esc(item.source_mark),"sticky-2")+
+            filterCell("name",item.source_name,esc(item.source_name),"sticky-3")+
+            '<td class="num">—</td><td class="num">'+fmt(p.volume)+'</td><td class="num">—</td>'+
+            '<td class="num">'+(p.singlePrice==null?"—":money(p.singlePrice))+'</td><td class="num">—</td>'+
+            '<td class="num">'+(p.perM3==null?"—":money(p.perM3))+'</td><td class="num">—</td>'+
+            filterCell("price",p.state,'<span class="price-state '+(p.state==="Проверить"?"review":"supplier")+'">'+esc(p.state)+'</span>',"status-cell")+'</tr>';
+        });
+      }
+    }
+
+    const linkedProjectRows=rows.filter(function(r){return r._price.items.length>0;}).length;
+    const noPriceRows=rows.filter(function(r){return r._price.state==="Нет цены";}).length;
+    const stats='<span>Рабочая сводка: '+rows.length+' · связано с прайсом: '+linkedProjectRows+' · без цены: '+noPriceRows+(supplierOnly.length?' · только у поставщика: '+supplierOnly.length:'')+'</span>';
     $("workArea").className="work-area table-work";
-    $("workArea").innerHTML='<div class="engineering-shell"><div class="local-action-row"><button class="local-text-action" type="button">Импорт прайса</button><span class="local-meta">'+stats+'</span></div><div class="engineering-scroll"><table class="eng-table price-table" data-table-key="supplier-price">'+
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="local-action-row"><button class="local-text-action" data-supplier-import-open type="button">Импорт спецификации поставщика</button><span class="local-meta">'+stats+'</span></div><div class="engineering-scroll"><table class="eng-table price-table" data-table-key="supplier-price-v2">'+
       '<thead><tr><th class="sticky-1" rowspan="2">№</th><th class="sticky-2 filterable-head" rowspan="2">'+filterHeader("Марка","mark")+'</th><th class="sticky-3 filterable-head" rowspan="2">'+filterHeader("Наименование","name")+'</th><th rowspan="2">Всего, шт.</th>'+
       '<th colspan="2">Объём, м³</th><th colspan="2">Стоимость за 1 шт.</th><th colspan="2">Стоимость за 1 м³</th><th class="filterable-head" rowspan="2">'+filterHeader("Прайс","price")+'</th></tr>'+
       '<tr><th>за ед.</th><th>всего</th><th>за ед.</th><th>всего</th><th>за ед.</th><th>всего</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    const importBtn=document.querySelector("[data-supplier-import-open]");
+    if(importBtn) importBtn.onclick=openSupplierImportModal;
   }
 
   function renderMontage(tab) {
