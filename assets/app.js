@@ -1344,6 +1344,361 @@
     await refreshEstimateImportStatuses();
   }
 
+
+  function supplierMatchMark(value) {
+    return importNorm(value).replace(/ё/g,"е").replace(/[()\s]/g,"");
+  }
+
+  function supplierMatchName(value) {
+    return importNorm(value).replace(/ё/g,"е");
+  }
+
+  function supplierColumnLabel(table,header,col) {
+    const parts=[];
+    for(let r=Math.max(0,header-2);r<=Math.min(table.length-1,header+2);r++){
+      const v=importText((table[r]||[])[col]);
+      if(v) parts.push(v);
+    }
+    return importNorm(parts.join(" "));
+  }
+
+  function parseSupplierSpecWorkbook(buffer,fallbackDate) {
+    if(!window.XLSX) throw new Error("Модуль чтения Excel не загрузился.");
+    const wb=XLSX.read(buffer,{type:"array",cellDates:false,cellFormula:false});
+    let sheetName="",table=null,header=-1,markCol=-1,nameCol=-1;
+
+    const preferred=wb.SheetNames.includes("24.08")
+      ? ["24.08"].concat(wb.SheetNames.filter(function(x){return x!=="24.08";}))
+      : wb.SheetNames.slice();
+
+    for(const name of preferred){
+      const t=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,defval:null,raw:true,blankrows:false});
+      for(let i=0;i<Math.min(t.length,60);i++){
+        const row=t[i]||[];
+        const labels=row.map(importNorm);
+        const p=labels.findIndex(function(x){return x==="позиция" || x==="марка" || x.includes("позиция");});
+        const n=labels.findIndex(function(x){return x.includes("наименование");});
+        if(p>=0 && n>=0){
+          sheetName=name;table=t;header=i;markCol=p;nameCol=n;break;
+        }
+      }
+      if(table) break;
+    }
+    if(!table) throw new Error("Не найдена таблица поставщика с колонками «Позиция/Марка» и «Наименование».");
+
+    const maxCols=Math.max.apply(null,table.slice(Math.max(0,header-2),Math.min(table.length,header+8)).map(function(r){return (r||[]).length;}));
+    const labels=Array.from({length:maxCols},function(_,c){return supplierColumnLabel(table,header,c);});
+
+    let volumeCol=labels.findIndex(function(x,c){
+      return c!==markCol && c!==nameCol && (x.includes("объем")||x.includes("объём")) &&
+        (x.includes("ед")||x.includes("1")||x.includes("шт")||x.includes("м3")||x.includes("м³"));
+    });
+    if(volumeCol<0) volumeCol=nameCol+1;
+
+    const priceCols=[];
+    labels.forEach(function(label,col){
+      if(col===markCol || col===nameCol || col===volumeCol) return;
+      const year=(label.match(/\b(20\d{2})\b/)||[])[1];
+      if(year && (label.includes("цен")||label.includes("стоим")||col===volumeCol+1||col===volumeCol+2)){
+        priceCols.push({col:col,year:Number(year)});
+      }
+    });
+    if(!priceCols.length){
+      if(maxCols>volumeCol+1) priceCols.push({col:volumeCol+1,year:2026});
+      if(maxCols>volumeCol+2) priceCols.push({col:volumeCol+2,year:2027});
+    }
+
+    let qtyHouseCol=labels.findIndex(function(x,c){
+      return c!==markCol && c!==nameCol && c!==volumeCol &&
+        (x.includes("колич")||x.includes("шт")) && (x.includes("дом")||x.includes("всего")||x.includes("итого"));
+    });
+    if(qtyHouseCol<0 && maxCols>volumeCol+3) qtyHouseCol=volumeCol+3;
+
+    const rows=[],counts={};
+    let section="";
+    for(let i=header+1;i<table.length;i++){
+      const raw=table[i]||[];
+      const mark=importText(raw[markCol]);
+      const name=importText(raw[nameCol]);
+      if(!mark && !name) continue;
+
+      const volume=estimateNumber(raw[volumeCol],"Строка "+(i+1)+", объём");
+      const prices=priceCols.map(function(pc){
+        const value=estimateNumber(raw[pc.col],"Строка "+(i+1)+", цена "+pc.year);
+        return value==null ? null : {
+          effective_from:String(pc.year)+"-01-01",
+          price_basis:"piece",
+          unit_price_gross:value
+        };
+      }).filter(Boolean);
+      const qty=qtyHouseCol>=0 ? estimateNumber(raw[qtyHouseCol],"Строка "+(i+1)+", количество") : null;
+
+      const looksSection=!mark && !!name && volume==null && !prices.length && qty==null && !/^(итого|всего)/i.test(name);
+      if(looksSection){section=name;continue;}
+      if(!mark || !name) continue;
+      if(/^(итого|всего)/i.test(name)) continue;
+
+      if(!prices.length){
+        const genericPriceCol=labels.findIndex(function(x,c){
+          return c!==markCol && c!==nameCol && c!==volumeCol && (x.includes("цен")||x.includes("стоим"));
+        });
+        if(genericPriceCol>=0){
+          const value=estimateNumber(raw[genericPriceCol],"Строка "+(i+1)+", цена");
+          if(value!=null) prices.push({effective_from:fallbackDate,price_basis:"piece",unit_price_gross:value});
+        }
+      }
+
+      const base=supplierMatchName(section)+"|"+supplierMatchMark(mark)+"|"+supplierMatchName(name);
+      counts[base]=(counts[base]||0)+1;
+      rows.push({
+        source_row_no:i+1,
+        source_key:base+"#"+counts[base],
+        source_mark:mark,
+        source_name:name,
+        source_section:section,
+        unit_volume_m3:volume,
+        qty_house:qty,
+        prices:prices
+      });
+    }
+    if(!rows.length) throw new Error("В файле поставщика не найдено товарных позиций.");
+
+    return {
+      sheetName:sheetName,
+      rows:rows,
+      priceYears:Array.from(new Set(rows.flatMap(function(r){return r.prices.map(function(p){return p.effective_from.slice(0,4);});}))).sort()
+    };
+  }
+
+  function supplierProjectFacts() {
+    const facts=new Map();
+    specJoinedRows().forEach(function(sr){
+      if(!facts.has(sr.catalog_item_id)) facts.set(sr.catalog_item_id,{qty:0,volumes:new Set()});
+      const f=facts.get(sr.catalog_item_id);
+      f.qty+=Number(sr.total||0);
+      if(Number(sr.volumePerPiece)>0) f.volumes.add(Number(sr.volumePerPiece));
+    });
+    facts.forEach(function(f){f.volume=f.volumes.size===1?Array.from(f.volumes)[0]:null;});
+    return facts;
+  }
+
+  function previewSupplierSpec(parsed,supplierName) {
+    const catalog=dataState.catalogItems;
+    const facts=supplierProjectFacts();
+    const itemsForSupplier=dataState.supplierItems.filter(function(si){
+      const supplier=dataState.suppliers.find(function(s){return s.id===si.supplier_id;});
+      return supplier && supplierMatchName(supplier.name)===supplierMatchName(supplierName);
+    });
+    const bySource=new Map(itemsForSupplier.map(function(x){return [x.source_key,x];}));
+    const result={
+      rows:parsed.rows.length,matched:0,newOrChanged:0,withoutPrice:0,
+      supplierOnly:0,requiresReview:0,volumeConflicts:0,qtyConflicts:0
+    };
+    const resolved=[];
+
+    parsed.rows.forEach(function(row){
+      const old=bySource.get(row.source_key);
+      let catalogId=null,state="";
+      if(old && old.link_method==="manual" && old.catalog_item_id){
+        catalogId=old.catalog_item_id;state="matched";
+      }else{
+        const both=catalog.filter(function(ci){
+          return supplierMatchMark(ci.mark)===supplierMatchMark(row.source_mark) &&
+            supplierMatchName(ci.name)===supplierMatchName(row.source_name);
+        });
+        const byMark=catalog.filter(function(ci){return supplierMatchMark(ci.mark)===supplierMatchMark(row.source_mark);});
+        const byName=catalog.filter(function(ci){return supplierMatchName(ci.name)===supplierMatchName(row.source_name);});
+        if(both.length===1){catalogId=both[0].id;state="matched";}
+        else if(both.length>1){state="review";}
+        else if(byMark.length || byName.length){state="review";}
+        else state="supplier_only";
+      }
+
+      let review=state==="review";
+      if(state==="supplier_only") result.supplierOnly++;
+      if(catalogId){
+        const f=facts.get(catalogId);
+        if(row.unit_volume_m3!=null && f && f.volume!=null && Math.abs(Number(row.unit_volume_m3)-Number(f.volume))>1e-6){
+          result.volumeConflicts++; review=true;
+        }
+        if(row.qty_house!=null && f && Math.abs(Number(row.qty_house)-Number(f.qty))>1e-6){
+          result.qtyConflicts++; review=true;
+        }
+        if(!review) result.matched++;
+      }
+      if(review) result.requiresReview++;
+      if(!row.prices.length) result.withoutPrice++;
+
+      let changed=false;
+      if(row.prices.length){
+        if(!old) changed=true;
+        else{
+          const existing=dataState.supplierPrices.filter(function(p){return p.supplier_item_id===old.id;});
+          changed=row.prices.some(function(p){
+            return !existing.some(function(ep){
+              return ep.effective_from===p.effective_from &&
+                ep.price_basis===p.price_basis &&
+                Math.abs(Number(ep.unit_price_gross)-Number(p.unit_price_gross))<1e-9;
+            });
+          });
+        }
+      }
+      if(changed) result.newOrChanged++;
+      resolved.push({row:row,catalogId:catalogId,state:state,review:review});
+    });
+
+    const priceKeys=new Map();
+    resolved.forEach(function(x){
+      if(!x.catalogId) return;
+      x.row.prices.forEach(function(p){
+        const key=x.catalogId+"|"+p.effective_from+"|"+p.price_basis;
+        if(!priceKeys.has(key)) priceKeys.set(key,new Set());
+        priceKeys.get(key).add(String(p.unit_price_gross));
+      });
+    });
+    priceKeys.forEach(function(values){
+      if(values.size>1) result.requiresReview++;
+    });
+
+    return result;
+  }
+
+  function supplierImportModal() {
+    let modal=document.getElementById("supplierImportModal");
+    if(modal) return modal;
+    modal=document.createElement("div");
+    modal.id="supplierImportModal";
+    modal.className="spec-import-backdrop";
+    modal.innerHTML=
+      '<div class="spec-import-modal supplier-import-modal">'+
+        '<div class="spec-import-head"><div><strong>Импорт спецификации поставщика</strong><span>Источник сохраняется как новая версия; проектные количества не заменяются</span></div><button class="spec-import-close" type="button">×</button></div>'+
+        '<div class="supplier-import-fields">'+
+          '<label><span>Поставщик</span><input class="supplier-name-input" type="text" placeholder="Наименование поставщика"></label>'+
+          '<label><span>Дата для цены без года</span><input class="supplier-date-input" type="date"></label>'+
+          '<input class="supplier-spec-file" type="file" accept=".xlsx,.xls,.xlsm">'+
+          '<button class="context-link supplier-file-pick" type="button">Выбрать Excel</button>'+
+        '</div>'+
+        '<div class="spec-import-preview hidden"></div>'+
+        '<div class="spec-import-foot"><span class="spec-import-state"></span><span class="spacer"></span><button class="context-link supplier-import-close" type="button">Закрыть</button><button class="context-link supplier-import-apply" type="button" disabled>Применить импорт</button></div>'+
+      '</div>';
+    document.body.appendChild(modal);
+    const close=function(){modal.classList.remove("open");};
+    modal.querySelector(".spec-import-close").onclick=close;
+    modal.querySelector(".supplier-import-close").onclick=close;
+    modal.onclick=function(e){if(e.target===modal) close();};
+    modal.querySelector(".supplier-file-pick").onclick=function(){
+      const input=modal.querySelector(".supplier-spec-file");input.value="";input.click();
+    };
+    modal.querySelector(".supplier-spec-file").onchange=function(e){
+      if(e.target.files&&e.target.files[0]) prepareSupplierSpecImport(e.target.files[0]);
+    };
+    modal.querySelector(".supplier-name-input").oninput=function(){
+      if(ui.pendingSupplierImport) renderSupplierImportPreview();
+    };
+    modal.querySelector(".supplier-import-apply").onclick=applyPendingSupplierImport;
+    return modal;
+  }
+
+  function renderSupplierImportPreview() {
+    const modal=supplierImportModal();
+    const pending=ui.pendingSupplierImport;
+    if(!pending) return;
+    const supplierName=modal.querySelector(".supplier-name-input").value.trim();
+    const preview=modal.querySelector(".spec-import-preview");
+    const apply=modal.querySelector(".supplier-import-apply");
+    if(!supplierName){
+      preview.innerHTML='<strong>Укажите поставщика</strong><span>Импорт пока нельзя применить</span>';
+      preview.classList.remove("hidden");apply.disabled=true;return;
+    }
+    const r=previewSupplierSpec(pending.parsed,supplierName);
+    pending.preview=r;
+    preview.innerHTML=
+      '<strong>'+esc(pending.fileName)+'</strong>'+
+      '<span>'+r.rows+' позиций</span>'+
+      '<span>'+r.matched+' сопоставлено</span>'+
+      '<span>'+r.newOrChanged+' новая/изменённая цена</span>'+
+      '<span>'+r.withoutPrice+' без цены</span>'+
+      '<span>'+r.supplierOnly+' только у поставщика</span>'+
+      '<span>'+r.requiresReview+' требует проверки</span>'+
+      '<span>лист «'+esc(pending.parsed.sheetName)+'»</span>';
+    preview.classList.remove("hidden");
+    apply.disabled=false;
+  }
+
+  async function prepareSupplierSpecImport(file) {
+    const modal=supplierImportModal();
+    const state=modal.querySelector(".spec-import-state");
+    const preview=modal.querySelector(".spec-import-preview");
+    const apply=modal.querySelector(".supplier-import-apply");
+    apply.disabled=true;state.textContent="Читаю Excel…";preview.classList.add("hidden");
+    try{
+      const buffer=await file.arrayBuffer();
+      const fallbackDate=modal.querySelector(".supplier-date-input").value || new Date().toISOString().slice(0,10);
+      const parsed=parseSupplierSpecWorkbook(buffer,fallbackDate);
+      const hash=await sha256Hex(buffer);
+      ui.pendingSupplierImport={fileName:file.name,hash:hash,parsed:parsed};
+      state.textContent="Проверка выполнена";
+      renderSupplierImportPreview();
+    }catch(err){
+      ui.pendingSupplierImport=null;
+      state.textContent="Ошибка проверки";
+      preview.innerHTML='<strong>Импорт остановлен</strong><pre>'+esc(err&&err.message?err.message:String(err))+'</pre>';
+      preview.classList.remove("hidden");
+    }
+  }
+
+  async function applyPendingSupplierImport() {
+    const pending=ui.pendingSupplierImport;
+    if(!pending || !dataState.project) return;
+    const modal=supplierImportModal();
+    const state=modal.querySelector(".spec-import-state");
+    const preview=modal.querySelector(".spec-import-preview");
+    const apply=modal.querySelector(".supplier-import-apply");
+    const supplierName=modal.querySelector(".supplier-name-input").value.trim();
+    if(!supplierName){renderSupplierImportPreview();return;}
+    apply.disabled=true;state.textContent="Записываю спецификацию поставщика…";
+    try{
+      const result=await client.rpc("apply_supplier_spec_import",{
+        p_project_id:dataState.project.id,
+        p_source_name:pending.fileName,
+        p_source_sha256:pending.hash,
+        p_supplier_name:supplierName,
+        p_rows:pending.parsed.rows
+      });
+      if(result.error) throw result.error;
+      const report=result.data||{};
+      ui.pendingSupplierImport=null;
+      await loadProjectData(dataState.project);
+      renderPage("supply",2);
+      state.textContent="Импорт завершён";
+      preview.innerHTML=
+        '<strong>Спецификация поставщика загружена</strong>'+
+        '<span>'+esc(String(report.rows||0))+' позиций</span>'+
+        '<span>'+esc(String(report.matched||0))+' сопоставлено</span>'+
+        '<span>'+esc(String(report.new_or_changed_price||0))+' новая/изменённая цена</span>'+
+        '<span>'+esc(String(report.without_price||0))+' без цены</span>'+
+        '<span>'+esc(String(report.supplier_only||0))+' только у поставщика</span>'+
+        '<span>'+esc(String(report.requires_review||0))+' требует проверки</span>';
+      preview.classList.remove("hidden");
+    }catch(err){
+      state.textContent="Ошибка импорта";
+      preview.innerHTML='<strong>Не удалось записать спецификацию поставщика</strong><pre>'+esc(err&&err.message?err.message:String(err))+'</pre>';
+      preview.classList.remove("hidden");
+      apply.disabled=false;
+    }
+  }
+
+  function openSupplierImportModal() {
+    const modal=supplierImportModal();
+    ui.pendingSupplierImport=null;
+    modal.querySelector(".supplier-name-input").value=dataState.suppliers.length===1?dataState.suppliers[0].name:"";
+    modal.querySelector(".supplier-date-input").value=new Date().toISOString().slice(0,10);
+    modal.querySelector(".spec-import-preview").classList.add("hidden");
+    modal.querySelector(".supplier-import-apply").disabled=true;
+    modal.querySelector(".spec-import-state").textContent="";
+    modal.classList.add("open");
+  }
+
   function renderUtilityActions(pageKey) {
     const el=$("pageActions");
     if(!el) return;
