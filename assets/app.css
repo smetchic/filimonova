@@ -390,9 +390,9 @@ svg{display:block}
 .ks-table th:nth-child(4),.ks-table td:nth-child(4){
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis
 }
-.est-table td[data-filter-field="name"],
+.est-table td[data-filter-field="name"]{cursor:default}
 .ks-table td[data-filter-field="name"]{cursor:zoom-in}
-.est-table td[data-filter-field="name"].cell-text-expanded,
+.est-table td[data-filter-field="name"].cell-text-expanded{cursor:default}
 .ks-table td[data-filter-field="name"].cell-text-expanded{
   white-space:normal!important;
   overflow:visible!important;
