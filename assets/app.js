@@ -3128,9 +3128,9 @@
       .map(function(l){return l.material_row_id;});
     if(ids.length){
       const set=new Set(ids);
-      return estimateRows.filter(function(r){return r.row_type==="material" && set.has(r.id);});
+      return (dataState.estimateRows||[]).filter(function(r){return r.row_type==="material" && set.has(r.id);});
     }
-    return estimateRows.filter(function(r){return r.row_type==="material";});
+    return estimateRows.filter(function(r){return r.row_type==="material" && r.section_id===row.section_id;});
   }
 
   function gprRowMonthQty(row,e,monthKey,estimateRows) {
