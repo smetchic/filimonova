@@ -1901,7 +1901,7 @@
       if (tab === 2) return '<span class="context-caption">ГПР</span><span class="context-muted">Помесячный финансовый план · без недель и дней</span>' + gprPeriodControlsHtml() + '<span class="spacer"></span><button class="context-link" type="button" data-gpr-action="spread">Разнести по месяцам</button><button class="context-link" type="button" data-gpr-action="display">Отображение</button><button class="context-link" type="button" data-gpr-action="excel">Экспорт Excel</button>';
     }
     if (pageKey === "recon") {
-      if (tab === 0) return buildEstimateContext(0);
+      if (tab === 0) return buildSpecContext(0);
       return '<span class="context-caption">Журнал</span><span class="context-muted">Только записи, добавленные вручную из Сверки</span>';
     }
     if (pageKey === "montage") {
@@ -3111,7 +3111,7 @@
 
     // The reconciliation grid is specification-first. Every project position exists
     // in the grid even when no estimate row is linked to it.
-    let specRows=specJoinedRows().slice().sort(function(a,b){
+    let specRows=specJoinedRows().filter(passesSpecFilters).slice().sort(function(a,b){
       return String(a.position_no||"").localeCompare(String(b.position_no||""),"ru",{numeric:true,sensitivity:"base"});
     });
 
@@ -3149,16 +3149,6 @@
       if(estimatePieces==null || Math.abs(projectQty-estimatePieces)>1e-9) return true;
       return importNorm(sr.name)!==importNorm(String(estimateSourceValue(r,"name")||""));
     }
-    const estimateNumbers=dataState.estimates.map(function(e){return e.number;});
-    const allEstimatesVisible=estimateNumbers.every(function(n){return ui.estimates[n]!==false;});
-    if(!allEstimatesVisible){
-      filtered=filtered.filter(function(v){
-        if(!v.estimate) return false;
-        const e=dataState.estimates.find(function(x){return x.id===v.estimate.estimate_id;});
-        return !!e && ui.estimates[e.number]!==false;
-      });
-    }
-
     if(ui.reconLinkFilter==="unlinked") filtered=filtered.filter(function(v){return !v.estimate;});
     else if(ui.reconLinkFilter==="linked") filtered=filtered.filter(function(v){return !!v.estimate;});
     else if(ui.reconLinkFilter==="issues") filtered=filtered.filter(viewIssue);
@@ -3175,7 +3165,8 @@
           '<td></td><td></td><td></td><td></td><td></td><td></td>'+
           '<td></td>'+
           '<td><span class="soft-status warn">Без связи</span></td>'+
-          '<td></td><td></td><td></td><td></td>'+
+          '<td></td><td></td><td></td>'+
+          '<td><button class="table-text-action" type="button" data-recon-spec-edit="'+esc(sr.id)+'">Изменить</button></td>'+
         '</tr>';
       }
 
@@ -3220,6 +3211,9 @@
     $("workArea").className="work-area table-work";
     $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table recon-table recon-header-clean" data-table-key="estimate-recon-v6"><thead><tr><th colspan="4">Спецификация</th><th colspan="6">Смета</th><th rowspan="2">Разница</th><th rowspan="2">Сопоставление</th><th rowspan="2">Способ</th><th rowspan="2">Расхождение</th><th rowspan="2">Журнал</th><th rowspan="2">Действия</th></tr>'+
       '<tr><th>Поз. спецификации</th><th>Марка</th><th>Наименование по спецификации</th><th>Проект, шт.</th><th>№ сметы</th><th class="filterable-head">'+filterHeader("Поз. сметы","position")+'</th><th class="filterable-head">'+filterHeader("Обоснование","basis")+'</th><th>Принятое обоснование</th><th class="filterable-head">'+filterHeader("Наименование по смете","name")+'</th><th>Смета, шт.</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    document.querySelectorAll("[data-recon-spec-edit]").forEach(function(btn){
+      btn.onclick=function(){openReconciliationEditorForSpec(btn.dataset.reconSpecEdit);};
+    });
   }
 
    function reconciliationEditorModal() {
@@ -3236,6 +3230,49 @@
     modal.onclick=function(e){if(e.target===modal) close();};
     modal.querySelector(".recon-edit-save").onclick=saveManualReconciliation;
     return modal;
+  }
+
+  function openReconciliationEditorForSpec(specRowId) {
+    const sr=specJoinedRows().find(function(x){return x.id===specRowId;});
+    if(!sr) return;
+    const candidates=dataState.estimateRows.filter(function(r){
+      if(r.row_type!=="material") return false;
+      const e=dataState.estimates.find(function(x){return x.id===r.estimate_id;});
+      if(!e) return false;
+      if(sr.section.is_stairs) return !!e.is_stairs;
+      return !e.is_stairs &&
+        (!e.building_section || e.building_section===sr.section.building_section) &&
+        (!e.zone || e.zone===sr.section.zone);
+    });
+    const ranked=candidates.map(function(r){
+      const e=dataState.estimates.find(function(x){return x.id===r.estimate_id;});
+      let score=0;
+      if(importNorm(estimateSourceValue(r,"basis"))===importNorm(sr.mark)) score+=100;
+      if(importNorm(estimateSourceValue(r,"name"))===importNorm(sr.name)) score+=80;
+      if(importNorm(estimateSourceValue(r,"name")).includes(importNorm(sr.name)) || importNorm(sr.name).includes(importNorm(estimateSourceValue(r,"name")))) score+=30;
+      return {row:r,estimate:e,score:score};
+    }).sort(function(a,b){return b.score-a.score || String(a.estimate.number).localeCompare(String(b.estimate.number),"ru",{numeric:true}) || Number(a.row.sort_order||0)-Number(b.row.sort_order||0);});
+    const modal=reconciliationEditorModal();
+    modal.dataset.estimateRowId="";
+    modal.dataset.specRowId=sr.id;
+    modal.querySelector(".recon-source-position").textContent="Спецификация · поз. "+sr.position_no;
+    modal.querySelector(".recon-source-basis").textContent=sr.mark||"—";
+    modal.querySelector(".recon-source-name").textContent=sr.name||"—";
+    modal.querySelector(".recon-target-head strong").textContent="Строки сметы — выбираем, к чему привязать";
+    modal.querySelector(".recon-target-head span").textContent="Выберите одну строку сметы";
+    const head=modal.querySelector(".recon-choice-header");
+    head.innerHTML="<span></span><span>Смета</span><span>Поз.</span><span>Обоснование / Наименование</span><span>Кол-во</span>";
+    modal.querySelector(".recon-edit-list").innerHTML=ranked.map(function(c,index){
+      return '<label class="recon-choice'+(index===0?' recon-choice-suggested':'')+'>'+
+        '<input type="radio" name="recon-estimate-candidate" data-recon-estimate="'+esc(c.row.id)+'">'+
+        '<span class="recon-choice-position">№'+esc(c.estimate.number)+'</span>'+
+        '<span class="recon-choice-mark">'+esc(c.row.position)+(index===0?'<small class="recon-suggested-label">Предлагаем</small>':'')+'</span>'+
+        '<span class="recon-choice-name" title="'+esc(estimateSourceValue(c.row,"name")||"")+'">'+esc(estimateSourceValue(c.row,"basis")||"—")+' · '+esc(estimateSourceValue(c.row,"name")||"—")+'</span>'+
+        '<span class="recon-choice-meta">'+esc(c.row.quantity==null?"—":fmt(c.row.quantity))+'</span>'+
+      '</label>';
+    }).join("") || '<div class="table-message">Подходящих строк сметы не найдено.</div>';
+    modal.querySelector(".recon-edit-state").textContent="";
+    modal.classList.add("open");
   }
 
   function openReconciliationEditor(rowId) {
