@@ -1569,3 +1569,28 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 }
 #reconciliationEditorModal .recon-occupied-label{left:auto;right:90px;color:#9A5A25}
 #reconciliationEditorModal .recon-choice-occupied:not(.is-selected){opacity:.72}
+
+/* Manual reconciliation selection must always be visibly actionable. */
+#reconciliationEditorModal .recon-choice-header{
+  grid-template-columns:52px 76px 58px minmax(150px,1.1fr) minmax(210px,1.6fr) 72px!important;
+}
+#reconciliationEditorModal .recon-estimate-choice{
+  grid-template-columns:52px 76px 58px minmax(150px,1.1fr) minmax(210px,1.6fr) 72px!important;
+}
+#reconciliationEditorModal .recon-estimate-choice > input[type="radio"]{
+  display:block!important;
+  appearance:auto!important;
+  -webkit-appearance:radio!important;
+  opacity:1!important;
+  visibility:visible!important;
+  position:static!important;
+  width:18px!important;
+  height:18px!important;
+  margin:0 auto!important;
+  accent-color:#3978C5;
+  cursor:pointer;
+}
+#reconciliationEditorModal .recon-choice-header > span:first-child{
+  text-align:center;
+  font-weight:600;
+}
