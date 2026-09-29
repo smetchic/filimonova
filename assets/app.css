@@ -1739,3 +1739,20 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 #materialCardModal .mv-history{padding:4px 10px}#materialCardModal .mv-history-row{display:grid;grid-template-columns:135px 115px 1fr 90px;gap:10px;align-items:start;padding:8px 0;border-bottom:1px solid #EFEFF1}#materialCardModal .mv-history-time{font-size:10.5px;color:var(--mv-muted)}#materialCardModal .mv-history-source{font-size:10.5px;font-weight:600}#materialCardModal .mv-history-text{font-size:10.8px}#materialCardModal .mv-history-user{font-size:10.3px;color:var(--mv-muted);text-align:right}
 #materialCardModal .mv-note{font-size:10.5px;color:var(--mv-muted);margin-top:7px}
 @media(max-width:900px){#materialCardModal{padding:10px}#materialCardModal .material-identity{gap:10px;flex-wrap:wrap}#materialCardModal .material-identity span{white-space:normal}#materialCardModal .mv-overview-two,#materialCardModal .mv-grid2,#materialCardModal .mv-grid3,#materialCardModal .mv-source-grid{grid-template-columns:1fr}#materialCardModal .mv-flow{grid-template-columns:1fr}#materialCardModal .mv-arrow{transform:rotate(90deg)}}
+
+
+/* MaterialCard v11 layout lock — isolate the canonical card from application-wide layout rules. */
+#materialCardModal .material-v11{display:block!important;height:auto!important;max-height:calc(100vh - 36px)!important;overflow:auto!important}
+#materialCardModal .material-v11 .material-body{display:block!important;flex:none!important;height:auto!important;min-height:0!important;overflow:visible!important}
+#materialCardModal .material-v11 .mv-overview-two{display:grid!important;grid-template-columns:minmax(0,1.35fr) minmax(320px,.85fr)!important;gap:10px!important;align-items:start!important}
+#materialCardModal .material-v11 .mv-overview-two>.mv-block{display:block!important;width:auto!important;height:auto!important;min-height:0!important;align-self:start!important}
+#materialCardModal .material-v11 .mv-overview-exec{display:grid!important;grid-template-columns:1fr 1fr!important;grid-auto-rows:auto!important;width:100%!important;height:auto!important}
+#materialCardModal .material-v11 .mv-overview-qty{display:grid!important;grid-template-columns:1fr 1fr!important;grid-auto-rows:auto!important;width:100%!important;height:auto!important}
+#materialCardModal .material-v11 .mv-kpi,#materialCardModal .material-v11 .mv-qty{display:block!important;height:66px!important;min-height:66px!important;max-height:66px!important;margin:0!important}
+#materialCardModal .material-v11 .mv-kpi-label,#materialCardModal .material-v11 .mv-kpi-value,#materialCardModal .material-v11 .mv-kpi-sub,
+#materialCardModal .material-v11 .mv-qty b,#materialCardModal .material-v11 .mv-qty strong,#materialCardModal .material-v11 .mv-qty span{position:static!important;float:none!important;width:auto!important;height:auto!important;margin-left:0!important;margin-right:0!important}
+#materialCardModal .material-v11 .mv-cost-grid{display:grid!important;grid-template-columns:repeat(3,1fr)!important}
+#materialCardModal .material-v11 .mv-cost{height:auto!important;min-height:58px!important}
+@media(max-width:900px){
+ #materialCardModal .material-v11 .mv-overview-two{grid-template-columns:1fr!important}
+}
