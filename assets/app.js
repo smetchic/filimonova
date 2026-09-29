@@ -3308,6 +3308,7 @@
         .map(function(l){return l.specification_row_id;})
     );
     const modal=reconciliationEditorModal();
+    modal.dataset.specRowId="";
     modal.dataset.estimateRowId=row.id;
     modal.querySelector(".recon-source-position").textContent="№"+estimate.number+" · поз. "+row.position;
     modal.querySelector(".recon-source-basis").textContent=estimateSourceValue(row,"basis")||"—";
@@ -3364,6 +3365,25 @@
 
   async function saveManualReconciliation() {
     const modal=reconciliationEditorModal();
+    const specRowId=modal.dataset.specRowId||"";
+    if(specRowId){
+      const chosen=modal.querySelector("[data-recon-estimate]:checked");
+      const state=modal.querySelector(".recon-edit-state");
+      if(!chosen){state.textContent="Выберите строку сметы.";return;}
+      state.textContent="Сохраняю…";
+      try{
+        const result=await client.rpc("set_manual_reconciliation",{
+          p_estimate_row_id:chosen.dataset.reconEstimate,
+          p_specification_row_ids:[specRowId]
+        });
+        if(result.error) throw result.error;
+        await loadProjectData(dataState.project);
+        modal.dataset.specRowId="";
+        modal.classList.remove("open");
+        renderPage("recon",0);
+      }catch(err){state.textContent=err&&err.message?err.message:String(err);}
+      return;
+    }
     const rowId=modal.dataset.estimateRowId;
     const selectedCatalogs=new Set(
       Array.from(modal.querySelectorAll("[data-recon-catalog]:checked")).map(function(x){return x.dataset.reconCatalog;})
