@@ -3292,18 +3292,26 @@
     modal.querySelector(".recon-source-name").textContent=sr.name||"—";
     modal.querySelector(".recon-target-head strong").textContent="Строки сметы — выбираем";
     modal.querySelector(".recon-target-head span").textContent="Одна строка; наиболее вероятная показана первой";
-    modal.querySelector(".recon-choice-header").innerHTML="<span></span><span>Смета</span><span>Поз.</span><span>Обоснование / Наименование</span><span>Кол-во</span>";
+    modal.querySelector(".recon-choice-header").innerHTML="<span></span><span>Смета</span><span>Поз.</span><span>Обоснование</span><span>Наименование</span><span>Кол-во</span>";
     modal.querySelector(".recon-edit-list").innerHTML=ranked.map(function(c,index){
       const basis=estimateSourceValue(c.row,"basis")||"—";
       const name=estimateSourceValue(c.row,"name")||"—";
       return '<label class="recon-choice recon-estimate-choice'+(index===0?' recon-choice-suggested':'')+(c.occupied?' recon-choice-occupied':'')+'>'+
         '<input type="radio" name="recon-estimate-candidate" data-recon-estimate="'+esc(c.row.id)+'">'+
-        '<span class="recon-choice-position">№'+esc(c.estimate.number)+'</span>'+
-        '<span class="recon-choice-mark">'+esc(c.row.position)+(index===0?'<small class="recon-suggested-label">Предлагаем</small>':'')+'</span>'+
-        '<span class="recon-choice-name" title="'+esc(basis+" · "+name)+'"><strong>'+esc(basis)+'</strong><small>'+esc(name)+(c.occupied?' · Уже есть связь':'')+'</small></span>'+
-        '<span class="recon-choice-meta">'+esc(c.row.quantity==null?"—":fmt(c.row.quantity))+'</span>'+
+        '<span class="recon-est-no">№'+esc(c.estimate.number)+'</span>'+
+        '<span class="recon-est-pos">'+esc(c.row.position)+'</span>'+
+        '<span class="recon-est-basis" title="'+esc(basis)+'">'+esc(basis)+'</span>'+
+        '<span class="recon-est-name" title="'+esc(name)+'">'+esc(name)+'</span>'+
+        '<span class="recon-est-qty">'+esc(c.row.quantity==null?"—":fmt(c.row.quantity))+' шт.</span>'+
+        (index===0?'<small class="recon-suggested-label">Предлагаем</small>':'')+
+        (c.occupied?'<small class="recon-occupied-label">Уже есть связь</small>':'')+
       '</label>';
     }).join("") || '<div class="table-message">Подходящих строк сметы не найдено.</div>';
+    modal.querySelectorAll("[data-recon-estimate]").forEach(function(input){
+      input.addEventListener("change",function(){
+        modal.querySelectorAll(".recon-estimate-choice").forEach(function(row){row.classList.toggle("is-selected",!!row.querySelector("input:checked"));});
+      });
+    });
     modal.querySelector(".recon-edit-state").textContent="";
     modal.classList.add("open");
   }
