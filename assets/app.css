@@ -1622,3 +1622,29 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   width:18px!important;height:18px!important;
   opacity:1!important;visibility:visible!important;
 }
+
+/* Custom reconciliation selector: independent from global native-input styling. */
+#reconciliationEditorModal .recon-choice-native{
+  position:absolute!important;
+  opacity:0!important;
+  width:1px!important;height:1px!important;
+  pointer-events:none!important;
+}
+#reconciliationEditorModal .recon-choice-box{
+  display:flex!important;
+  width:18px;height:18px;
+  margin:0 auto;
+  border:1.5px solid #7A8491;
+  border-radius:3px;
+  background:#fff;
+  align-items:center;justify-content:center;
+  box-sizing:border-box;
+  font-size:14px;font-weight:700;line-height:1;
+  color:#fff;
+  cursor:pointer;
+}
+#reconciliationEditorModal .recon-estimate-choice.is-selected .recon-choice-box{
+  background:#3978C5;
+  border-color:#3978C5;
+  color:#fff;
+}
