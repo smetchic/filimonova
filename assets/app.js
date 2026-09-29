@@ -3721,8 +3721,14 @@
       const basis=estimateSourceValue(row,"basis");
       const name=estimateSourceValue(row,"name");
       let score=0;
-      if(importNorm(basis)===importNorm(g.mark)) score+=1000;
-      if(importNorm(name)===importNorm(g.name)) score+=500;
+      const normBasis=importNorm(basis);
+      const normName=importNorm(name);
+      const normMark=importNorm(g.mark);
+      const normSpecName=importNorm(g.name);
+      if(normBasis===normMark) score+=1000;
+      if(normName===normSpecName) score+=1500;
+      if(normMark && normName.includes(normMark)) score+=800;
+      if(normSpecName && (normName.includes(normSpecName) || normSpecName.includes(normName))) score+=350;
       score+=tokenSimilarity(name,g.name)*160;
       const indexes=g.rows.map(function(sr){return orderedSpec.findIndex(function(x){return x.id===sr.id;});}).filter(function(i){return i>=0;});
       const specIndex=indexes.length?Math.min.apply(null,indexes):0;
@@ -3732,20 +3738,44 @@
     }).sort(function(a,b){
       return b.score-a.score || a.group.mark.localeCompare(b.group.mark,"ru");
     });
-    modal.querySelector(".recon-edit-list").innerHTML=ranked
-      .map(function(candidate,index){
-        const g=candidate.group;
-        const checked=g.rows.some(function(sr){return linkedIds.has(sr.id);});
-        const positions=g.rows.map(function(sr){return sr.position_no;});
-        const positionText=positions.length<=3?positions.join(", "):positions.slice(0,2).join(", ")+"…";
-        return '<label class="recon-choice'+(index===0?' recon-choice-suggested':'')+'>'+
-          '<input type="checkbox" data-recon-catalog="'+esc(g.id)+'" '+(checked?'checked':'')+'>'+
-          '<span class="recon-choice-position">'+esc(positionText||"—")+'</span>'+
-          '<span class="recon-choice-mark">'+esc(g.mark)+(index===0?'<small class="recon-suggested-label">Предлагаем</small>':'')+'</span>'+
-          '<span class="recon-choice-name" title="'+esc(g.name)+'">'+esc(g.name)+'</span>'+
-          '<span class="recon-choice-meta">'+fmt0(g.qty)+' шт.</span>'+
-        '</label>';
-      }).join("") || '<div class="empty-note">В области этой сметы нет проектных позиций.</div>';
+    modal.querySelector(".spec-import-head strong").textContent="Ручное сопоставление";
+    modal.querySelector(".recon-edit-caption").textContent="Выберите позиции спецификации для строки сметы";
+    modal.querySelector(".recon-block-label").textContent="Строка сметы — привязываем";
+    modal.querySelector(".recon-target-head strong").textContent="Позиции спецификации — выбираем, к чему привязать";
+    modal.querySelector(".recon-target-head span").textContent="Можно выбрать несколько позиций";
+    const header=modal.querySelector(".recon-choice-header");
+    header.innerHTML="";
+    header.style.display="none";
+    const list=modal.querySelector(".recon-edit-list");
+    list.innerHTML=ranked.length
+      ? '<table class="recon-spec-candidate-table"><colgroup><col class="recon-spec-col-pick"><col class="recon-spec-col-pos"><col class="recon-spec-col-mark"><col class="recon-spec-col-name"><col class="recon-spec-col-qty"></colgroup><thead><tr><th>Выбор</th><th>Поз.</th><th>Марка</th><th>Наименование</th><th>Кол-во</th></tr></thead><tbody>'+
+        ranked.map(function(candidate,index){
+          const g=candidate.group;
+          const checked=g.rows.some(function(sr){return linkedIds.has(sr.id);});
+          const positions=g.rows.map(function(sr){return sr.position_no;});
+          const positionText=positions.length<=3?positions.join(", "):positions.slice(0,2).join(", ")+"…";
+          return '<tr class="recon-spec-candidate-row'+(checked?' is-selected':'')+'" data-recon-spec-row>'+
+            '<td class="recon-spec-pick-cell"><input type="checkbox" data-recon-catalog="'+esc(g.id)+'" '+(checked?'checked':'')+' aria-label="Выбрать позицию '+esc(g.mark)+'"></td>'+
+            '<td class="recon-num">'+esc(positionText||"—")+'</td>'+
+            '<td class="recon-spec-mark">'+esc(g.mark)+(index===0?'<small class="recon-table-note">Предлагаем</small>':'')+'</td>'+
+            '<td title="'+esc(g.name)+'">'+esc(g.name)+'</td>'+
+            '<td class="recon-num">'+fmt0(g.qty)+' шт.</td>'+
+          '</tr>';
+        }).join("")+
+        '</tbody></table>'
+      : '<div class="empty-note">В области этой сметы нет проектных позиций.</div>';
+    list.querySelectorAll("[data-recon-spec-row]").forEach(function(candidateRow){
+      const input=candidateRow.querySelector("[data-recon-catalog]");
+      candidateRow.addEventListener("click",function(ev){
+        if(ev.target!==input){
+          input.checked=!input.checked;
+          input.dispatchEvent(new Event("change",{bubbles:true}));
+        }
+      });
+      input.addEventListener("change",function(){
+        candidateRow.classList.toggle("is-selected",input.checked);
+      });
+    });
     modal.classList.add("open");
   }
 
