@@ -3296,7 +3296,7 @@
     list.innerHTML='<table class="recon-candidate-table"><colgroup><col class="recon-col-pick"><col class="recon-col-est"><col class="recon-col-pos"><col class="recon-col-basis"><col class="recon-col-accepted"><col class="recon-col-name"><col class="recon-col-qty"></colgroup><thead><tr><th>Выбор</th><th>Смета</th><th>Поз.</th><th>Обоснование</th><th>Принятое обоснование</th><th>Наименование</th><th>Кол-во</th></tr></thead><tbody>'+
       ranked.map(function(c,index){
         const basis=estimateSourceValue(c.row,"basis")||"—";
-        const accepted=estimateAcceptedBasis(c.row)||"—";
+        const accepted=estimateDisplayBasis(c.row)||"—";
         const name=estimateSourceValue(c.row,"name")||"—";
         return '<tr class="recon-candidate-row'+(c.occupied?' is-occupied':'')+'" data-candidate-row>'+
           '<td class="recon-pick-cell"><input type="radio" name="recon-estimate-candidate" data-recon-estimate="'+esc(c.row.id)+'" aria-label="Выбрать строку сметы №'+esc(c.estimate.number)+' позиция '+esc(c.row.position)+'"></td>'+
