@@ -3203,7 +3203,7 @@
     modal=document.createElement("div");
     modal.id="reconciliationEditorModal";
     modal.className="spec-import-backdrop";
-    modal.innerHTML='<div class="recon-edit-modal"><div class="spec-import-head"><div><strong>Ручное сопоставление</strong><span class="recon-edit-caption"></span></div><button class="spec-import-close" type="button">×</button></div><div class="recon-edit-list"></div><div class="spec-import-foot"><span class="recon-edit-state"></span><span class="spacer"></span><button class="context-link recon-edit-cancel" type="button">Отмена</button><button class="context-link recon-edit-save" type="button">Сохранить</button></div></div>';
+    modal.innerHTML='<div class="recon-edit-modal"><div class="spec-import-head"><div><strong>Ручное сопоставление</strong><span class="recon-edit-caption">Выберите позиции спецификации для строки сметы</span></div><button class="spec-import-close" type="button">×</button></div><div class="recon-source-card"><div class="recon-block-label">Строка сметы — привязываем</div><div class="recon-source-grid"><div><span>Смета / позиция</span><strong class="recon-source-position"></strong></div><div><span>Обоснование</span><strong class="recon-source-basis"></strong></div><div class="recon-source-name-wrap"><span>Наименование</span><strong class="recon-source-name"></strong></div></div></div><div class="recon-target-head"><strong>Позиции спецификации — выбираем, к чему привязать</strong><span>Можно выбрать несколько позиций</span></div><div class="recon-choice-header"><span></span><span>Поз.</span><span>Марка</span><span>Наименование</span><span>Кол-во</span></div><div class="recon-edit-list"></div><div class="spec-import-foot"><span class="recon-edit-state"></span><span class="spacer"></span><button class="context-link recon-edit-cancel" type="button">Отмена</button><button class="context-link recon-edit-save" type="button">Сохранить</button></div></div>';
     document.body.appendChild(modal);
     const close=function(){modal.classList.remove("open");};
     modal.querySelector(".spec-import-close").onclick=close;
@@ -3247,8 +3247,9 @@
     );
     const modal=reconciliationEditorModal();
     modal.dataset.estimateRowId=row.id;
-    modal.querySelector(".recon-edit-caption").textContent=
-      "Смета №"+estimate.number+" · поз. "+row.position+" · "+estimateSourceValue(row,"basis")+" · "+estimateSourceValue(row,"name");
+    modal.querySelector(".recon-source-position").textContent="№"+estimate.number+" · поз. "+row.position;
+    modal.querySelector(".recon-source-basis").textContent=estimateSourceValue(row,"basis")||"—";
+    modal.querySelector(".recon-source-name").textContent=estimateSourceValue(row,"name")||"—";
     modal.querySelector(".recon-edit-state").textContent="";
     // Manual reconciliation candidate ranking.
     // Source rows in estimate/specification normally follow approximately the same construction order,
@@ -3286,11 +3287,14 @@
       .map(function(candidate,index){
         const g=candidate.group;
         const checked=g.rows.some(function(sr){return linkedIds.has(sr.id);});
+        const positions=g.rows.map(function(sr){return sr.position_no;});
+        const positionText=positions.length<=3?positions.join(", "):positions.slice(0,2).join(", ")+"…";
         return '<label class="recon-choice'+(index===0?' recon-choice-suggested':'')+'>'+
           '<input type="checkbox" data-recon-catalog="'+esc(g.id)+'" '+(checked?'checked':'')+'>'+
+          '<span class="recon-choice-position">'+esc(positionText||"—")+'</span>'+
           '<span class="recon-choice-mark">'+esc(g.mark)+(index===0?'<small class="recon-suggested-label">Предлагаем</small>':'')+'</span>'+
-          '<span class="recon-choice-name">'+esc(g.name)+'</span>'+
-          '<span class="recon-choice-meta">'+g.rows.length+' поз. · '+fmt0(g.qty)+' шт.</span>'+
+          '<span class="recon-choice-name" title="'+esc(g.name)+'">'+esc(g.name)+'</span>'+
+          '<span class="recon-choice-meta">'+fmt0(g.qty)+' шт.</span>'+
         '</label>';
       }).join("") || '<div class="empty-note">В области этой сметы нет проектных позиций.</div>';
     modal.classList.add("open");
