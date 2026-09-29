@@ -365,17 +365,11 @@ svg{display:block}
 
 /* Estimates — shared engineering column policy.
    Keep identifiers readable, units compact and long names from stretching the whole grid. */
-.est-table .e-sticky-1{
-  position:sticky;left:0;width:42px;min-width:42px;max-width:42px;z-index:6
-}
-.est-table .e-sticky-2{
-  position:sticky;left:42px;width:72px;min-width:72px;max-width:72px;z-index:6
-}
-.est-table .e-sticky-3{
-  position:sticky;left:114px;width:190px;min-width:190px;max-width:190px;z-index:6
-}
+.est-table .e-sticky-1{position:sticky;left:0;z-index:6}
+.est-table .e-sticky-2{position:sticky;left:42px;z-index:6}
+.est-table .e-sticky-3{position:sticky;left:114px;z-index:6}
 .est-table .e-sticky-4{
-  position:sticky;left:304px;width:420px;min-width:420px;max-width:420px;z-index:6;
+  position:sticky;left:304px;z-index:6;
   box-shadow:1px 0 0 var(--line-strong)
 }
 .est-table thead .e-sticky-1,
@@ -391,9 +385,7 @@ svg{display:block}
   background:var(--group)!important;
   box-shadow:1px 0 0 var(--line-strong)
 }
-.est-table th:nth-child(n+5),
-.est-table td:nth-child(n+5){min-width:82px}
-.est-table th:nth-child(5),.est-table td:nth-child(5){width:92px;min-width:92px;max-width:92px}
+.est-table th,.est-table td{min-width:0}
 .est-table th:nth-child(4),.est-table td:nth-child(4),
 .ks-table th:nth-child(4),.ks-table td:nth-child(4){
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis
@@ -409,10 +401,7 @@ svg{display:block}
   line-height:1.35;
   cursor:zoom-out
 }
-.ks-table th:nth-child(2),.ks-table td:nth-child(2){width:72px;min-width:72px;max-width:72px}
-.ks-table th:nth-child(3),.ks-table td:nth-child(3){width:190px;min-width:190px;max-width:190px}
-.ks-table th:nth-child(4),.ks-table td:nth-child(4){width:420px;min-width:420px;max-width:420px}
-.ks-table th:nth-child(5),.ks-table td:nth-child(5){width:92px;min-width:92px;max-width:92px}
+.ks-table th,.ks-table td{min-width:0}
 
 /* Supply / price */
 .supply-table th,.supply-table td{min-width:72px}
