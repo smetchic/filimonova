@@ -218,6 +218,7 @@
       fetchAllRows("estimate_rows","id,estimate_id,section_id,row_type,position,basis,name,unit,quantity,sort_order,catalog_item_id,source_original",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("sort_order");}),
       fetchAllRows("estimate_row_costs","estimate_row_id,salary_unit,salary_amount,machines_unit,machines_amount,drivers_unit,drivers_amount,materials_unit,materials_amount,transport_unit,transport_amount,total_unit,total_amount",function(q){return q.eq("project_id",project.id);}),
       fetchAllRows("reconciliation_links","id,estimate_row_id,specification_row_id,link_method,origin_mode",function(q){return q.eq("project_id",project.id);}),
+      fetchAllRows("reconciliation_journal","id,estimate_row_id,specification_row_id,issue_key,reasons,proposal,comment,status,snapshot,created_at,updated_at",function(q){return q.eq("project_id",project.id).order("created_at",{ascending:false});}),
       fetchAllRows("suppliers","id,name",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("name");}),
       fetchAllRows("supplier_items","id,supplier_id,catalog_item_id,source_mark,source_name,source_section,source_key,unit_volume_m3,link_method,link_state,source_import_row_id",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("source_mark");}),
       fetchAllRows("supplier_prices_current","id,supplier_item_id,effective_from,price_basis,unit_price_gross,unit_volume_snapshot_m3,source_import_row_id,source_imported_at",function(q){return q.eq("project_id",project.id).order("effective_from");})
@@ -236,9 +237,10 @@
       estimateRows:results[6] || [],
       estimateCosts:results[7] || [],
       reconciliationLinks:results[8] || [],
-      suppliers:results[9] || [],
-      supplierItems:results[10] || [],
-      supplierPrices:results[11] || []
+      reconciliationJournal:results[9] || [],
+      suppliers:results[10] || [],
+      supplierItems:results[11] || [],
+      supplierPrices:results[12] || []
     };
   }
 
@@ -3118,7 +3120,7 @@
         '<td><span class="soft-status '+statusClass+'">'+status+'</span></td>'+
         '<td>'+method+'</td>'+
         '<td>'+esc(discrepancy)+'</td>'+
-        '<td class="center"><input class="table-checkbox" type="checkbox" aria-label="Запись в журнале"></td>'+
+        '<td class="center"><input class="table-checkbox" type="checkbox" data-recon-journal="'+esc(r.id)+'" '+(dataState.reconciliationJournal.some(function(j){return j.estimate_row_id===r.id && j.status==="open";})?'checked':'')+' aria-label="Запись в журнале"></td>'+
         '<td><button class="table-text-action" type="button" data-recon-edit="'+esc(r.id)+'">Изменить</button></td>'+
       '</tr>';
     }).join("");
@@ -3266,6 +3268,63 @@
     }
   }
 
+  async function setReconciliationJournal(rowId,enabled,input) {
+    const row=dataState.estimateRows.find(function(x){return x.id===rowId;});
+    if(!row || !dataState.project) return;
+    input.disabled=true;
+    try{
+      const existing=dataState.reconciliationJournal.filter(function(j){return j.estimate_row_id===rowId && j.status==="open";});
+      if(enabled){
+        if(!existing.length){
+          const linked=linkedSpecRowsForEstimateRow(row);
+          const projectQty=linked.reduce(function(sum,x){return sum+Number(x.total||0);},0);
+          const estimatePieces=estimateQuantityPieces(row,linked);
+          const reasons=[];
+          if(!linked.length) reasons.push("Без связи");
+          if(estimatePieces==null) reasons.push("Количество сметы не приведено к шт.");
+          else if(Math.abs(projectQty-estimatePieces)>1e-9) reasons.push("Расхождение количества");
+          const specNames=Array.from(new Set(linked.map(function(x){return x.name;})));
+          if(specNames.length===1 && importNorm(specNames[0])!==importNorm(estimateSourceValue(row,"name"))) reasons.push("Расхождение наименования");
+          if(!reasons.length) reasons.push("Добавлено пользователем");
+          const payload={
+            project_id:dataState.project.id,
+            estimate_row_id:row.id,
+            issue_key:"estimate:"+row.id,
+            reasons:reasons,
+            status:"open",
+            snapshot:{
+              estimate_id:row.estimate_id,
+              estimate_position:row.position,
+              estimate_basis:estimateSourceValue(row,"basis"),
+              estimate_name:estimateSourceValue(row,"name"),
+              estimate_quantity_pieces:estimatePieces,
+              specification_positions:linked.map(function(x){return x.position_no;}),
+              specification_marks:Array.from(new Set(linked.map(function(x){return x.mark;}))),
+              specification_names:specNames,
+              project_quantity_pieces:projectQty,
+              difference_pieces:estimatePieces==null?null:projectQty-estimatePieces
+            }
+          };
+          const result=await client.from("reconciliation_journal").insert(payload).select("id,estimate_row_id,specification_row_id,issue_key,reasons,proposal,comment,status,snapshot,created_at,updated_at").single();
+          if(result.error) throw result.error;
+          dataState.reconciliationJournal.unshift(result.data);
+        }
+      }else if(existing.length){
+        const ids=existing.map(function(x){return x.id;});
+        const result=await client.from("reconciliation_journal").delete().in("id",ids);
+        if(result.error) throw result.error;
+        dataState.reconciliationJournal=dataState.reconciliationJournal.filter(function(j){return !ids.includes(j.id);});
+      }
+      rerenderContent();
+    }catch(err){
+      console.error(err);
+      input.checked=!enabled;
+      alert("Не удалось изменить Журнал: "+(err.message||err));
+    }finally{
+      input.disabled=false;
+    }
+  }
+
   function wireReconciliationControls() {
     const linkSelect=document.querySelector("[data-recon-link-select]");
     if(linkSelect) linkSelect.onchange=function(){
@@ -3275,11 +3334,46 @@
     document.querySelectorAll("[data-recon-edit]").forEach(function(btn){
       btn.onclick=function(){openReconciliationEditor(btn.dataset.reconEdit);};
     });
+    document.querySelectorAll("[data-recon-journal]").forEach(function(input){
+      input.onchange=function(){setReconciliationJournal(input.dataset.reconJournal,input.checked,input);};
+    });
   }
 
   function renderEstimateJournal() {
+    const rows=(dataState.reconciliationJournal||[]).filter(function(j){return j.status==="open";});
+    let body=rows.map(function(j){
+      const r=dataState.estimateRows.find(function(x){return x.id===j.estimate_row_id;});
+      const e=r?dataState.estimates.find(function(x){return x.id===r.estimate_id;}):null;
+      const s=r?dataState.estimateSections.find(function(x){return x.id===r.section_id;}):null;
+      const snap=j.snapshot||{};
+      const reasons=Array.isArray(j.reasons)?j.reasons.join("; "):"";
+      return '<tr class="data-row">'+
+        '<td>'+esc(e?e.number:"—")+'</td>'+
+        '<td>'+esc(s?s.title:"—")+'</td>'+
+        '<td>'+esc(r?r.position:(snap.estimate_position||"—"))+'</td>'+
+        '<td>'+esc(r?estimateDisplayBasis(r):(snap.estimate_basis||"—"))+'</td>'+
+        '<td>'+esc(reasons||"Добавлено пользователем")+'</td>'+
+        '<td>'+esc(j.comment||"")+'</td>'+
+        '<td><span class="soft-status warn">Открыто</span></td>'+
+        '<td><button class="table-text-action" type="button" data-journal-remove="'+esc(j.id)+'">Убрать</button></td>'+
+      '</tr>';
+    }).join("");
+    if(!body) body=tableMessage("В журнал ещё не добавлены контрольные записи.",8);
     $("workArea").className="work-area table-work";
-    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table journal-table" data-table-key="estimate-journal"><thead><tr><th>№ сметы</th><th>Раздел</th><th>Поз. сметы</th><th>Обоснование</th><th>Расхождение</th><th>Комментарий</th><th>Состояние</th><th>Действия</th></tr></thead><tbody>'+tableMessage("В журнал ещё не добавлены контрольные записи.",8)+'</tbody></table></div></div>';
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table journal-table" data-table-key="estimate-journal"><thead><tr><th>№ сметы</th><th>Раздел</th><th>Поз. сметы</th><th>Обоснование</th><th>Расхождение</th><th>Комментарий</th><th>Состояние</th><th>Действия</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    document.querySelectorAll("[data-journal-remove]").forEach(function(btn){
+      btn.onclick=async function(){
+        const j=dataState.reconciliationJournal.find(function(x){return x.id===btn.dataset.journalRemove;});
+        if(!j) return;
+        btn.disabled=true;
+        try{
+          const result=await client.from("reconciliation_journal").delete().eq("id",j.id);
+          if(result.error) throw result.error;
+          dataState.reconciliationJournal=dataState.reconciliationJournal.filter(function(x){return x.id!==j.id;});
+          rerenderContent();
+        }catch(err){console.error(err);alert("Не удалось убрать запись из Журнала: "+(err.message||err));btn.disabled=false;}
+      };
+    });
   }
 
   function renderHome() {
