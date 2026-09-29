@@ -803,8 +803,8 @@
       const m=excelHeaderMap(rows[i]||[]);
       const hasIdentity=(m.mark!=null && m.name!=null);
       const hasProjectLevels=(m.levelC!=null || (m.levels && Object.keys(m.levels).length) || m.levelAttic!=null || m.levelRoof!=null);
-      const hasStairQty=m.quantity!=null || m.total!=null;
-      if(hasIdentity && (slotKey==="spec_stairs" ? hasStairQty : hasProjectLevels)){
+      const hasStairLevels=((m.levels && Object.keys(m.levels).length) || m.levelAttic!=null || m.levelRoof!=null);
+      if(hasIdentity && (slotKey==="spec_stairs" ? hasStairLevels : hasProjectLevels)){
         headerIndex=i; map=m; break;
       }
     }
@@ -814,7 +814,7 @@
     const stairs=slotKey==="spec_stairs";
     if(!stairs && basement && map.levelC==null) throw new Error("Не найдена колонка «Цокольный этаж».");
     if(!stairs && !basement && !(map.levels && Object.keys(map.levels).length)) throw new Error("Не найдены поэтажные колонки 1–19.");
-    if(stairs && map.quantity==null && map.total==null) throw new Error("Не найдена колонка количества.");
+    if(stairs && !(map.levels && Object.keys(map.levels).length) && map.levelAttic==null && map.levelRoof==null) throw new Error("Для элементов лестниц нужны поэтажные колонки 1–19 / Чердак / Кровля.");
 
     let currentSection=stairs ? "Элементы лестниц" : "";
     const panels=[];
@@ -844,8 +844,16 @@
 
       const levels={};
       if(stairs){
-        const q=Number(row[map.quantity!=null?map.quantity:map.total]||0);
-        if(Number.isFinite(q) && q!==0) levels["Л"]=q;
+        Object.keys(map.levels||{}).forEach(function(code){
+          const q=Number(row[map.levels[code]]||0);
+          if(Number.isFinite(q) && q!==0) levels[code]=q;
+        });
+        if(map.levelAttic!=null){
+          const q=Number(row[map.levelAttic]||0); if(Number.isFinite(q)&&q!==0) levels["Ч"]=q;
+        }
+        if(map.levelRoof!=null){
+          const q=Number(row[map.levelRoof]||0); if(Number.isFinite(q)&&q!==0) levels["К"]=q;
+        }
       } else if(basement){
         const q=Number(row[map.levelC]||0);
         if(Number.isFinite(q) && q!==0) levels["Ц"]=q;
@@ -1901,7 +1909,7 @@
               body += filterCell("mark",r.mark,esc(r.mark),"sticky-2");
               body += filterCell("name",r.name,esc(r.name),"sticky-3");
               levels.forEach(function(code){
-                const value = code === "Всего" ? r.total : 0;
+                const value = code === "Всего" ? r.total : qtyAt(r,code);
                 body += '<td class="level-col num">' + fmt0(value) + '</td>';
               });
               body += '</tr>';
@@ -1943,14 +1951,27 @@
         });
       }
       const g = grouped.get(key);
-      const bs = r.section.building_section;
-      if (!g.bySection[bs]) g.bySection[bs] = 0;
-      g.bySection[bs] += r.total;
-      if (!g.byLevel[bs]) g.byLevel[bs] = new Map();
-      levels.forEach(function(code) {
-        const v = qtyAt(r,code);
-        if (v) g.byLevel[bs].set(code,Number(g.byLevel[bs].get(code) || 0)+v);
-      });
+      if (r.section.is_stairs) {
+        const s1Total=Number(r.total||0)/2;
+        const s2Total=Number(r.total||0)/2;
+        g.bySection["Секция 1"] += s1Total;
+        g.bySection["Секция 2"] += s2Total;
+        levels.forEach(function(code) {
+          const v=Number(qtyAt(r,code)||0);
+          if (!v) return;
+          g.byLevel["Секция 1"].set(code,Number(g.byLevel["Секция 1"].get(code)||0)+v/2);
+          g.byLevel["Секция 2"].set(code,Number(g.byLevel["Секция 2"].get(code)||0)+v/2);
+        });
+      } else {
+        const bs = r.section.building_section;
+        if (!g.bySection[bs]) g.bySection[bs] = 0;
+        g.bySection[bs] += r.total;
+        if (!g.byLevel[bs]) g.byLevel[bs] = new Map();
+        levels.forEach(function(code) {
+          const v = qtyAt(r,code);
+          if (v) g.byLevel[bs].set(code,Number(g.byLevel[bs].get(code) || 0)+v);
+        });
+      }
     });
 
     return Array.from(grouped.values()).sort(function(a,b) {
@@ -2042,18 +2063,19 @@
         const stairRows=rows.filter(function(r){return r.zone==="Лестницы";});
         if(stairRows.length){
           const stairKey="spec-summary:stairs";
-          registerGroup(stairKey);
-          const stairTotal=stairRows.reduce(function(sum,r){return sum+Number(r.bySection["Элементы лестниц"]||0);},0);
-          body += '<tr class="group-row group-toggle" data-group-key="'+esc(stairKey)+'"><td colspan="3" class="group-title spec-group-title" style="padding-left:22px"><span class="group-arrow">'+groupArrow(stairKey)+'</span>Элементы лестниц</td>'+
-            '<td class="qty-col num">'+fmt0(stairTotal)+'</td><td class="vol-col num"></td><td class="qty-col num"></td><td class="vol-col num"></td>'+
-            levels.map(function(){return '<td class="summary-col num"></td><td class="summary-col num"></td>';}).join("")+'</tr>';
+          body += summaryGroupRow("Элементы лестниц",stairRows,stairKey,1,levels);
           if(!ui.collapsed.has(stairKey) && !ui.collapseLeaves){
             stairRows.forEach(function(r,index){
-              const qty=Number(r.bySection["Элементы лестниц"]||0);
+              const s1=Number(r.bySection["Секция 1"]||0);
+              const s2=Number(r.bySection["Секция 2"]||0);
               body += '<tr class="data-row" data-material-id="'+esc(r.catalogItemId||"")+'"><td class="sticky-1 center">'+(index+1)+'</td>'+
                 filterCell("mark",r.mark,esc(r.mark),"sticky-2")+filterCell("name",r.name,esc(r.name),"sticky-3")+
-                '<td class="qty-col num">'+fmt0(qty)+'</td><td class="vol-col num"></td><td class="qty-col num"></td><td class="vol-col num"></td>'+
-                levels.map(function(){return '<td class="summary-col num"></td><td class="summary-col num"></td>';}).join("")+'</tr>';
+                '<td class="qty-col num">'+fmt0(s1)+'</td><td class="vol-col num">'+fmt(s1*r.volumePerPiece)+'</td>'+
+                '<td class="qty-col num">'+fmt0(s2)+'</td><td class="vol-col num">'+fmt(s2*r.volumePerPiece)+'</td>'+
+                levels.map(function(code){
+                  return '<td class="summary-col num">'+fmt0((r.byLevel["Секция 1"]&&r.byLevel["Секция 1"].get(code))||0)+'</td>'+
+                    '<td class="summary-col num">'+fmt0((r.byLevel["Секция 2"]&&r.byLevel["Секция 2"].get(code))||0)+'</td>';
+                }).join("")+'</tr>';
             });
           }
         }
@@ -2074,7 +2096,7 @@
       '</tr>';
 
     $("workArea").className = "work-area table-work spec-work";
-    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="spec-table working-summary" data-table-key="spec-summary-v3"><thead>' + head1 + head2 + '</thead><tbody>' + body + '</tbody></table></div></div>';
+    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="spec-table working-summary" data-table-key="spec-summary-v4"><thead>' + head1 + head2 + '</thead><tbody>' + body + '</tbody></table></div></div>';
   }
 
   function rowCost(row,m) {
