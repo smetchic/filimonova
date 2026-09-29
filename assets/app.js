@@ -639,6 +639,14 @@
     });
   }
 
+  function lockTableToColumnSum(table,widths) {
+    if(!table || !(table.classList.contains("est-table") || table.classList.contains("ks-table"))) return;
+    const total=Math.max(1,widths.reduce(function(sum,w){return sum+(Number(w)||0);},0));
+    table.style.setProperty("width",total+"px","important");
+    table.style.setProperty("min-width",total+"px","important");
+    table.style.setProperty("max-width",total+"px","important");
+  }
+
   function installResizeAutofit(table) {
     if(!table || !table.tHead) return;
     const grid=logicalHeaderGrid(table);
@@ -668,6 +676,7 @@
       col.style.maxWidth=widths[i]+"px";
     });
     widths.forEach(function(w,i){forceLogicalColumnWidth(table,i,w);});
+    lockTableToColumnSum(table,widths);
     updateStickyOffsets(table,widths);
     updateStickyHeaderOffsets(table);
 
@@ -685,6 +694,7 @@
           cg.children[index].style.minWidth=widths[index]+"px";
           cg.children[index].style.maxWidth=widths[index]+"px";
           forceLogicalColumnWidth(table,index,widths[index]);
+          lockTableToColumnSum(table,widths);
           updateStickyOffsets(table,widths);
           updateStickyHeaderOffsets(table);
         }
@@ -698,6 +708,7 @@
         cg.children[index].style.minWidth=widths[index]+"px";
         cg.children[index].style.maxWidth=widths[index]+"px";
         forceLogicalColumnWidth(table,index,widths[index]);
+        lockTableToColumnSum(table,widths);
         updateStickyOffsets(table,widths);
         updateStickyHeaderOffsets(table);
         saveTableWidths(table,widths);
