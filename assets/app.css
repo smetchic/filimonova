@@ -1458,3 +1458,18 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 #workArea .eng-table thead tr:nth-child(2) th{
   top:auto;
 }
+
+/* Reconciliation header: compact two-level grid, no artificial blank header band. */
+#workArea .recon-table thead tr:first-child th[colspan]{
+  height:24px!important;
+  min-height:24px!important;
+  padding-top:2px!important;
+  padding-bottom:2px!important;
+  line-height:16px!important;
+}
+#workArea .recon-table thead tr:nth-child(2) th{
+  top:auto;
+}
+#workArea .recon-table thead th[rowspan="2"]{
+  vertical-align:middle!important;
+}
