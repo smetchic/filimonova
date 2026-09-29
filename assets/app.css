@@ -1916,3 +1916,27 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   color:transparent!important;
   pointer-events:none;
 }
+
+
+/* Estimate width ownership fix.
+   Legacy width:max-content!important defeated JS COLGROUP widths and made long
+   work descriptions/units stretch "Наименование" and "Ед. изм.". */
+#workArea .engineering-scroll > table.est-table{
+  width:auto!important;
+  min-width:0!important;
+  max-width:none!important;
+}
+#workArea .est-table th:nth-child(3),
+#workArea .est-table td:nth-child(3),
+#workArea .est-table th:nth-child(4),
+#workArea .est-table td:nth-child(4),
+#workArea .est-table th:nth-child(5),
+#workArea .est-table td:nth-child(5){
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+}
+#workArea .est-table .estimate-unit-cell{
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+}
