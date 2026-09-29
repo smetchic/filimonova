@@ -826,7 +826,9 @@
       return (dataState.estimateCosts||[]).find(function(c){return c.estimate_row_id===r.id;});
     }).filter(Boolean);
     function singleUnitCost(field){
-      const values=Array.from(new Set(unitCosts.map(function(c){return Number(c[field]||0);}).filter(function(v){return v>0;}).map(function(v){return v.toFixed(2);})));
+      if(!linkedEstimateRows.length || unitCosts.length!==linkedEstimateRows.length ||
+        unitCosts.some(function(c){return Number(c[field]||0)<=0;})) return null;
+      const values=Array.from(new Set(unitCosts.map(function(c){return Number(c[field]).toFixed(2);})));
       return values.length===1?Number(values[0]):null;
     }
     const materialUnit=singleUnitCost("materials_unit");
@@ -835,7 +837,7 @@
     const supplierUnit=supplierModel && supplierModel.prices.length===1 &&
       supplierModel.prices[0].price_basis==="piece" && supplierModel.state!=="Проверить"
       ?Number(supplierModel.prices[0].unit_price_gross):null;
-    function unitMoney(value){return value!=null && Number.isFinite(value)?money(value)+" BYN":"—";}
+    function unitMoney(value){return value!=null && Number.isFinite(value) && value>0?money(value)+" BYN":"—";}
     const sectionLabel=st.rows.length&&st.rows[0].section?st.rows[0].section.name:"Раздел";
     const allNames=Array.from(new Set(dataState.catalogItems.map(function(x){return x.name;}).filter(Boolean))).sort(function(a,b){return a.localeCompare(b,"ru",{numeric:true});});
     let modal=document.getElementById("materialCardModal");
