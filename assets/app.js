@@ -551,7 +551,27 @@
     if (table.classList.contains("working-summary")) {
       if (index === 3 || index === 5) return 58;
       if (index === 4 || index === 6) return 64;
-      if (index >= 7) return 28;
+      // Floor subcolumns contain only quantities. Keep them compact and stable:
+      // size from the complete project dataset, not from the currently visible grouping.
+      if (index >= 7) {
+        const levels=levelCodes();
+        const floorEnd=7+levels.length*2;
+        if(index < floorEnd){
+          const rel=index-7, section=rel%2===0?"Секция 1":"Секция 2";
+          const code=levels[Math.floor(rel/2)];
+          let maxText="0";
+          buildWorkingSummaryRows().forEach(function(r){
+            const v=Number((r.byLevel[section]&&r.byLevel[section].get(code))||0);
+            const txt=fmt0(v);
+            if(txt.length>maxText.length) maxText=txt;
+          });
+          const canvas=intrinsicColumnWidth.canvas||(intrinsicColumnWidth.canvas=document.createElement("canvas"));
+          const ctx=canvas.getContext("2d");
+          ctx.font="12px Segoe UI";
+          return Math.max(28,Math.ceil(ctx.measureText(maxText).width)+12);
+        }
+        return 42;
+      }
     }
     let max=40;
     const cells=[];
@@ -2213,7 +2233,7 @@
       '</tr>';
 
     $("workArea").className = "work-area table-work spec-work";
-    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="spec-table working-summary" data-table-key="spec-summary-v4"><thead>' + head1 + head2 + '</thead><tbody>' + body + '</tbody></table></div></div>';
+    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="spec-table working-summary" data-table-key="spec-summary-v5"><thead>' + head1 + head2 + '</thead><tbody>' + body + '</tbody></table></div></div>';
   }
 
   function rowCost(row,m) {
