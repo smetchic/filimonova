@@ -3004,7 +3004,7 @@
       ? months[0].label+" — "+months[months.length-1].label
       : "не установлен";
     const last=months.length?Number(months[months.length-1].index||1):1;
-    return '<span class="gpr-period-summary"><span class="gpr-period-label">Начало работ:</span><strong>Октябрь 2026</strong><span>·</span><span class="gpr-period-label">Период:</span><strong>'+esc(period)+'</strong><span>·</span><span class="gpr-period-label">Прогноз:</span><strong>от цены на начало работ</strong><span class="context-muted">нарастающий индекс до '+esc(last.toFixed(6).replace(".",","))+'</span></span>';
+    return '<span class="gpr-period-summary"><span class="gpr-period-label">Цена на начало работ:</span><strong>01.10.2026</strong><span>·</span><span class="gpr-period-label">Период:</span><strong>'+esc(period)+'</strong><span>·</span><span class="gpr-period-label">Прогноз:</span><strong>от цены на начало работ</strong><span class="context-muted">нарастающий индекс до '+esc(last.toFixed(6).replace(".",","))+'</span></span>';
   }
 
   let gprAssignmentState=null;
@@ -3282,13 +3282,13 @@
         '<td class="center"><input class="gpr-settings-check" type="checkbox" '+(mon.is_in_period?'checked':'')+' aria-label="Включить '+esc(mon.label)+'"></td>'+
         '<td>'+esc(mon.label)+'</td>'+
         '<td class="num">'+(mon.key==="2026-10"
-          ? '<span class="gpr-index-base">1,000000 <small>база</small></span>'
+          ? '<span class="gpr-index-base">1,000000 <small>на 01.10.2026</small></span>'
           : '<input class="gpr-index-input" data-gpr-month-index="'+esc(mon.id)+'" value="'+esc(Number(mon.monthlyIndex||1).toFixed(6).replace(".",","))+'" inputmode="decimal" aria-label="Индекс '+esc(mon.label)+'">')+'</td>'+
         '<td class="num gpr-cumulative-cell" data-gpr-cumulative="'+esc(mon.id)+'">'+esc(Number(mon.index||1).toFixed(6).replace(".",","))+'</td>'+
       '</tr>';
     }).join("");
     modal.innerHTML='<div class="gpr-modal gpr-settings-modal"><div class="gpr-modal-head"><strong>Параметры ГПР</strong><button type="button" class="gpr-modal-close">×</button></div>'+
-      '<div class="gpr-settings-note">Цена на начало работ берётся из расчёта «Текущая цена». Сейчас начало работ — Октябрь 2026, поэтому Октябрь = 1,000000 и повторно не индексируется. Для следующих месяцев вводится месячный прогнозный индекс; нарастающий индекс считается автоматически от Октября.</div>'+
+      '<div class="gpr-settings-note">Цена на начало работ берётся из расчёта «Текущая цена» и фиксируется на дату 01.10.2026. Поэтому для Октября 2026 коэффициент к этой цене равен 1,000000 и повторно не индексируется. Для последующих месяцев вводится месячный прогнозный индекс; нарастающий индекс рассчитывается относительно цены на 01.10.2026.</div>'+
       '<div class="gpr-modal-body"><div class="gpr-alloc-scroll"><table class="gpr-settings-table"><thead><tr><th>Период</th><th>Месяц</th><th>Индекс месяца</th><th>Индекс нарастающим итогом</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>'+
       '<div class="gpr-modal-foot"><span class="gpr-settings-state"></span><button type="button" class="context-link gpr-cancel">Отмена</button><span class="spacer"></span><button type="button" class="context-link gpr-settings-save">Сохранить</button></div></div>';
     modal.classList.add("open");
