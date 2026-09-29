@@ -533,6 +533,14 @@
       max=Math.max(max,w);
     });
     if(index===0) max=Math.max(40,Math.min(max,68));
+    // Estimate names must never make the whole grid excessively wide.
+    // Full text remains available through the cell title tooltip.
+    if((table.classList.contains("est-table") || table.classList.contains("ks-table")) && index===3) {
+      return Math.max(220,Math.min(max,480));
+    }
+    if((table.classList.contains("est-table") || table.classList.contains("ks-table")) && index===2) {
+      return Math.max(120,Math.min(max,280));
+    }
     return Math.max(28,Math.min(max,340));
   }
 
@@ -620,15 +628,11 @@
       });
       saveTableWidths(table,widths);
     } else {
-      // Migrate previously saved widths so an old narrow localStorage value
-      // cannot override the current estimate UI minimums.
-      let migrated=false;
+      // Saved widths are the user's choice. Never expand them because cell text is long.
       widths=widths.map(function(w,i){
-        const next=Math.max(Number(w)||0,tableColumnMinimum(table,i));
-        if(next!==Number(w)) migrated=true;
-        return next;
+        const n=Number(w);
+        return Number.isFinite(n) && n>=28 ? n : tableColumnMinimum(table,i);
       });
-      if(migrated) saveTableWidths(table,widths);
     }
     Array.from(cg.children).forEach(function(col,i){col.style.width=widths[i]+"px";});
     updateStickyOffsets(table,widths);
@@ -643,7 +647,7 @@
         e.preventDefault();e.stopPropagation();
         const startX=e.clientX,start=widths[index];
         function move(ev){
-          widths[index]=Math.max(tableColumnMinimum(table,index),Math.min(720,start+ev.clientX-startX));
+          widths[index]=Math.max(28,Math.min(720,start+ev.clientX-startX));
           cg.children[index].style.width=widths[index]+"px";
           updateStickyOffsets(table,widths);
           updateStickyHeaderOffsets(table);
@@ -653,7 +657,7 @@
       });
       h.addEventListener("dblclick",function(e){
         e.preventDefault();e.stopPropagation();
-        widths[index]=Math.max(tableColumnMinimum(table,index),intrinsicColumnWidth(table,index));
+        widths[index]=intrinsicColumnWidth(table,index);
         cg.children[index].style.width=widths[index]+"px";
         updateStickyOffsets(table,widths);
         updateStickyHeaderOffsets(table);
