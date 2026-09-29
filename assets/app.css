@@ -1383,3 +1383,28 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   display:block;margin-top:2px;font-size:9px;line-height:11px;
   font-weight:500;color:#6B7280
 }
+
+/* Manual reconciliation: clearly separate estimate source from specification candidates. */
+.recon-source-card{padding:10px 12px 11px;background:#FAFAFA;border-bottom:1px solid #E4E4E7}
+.recon-block-label{margin-bottom:7px;font-size:10px;font-weight:600;color:#71717A;text-transform:uppercase;letter-spacing:.03em}
+.recon-source-grid{display:grid;grid-template-columns:150px 210px minmax(260px,1fr);gap:12px}
+.recon-source-grid>div{min-width:0;display:flex;flex-direction:column;gap:2px}
+.recon-source-grid span{font-size:10px;color:#71717A}
+.recon-source-grid strong{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.recon-target-head{display:flex;align-items:baseline;gap:10px;padding:10px 12px 6px}
+.recon-target-head strong{font-size:12px}
+.recon-target-head span{font-size:10.5px;color:#71717A}
+.recon-choice-header{display:grid;grid-template-columns:22px 70px 135px minmax(260px,1fr) 80px;gap:8px;padding:0 12px 5px;border-bottom:1px solid #D4D4D8;color:#71717A;font-size:10px}
+.recon-edit-list{padding:0 12px 8px}
+.recon-choice{grid-template-columns:22px 70px 135px minmax(260px,1fr) 80px;min-height:42px}
+.recon-choice-position{font-variant-numeric:tabular-nums;color:#52525B}
+.recon-choice-mark{min-width:0}
+.recon-choice-meta{text-align:right}
+.recon-choice-suggested{box-shadow:inset 3px 0 0 #A1A1AA}
+.recon-suggested-label{display:block;margin-top:2px}
+@media(max-width:760px){
+ .recon-source-grid{grid-template-columns:1fr}
+ .recon-choice-header{display:none}
+ .recon-choice{grid-template-columns:22px 62px 100px minmax(140px,1fr)}
+ .recon-choice-meta{grid-column:4;text-align:left;padding-bottom:5px}
+}
