@@ -847,8 +847,8 @@
       '<nav class="material-tabs"><button class="active" data-mtab="overview">Обзор</button><button data-mtab="projectEstimate">Проект и смета</button><button data-mtab="supplyMontage">Поставка и монтаж</button><button data-mtab="avrS29">АВР и С-29</button><button data-mtab="history">История</button></nav>'+
       '<div class="material-body"></div></div>';
     modal.classList.add("open");
-    function kpi(label,value,sub,cls){return '<div class="mv-kpi '+(cls||"")+'><div class="mv-kpi-label">'+esc(label)+'</div><div class="mv-kpi-value">'+value+'</div>'+(sub?'<div class="mv-kpi-sub">'+sub+'</div>':'')+'</div>';}
-    function block(title,html,extra){return '<section class="mv-block '+(extra||"")+'><div class="mv-block-title">'+title+'</div>'+html+'</section>';}
+    function kpi(label,value,sub,cls){return '<div class="mv-kpi '+(cls||"")+'"><div class="mv-kpi-label">'+esc(label)+'</div><div class="mv-kpi-value">'+value+'</div>'+(sub?'<div class="mv-kpi-sub">'+sub+'</div>':'')+'</div>';}
+    function block(title,html,extra){return '<section class="mv-block '+(extra||"")+'"><div class="mv-block-title">'+title+'</div>'+html+'</section>';}
     function body(tab){
       const b=modal.querySelector(".material-body");
       if(tab==="overview"){
