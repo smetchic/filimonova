@@ -3291,7 +3291,7 @@
     modal.querySelector(".recon-source-basis").textContent=sr.mark||"—";
     modal.querySelector(".recon-source-name").textContent=sr.name||"—";
     modal.querySelector(".recon-target-head strong").textContent="Строки сметы — выбираем";
-    modal.querySelector(".recon-target-head span").textContent="Одна строка; наиболее вероятная показана первой";
+    modal.querySelector(".recon-target-head span").textContent="Отметьте строку слева и нажмите «Сохранить»";
     modal.querySelector(".recon-choice-header").innerHTML="<span>Выбор</span><span>Смета</span><span>Поз.</span><span>Обоснование</span><span>Наименование</span><span>Кол-во</span>";
     modal.querySelector(".recon-edit-list").innerHTML=ranked.map(function(c,index){
       const basis=estimateSourceValue(c.row,"basis")||"—";
@@ -3307,9 +3307,14 @@
         (c.occupied?'<small class="recon-occupied-label">Уже есть связь</small>':'')+
       '</label>';
     }).join("") || '<div class="table-message">Подходящих строк сметы не найдено.</div>';
+    const saveBtn=modal.querySelector(".recon-edit-save");
+    saveBtn.classList.add("is-disabled");
+    saveBtn.setAttribute("aria-disabled","true");
     modal.querySelectorAll("[data-recon-estimate]").forEach(function(input){
       input.addEventListener("change",function(){
         modal.querySelectorAll(".recon-estimate-choice").forEach(function(row){row.classList.toggle("is-selected",!!row.querySelector("input:checked"));});
+        saveBtn.classList.remove("is-disabled");
+        saveBtn.setAttribute("aria-disabled","false");
       });
     });
     modal.querySelector(".recon-edit-state").textContent="";
