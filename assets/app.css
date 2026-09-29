@@ -544,8 +544,6 @@ svg{display:block}
 /* Column widths are controlled by generated colgroup; no fixed legacy widths */
 .spec-table .sticky-1,.spec-table .sticky-2,.spec-table .sticky-3,
 .spec-table .level-col,.spec-table .summary-col,.spec-table .qty-col,.spec-table .vol-col,
-.est-table .e-sticky-1,.est-table .e-sticky-2,.est-table .e-sticky-3,.est-table .e-sticky-4,
-.est-table th:nth-child(n+5),.est-table td:nth-child(n+5),
 .supply-table th,.supply-table td,.supply-table .sticky-3,
 .price-table th,.price-table td,.price-table .sticky-3,
 .montage-table .sticky-3,.gpr-table th,.gpr-table td,.gpr-table .gpr-sticky,
@@ -1296,3 +1294,12 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 @media(max-width:760px){
   .supplier-import-fields{grid-template-columns:1fr}
 }
+
+
+/* Estimate colgroup is authoritative: allow user widths down to the technical minimum. */
+.est-table th,.est-table td,.ks-table th,.ks-table td{
+  width:auto;
+  min-width:0!important;
+  max-width:none!important;
+}
+.est-table{min-width:0!important;width:max-content!important}
