@@ -2835,15 +2835,30 @@
 
   function renderSupplyDocuments() {
     $("workArea").className = "work-area table-work";
+    let docs=(dataState.supplyDocuments||[]).filter(function(d){return passesSearch([d.receipt_date,d.document_type,d.ttn_number,d.status]);});
+    let body=docs.map(function(d){
+      const lines=(dataState.supplyDocumentLines||[]).filter(function(x){return x.document_id===d.id;});
+      const pcs=lines.reduce(function(a,x){return a+Number(x.qty_pieces||0);},0);
+      const m3=lines.reduce(function(a,x){return a+Number(x.qty_m3||0);},0);
+      const net=lines.reduce(function(a,x){return a+Number(x.amount_net||0);},0);
+      const vat=lines.reduce(function(a,x){return a+Number(x.vat_amount||0);},0);
+      const gross=lines.reduce(function(a,x){return a+Number(x.amount_gross||0);},0);
+      return '<tr class="data-row">'+
+        filterCell("date",d.receipt_date,esc(d.receipt_date||""),"")+
+        filterCell("type",d.document_type,esc(d.document_type||""),"")+
+        filterCell("ttn",d.ttn_number,esc(d.ttn_number||""),"")+
+        '<td>—</td><td class="num">'+fmt0(lines.length)+'</td><td class="num">'+fmt(pcs)+'</td><td class="num">'+fmt(m3)+'</td>'+
+        '<td class="num">'+money(net)+'</td><td class="num">'+money(vat)+'</td><td class="num">'+money(gross)+'</td><td>'+esc(d.status||"")+'</td></tr>';
+    }).join("");
+    if(!body) body=tableMessage("Накладных пока нет. Фактические поступления не подменяются тестовыми документами.",11);
     const head='<thead><tr>'+
       '<th class="filterable-head">'+filterHeader("Дата поступления","date")+'</th>'+
       '<th class="filterable-head">'+filterHeader("Тип","type")+'</th>'+
       '<th class="filterable-head">'+filterHeader("№ ТТН","ttn")+'</th>'+
-      '<th class="filterable-head">'+filterHeader("Файл","file")+'</th>'+
-      '<th>Позиций</th><th>Шт.</th><th>м³</th><th>Без НДС</th><th>НДС</th><th>С НДС</th><th>Состояние</th></tr></thead>';
+      '<th>Файл</th><th>Позиций</th><th>Шт.</th><th>м³</th><th>Без НДС</th><th>НДС</th><th>С НДС</th><th>Состояние</th></tr></thead>';
     $("workArea").innerHTML =
       '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table supply-doc-table" data-table-key="supply-documents">'+head+
-      '<tbody>' + tableMessage("Накладных пока нет. Фактические поступления не подменяются тестовыми документами.",11) + '</tbody></table></div></div>';
+      '<tbody>'+body+'</tbody></table></div></div>';
   }
 
   function supplierPriceModel(catalogItemId,projectVolume) {
@@ -3009,7 +3024,16 @@
     }
     if (tab === 1) {
       $("workArea").className = "work-area table-work";
-      $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table compact-registry"><thead><tr><th>Период</th><th>№ АВР</th><th>Файл</th><th>Версия</th><th>Статус</th></tr></thead><tbody>' + tableMessage("АВР ещё не импортировались.",5) + '</tbody></table></div></div>';
+      let body=(dataState.avrDocuments||[]).map(function(d){
+        const versions=(dataState.avrVersions||[]).filter(function(v){return v.document_id===d.id;}).sort(function(a,b){return Number(b.version_no)-Number(a.version_no);});
+        if(!versions.length) return '<tr class="data-row"><td>'+esc(d.period_month||"")+'</td><td>'+esc(d.display_number||"")+'</td><td>—</td><td>—</td><td>Без версии</td></tr>';
+        return versions.map(function(v){
+          const status=v.signed_at?"Подписан":v.state==="active"?"Используется":v.state==="draft"?"Черновик":v.state;
+          return '<tr class="data-row"><td>'+esc(d.period_month||"")+'</td><td>'+esc(d.display_number||"")+'</td><td>—</td><td class="num">'+esc(v.version_no)+'</td><td>'+esc(status||"")+'</td></tr>';
+        }).join("");
+      }).join("");
+      if(!body) body=tableMessage("АВР ещё не импортировались.",5);
+      $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table compact-registry"><thead><tr><th>Период</th><th>№ АВР</th><th>Файл</th><th>Версия</th><th>Статус</th></tr></thead><tbody>' + body + '</tbody></table></div></div>';
       return;
     }
     $("workArea").className = "work-area table-work";
