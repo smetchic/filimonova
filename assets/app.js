@@ -78,7 +78,7 @@
       section: "Проект",
       title: "Сметы",
       subtitle: "Локальные сметы объекта и расчёт стоимости",
-      tabs: ["Смета","Текущая цена","График производства работ","Сверка","Журнал"]
+      tabs: ["Смета","Текущая цена","График производства работ"]
     },
     supply: {
       section: "Исполнение",
@@ -107,8 +107,8 @@
     recon: {
       section: "Контроль",
       title: "Сверка",
-      subtitle: "Сопоставление спецификации и смет",
-      tabs: ["Сверка"]
+      subtitle: "Контроль сопоставления проектных и сметных данных",
+      tabs: ["Сметы ↔ Спецификация","Журнал"]
     },
     diffs: {
       section: "Контроль",
@@ -1900,8 +1900,10 @@
       if (tab === 0) return buildEstimateContext(tab);
       if (tab === 1) return '<span class="context-caption">Текущая цена</span><span class="context-muted">НДС по объекту 0 %, участвует в формулах</span>';
       if (tab === 2) return '<span class="context-caption">ГПР</span><span class="context-muted">Помесячный финансовый план · без недель и дней</span>' + gprPeriodControlsHtml() + '<span class="spacer"></span><button class="context-link" type="button" data-gpr-action="spread">Разнести по месяцам</button><button class="context-link" type="button" data-gpr-action="display">Отображение</button><button class="context-link" type="button" data-gpr-action="excel">Экспорт Excel</button>';
-      if (tab === 3) return '<span class="context-caption">Сверка</span><span class="context-muted">Ручные связи имеют приоритет</span>';
-      return '<span class="context-caption">Журнал</span><span class="context-muted">Записи создаются из контрольных экранов</span>';
+    }
+    if (pageKey === "recon") {
+      if (tab === 0) return '<span class="context-caption">Сметы ↔ Спецификация</span><span class="context-muted">Ручные связи имеют приоритет</span>';
+      return '<span class="context-caption">Журнал</span><span class="context-muted">Только записи, добавленные вручную из Сверки</span>';
     }
     if (pageKey === "montage") {
       return '<span class="context-caption">Показывать:</span>' +
@@ -3332,7 +3334,7 @@
       if(result.error) throw result.error;
       await loadProjectData(dataState.project);
       modal.classList.remove("open");
-      renderPage("estimates",3);
+      renderPage("recon",0);
     }catch(err){
       state.textContent=err&&err.message?err.message:String(err);
     }
@@ -3470,9 +3472,7 @@
     if (pageKey === "estimates") {
       if (tab === 0) return renderEstimateTable();
       if (tab === 1) return renderCurrentPricePlaceholder();
-      if (tab === 2) return renderGprPlaceholder();
-      if (tab === 3) return renderRecon();
-      return renderEstimateJournal();
+      return renderGprPlaceholder();
     }
     if (pageKey === "supply") {
       if (tab === 0) return renderSupplySummary();
@@ -3482,7 +3482,7 @@
     if (pageKey === "montage") return renderMontage(tab);
     if (pageKey === "avr") return renderAvr(tab);
     if (pageKey === "s29") return renderS29(tab);
-    if (pageKey === "recon") return renderRecon();
+    if (pageKey === "recon") return tab === 0 ? renderRecon() : renderEstimateJournal();
     if (pageKey === "diffs") return renderSimple("Расхождения");
     if (pageKey === "links") return renderSimple("Связи работ");
     if (pageKey === "import") return renderSimple("Импорт");
@@ -3641,7 +3641,7 @@
     $("serviceLeft").innerHTML = buildServiceLeft(pageKey);
     // Project UI rule: page-level controls belong in the existing service row;
     // do not add local button bars above working tables.
-    if((pageKey==="estimates" && tab===3) || pageKey==="recon"){
+    if(pageKey==="recon" && tab===0){
       if(!ui.reconLinkFilter) ui.reconLinkFilter="all";
       $("serviceRight").innerHTML =
         '<span class="context-muted">Сопоставление:</span>' +
