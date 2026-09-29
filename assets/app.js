@@ -3029,6 +3029,7 @@
   }
 
   function renderRecon() {
+    if(!ui.reconLinkFilter) ui.reconLinkFilter="all";
     let rows=dataState.estimateRows.filter(function(r){
       return r.row_type==="material" &&
         passesSearch([r.position,estimateDisplayBasis(r),estimateDisplayName(r),r.basis,r.name]);
@@ -3046,6 +3047,12 @@
     dataState.reconciliationLinks.forEach(function(l){
       claimCount.set(l.specification_row_id,(claimCount.get(l.specification_row_id)||0)+1);
     });
+
+    if(ui.reconLinkFilter==="unlinked"){
+      rows=rows.filter(function(r){return !dataState.reconciliationLinks.some(function(l){return l.estimate_row_id===r.id;});});
+    } else if(ui.reconLinkFilter==="linked"){
+      rows=rows.filter(function(r){return dataState.reconciliationLinks.some(function(l){return l.estimate_row_id===r.id;});});
+    }
 
     let body=rows.map(function(r){
       const e=dataState.estimates.find(function(x){return x.id===r.estimate_id;});
@@ -3097,9 +3104,16 @@
 
     if(!body)body=tableMessage("Нет строк по текущему фильтру.",16);
     $("workArea").className="work-area table-work";
-    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table recon-table" data-table-key="estimate-recon-v2"><thead><tr><th colspan="4">Спецификация</th><th colspan="6">Смета</th><th rowspan="2">Разница</th><th rowspan="2">Сопоставление</th><th rowspan="2">Способ</th><th rowspan="2">Расхождение</th><th rowspan="2">Журнал</th><th rowspan="2">Действия</th></tr>'+
+    $("workArea").innerHTML='<div class="recon-quick-filter"><span>Показывать:</span><button type="button" class="'+(ui.reconLinkFilter==="all"?"active":"")+'" data-recon-link-filter="all">Все</button><button type="button" class="'+(ui.reconLinkFilter==="unlinked"?"active":"")+'" data-recon-link-filter="unlinked">Без связи</button><button type="button" class="'+(ui.reconLinkFilter==="linked"?"active":"")+'" data-recon-link-filter="linked">Связано</button></div><div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table recon-table" data-table-key="estimate-recon-v2"><thead><tr><th colspan="4">Спецификация</th><th colspan="6">Смета</th><th rowspan="2">Разница</th><th rowspan="2">Сопоставление</th><th rowspan="2">Способ</th><th rowspan="2">Расхождение</th><th rowspan="2">Журнал</th><th rowspan="2">Действия</th></tr>'+
       '<tr><th>Поз. спецификации</th><th>Марка</th><th>Наименование по спецификации</th><th>Проект, шт.</th><th>№ сметы</th><th class="filterable-head">'+filterHeader("Поз. сметы","position")+'</th><th class="filterable-head">'+filterHeader("Обоснование","basis")+'</th><th>Принятое обоснование</th><th class="filterable-head">'+filterHeader("Наименование по смете","name")+'</th><th>Смета, шт.</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
+
+  document.addEventListener("click",function(e){
+    const btn=e.target && e.target.closest ? e.target.closest("[data-recon-link-filter]") : null;
+    if(!btn) return;
+    ui.reconLinkFilter=btn.dataset.reconLinkFilter||"all";
+    renderRecon();
+  });
 
   function reconciliationEditorModal() {
     let modal=document.getElementById("reconciliationEditorModal");
