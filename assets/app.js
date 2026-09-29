@@ -3006,23 +3006,62 @@
     return {section:section,zone:zone};
   }
 
+  let gprQtyIndexState=null;
+
+  function gprQuantityIndex() {
+    const assignments=gprAssignments();
+    const assignmentsKey=JSON.stringify(assignments);
+    if(
+      gprQtyIndexState &&
+      gprQtyIndexState.assignmentsKey===assignmentsKey &&
+      gprQtyIndexState.specRows===dataState.specRows &&
+      gprQtyIndexState.specSections===dataState.specSections &&
+      gprQtyIndexState.specQuantities===dataState.specQuantities
+    ) return gprQtyIndexState.map;
+
+    const sections=new Map((dataState.specSections||[]).map(function(sec){return [sec.id,sec];}));
+    const rows=new Map((dataState.specRows||[]).map(function(sr){return [sr.id,sr];}));
+    const map=new Map();
+
+    function add(itemId,section,zone,month,qty) {
+      const key=itemId+"|"+(section||"*")+"|"+(zone||"*")+"|"+month;
+      map.set(key,(map.get(key)||0)+qty);
+    }
+
+    (dataState.specQuantities||[]).forEach(function(q){
+      const month=assignments[q.level_code];
+      if(!month) return;
+      const sr=rows.get(q.specification_row_id);
+      if(!sr || !sr.catalog_item_id) return;
+      const sec=sections.get(sr.section_id);
+      if(!sec) return;
+      const qty=Number(q.quantity||0);
+      if(!qty) return;
+
+      const section=sec.building_section||"";
+      const zone=sec.zone||"";
+      add(sr.catalog_item_id,"","",month,qty);
+      if(section) add(sr.catalog_item_id,section,"",month,qty);
+      if(zone) add(sr.catalog_item_id,"",zone,month,qty);
+      if(section && zone) add(sr.catalog_item_id,section,zone,month,qty);
+    });
+
+    gprQtyIndexState={
+      assignmentsKey:assignmentsKey,
+      specRows:dataState.specRows,
+      specSections:dataState.specSections,
+      specQuantities:dataState.specQuantities,
+      map:map
+    };
+    return map;
+  }
+
   function gprMaterialMonthQty(row,e,monthKey) {
     const item=estimateProjectItem(row) || dataState.catalogItems.find(function(x){return x.mark===estimateDisplayBasis(row);});
     if(!item) return 0;
     const scope=estimateScope(e);
-    let qty=0;
-    dataState.specRows.forEach(function(sr){
-      if(sr.catalog_item_id!==item.id) return;
-      const sec=dataState.specSections.find(function(x){return x.id===sr.section_id;});
-      if(!sec) return;
-      if(scope.section && sec.building_section!==scope.section) return;
-      if(scope.zone && sec.zone!==scope.zone) return;
-      dataState.specQuantities.forEach(function(q){
-        if(q.specification_row_id!==sr.id) return;
-        if(gprAssignments()[q.level_code]===monthKey) qty+=Number(q.quantity||0);
-      });
-    });
-    return qty;
+    const key=item.id+"|"+(scope.section||"*")+"|"+(scope.zone||"*")+"|"+monthKey;
+    return Number(gprQuantityIndex().get(key)||0);
   }
 
   function gprRowMonthQty(row,e,monthKey,estimateRows) {
@@ -3034,33 +3073,34 @@
     return Number(row.quantity||0)*(monthMaterial/allMaterial);
   }
 
-  function gprRowAmounts(row,e,estimateRows,m) {
+  function gprRowAmounts(row,e,estimateRows,m,monthList) {
     const c=rowCost(row,m);
     const P=ui.currentPrice||{forecast:1.0552,competition:1};
     const unitAtStart=Number(c.total_unit||0)*Number(P.competition||1)*Number(P.forecast||1);
     const totalAtStart=Number(row.quantity||0)*unitAtStart;
     const months={};
-    gprMonths().forEach(function(month){
+    (monthList||gprMonths()).forEach(function(month){
       const q=gprRowMonthQty(row,e,month.key,estimateRows);
       months[month.key]=q*unitAtStart*Number(month.index||1);
     });
     return {unit:unitAtStart,total:totalAtStart,months:months};
   }
 
-  function gprGroupRow(label,rows,e,key,depth,m) {
+  function gprGroupRow(label,rows,e,key,depth,m,monthList) {
     registerGroup(key);
+    const activeMonths=monthList||gprMonths();
     const monthTotals={};
     let total=0;
-    gprMonths().forEach(function(mon){monthTotals[mon.key]=0;});
+    activeMonths.forEach(function(mon){monthTotals[mon.key]=0;});
     rows.forEach(function(r){
-      const a=gprRowAmounts(r,e,rows,m);
+      const a=gprRowAmounts(r,e,rows,m,activeMonths);
       total+=a.total;
-      gprMonths().forEach(function(mon){monthTotals[mon.key]+=a.months[mon.key]||0;});
+      activeMonths.forEach(function(mon){monthTotals[mon.key]+=a.months[mon.key]||0;});
     });
     let html='<tr class="group-row group-toggle" data-group-key="'+esc(key)+'">';
     html+='<td colspan="4" class="est-group-title gpr-group-title" style="padding-left:'+(8+depth*14)+'px"><span class="group-arrow">'+groupArrow(key)+'</span>'+esc(label)+'</td>';
     html+='<td></td><td></td><td></td><td class="num strong-num">'+money(total)+'</td>';
-    gprMonths().forEach(function(mon){html+='<td class="num gpr-month group-month">'+money(monthTotals[mon.key])+'</td>';});
+    activeMonths.forEach(function(mon){html+='<td class="num gpr-month group-month">'+money(monthTotals[mon.key])+'</td>';});
     html+='</tr>';
     return html;
   }
@@ -3086,7 +3126,7 @@
       if(!erows.length && (currentSearch()||Object.keys(filterBucket()).length)) return;
 
       const eKey="gpr:estimate:"+e.number;
-      body+=gprGroupRow("Смета №"+e.number+" · "+(e.name||""),erows,e,eKey,0,m);
+      body+=gprGroupRow("Смета №"+e.number+" · "+(e.name||""),erows,e,eKey,0,m,months);
       if(ui.collapsed.has(eKey)) return;
 
       const sections=dataState.estimateSections.filter(function(x){return x.estimate_id===e.id;});
@@ -3094,11 +3134,11 @@
         const sRows=erows.filter(function(r){return r.section_id===sec.id;});
         if(!sRows.length) return;
         const sKey="gpr:section:"+e.number+":"+sec.id;
-        body+=gprGroupRow(sec.title,sRows,e,sKey,1,m);
+        body+=gprGroupRow(sec.title,sRows,e,sKey,1,m,months);
         if(ui.collapsed.has(sKey)||ui.collapseLeaves) return;
 
         sRows.forEach(function(r){
-          const a=gprRowAmounts(r,e,sRows,m);
+          const a=gprRowAmounts(r,e,sRows,m,months);
           const item=estimateProjectItem(r);
           const displayBasis=estimateDisplayBasis(r);
           const displayName=estimateDisplayName(r);
@@ -3172,6 +3212,7 @@
       const next={};
       modal.querySelectorAll(".gpr-month-check:checked").forEach(function(check){next[check.dataset.level]=check.dataset.month;});
       ui.gprAssignments=next;
+      gprQtyIndexState=null;
       localStorage.setItem("filimonova.gpr.assignments",JSON.stringify(next));
       close();
       rerenderContent();
