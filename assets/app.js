@@ -3292,7 +3292,7 @@
     modal.querySelector(".recon-source-name").textContent=sr.name||"—";
     modal.querySelector(".recon-target-head strong").textContent="Строки сметы — выбираем";
     modal.querySelector(".recon-target-head span").textContent="Одна строка; наиболее вероятная показана первой";
-    modal.querySelector(".recon-choice-header").innerHTML="<span></span><span>Смета</span><span>Поз.</span><span>Обоснование</span><span>Наименование</span><span>Кол-во</span>";
+    modal.querySelector(".recon-choice-header").innerHTML="<span>Выбор</span><span>Смета</span><span>Поз.</span><span>Обоснование</span><span>Наименование</span><span>Кол-во</span>";
     modal.querySelector(".recon-edit-list").innerHTML=ranked.map(function(c,index){
       const basis=estimateSourceValue(c.row,"basis")||"—";
       const name=estimateSourceValue(c.row,"name")||"—";
