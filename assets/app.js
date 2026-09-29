@@ -221,7 +221,30 @@
       fetchAllRows("reconciliation_journal","id,estimate_row_id,specification_row_id,issue_key,reasons,proposal,comment,status,snapshot,created_at,updated_at",function(q){return q.eq("project_id",project.id).order("created_at",{ascending:false});}),
       fetchAllRows("suppliers","id,name",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("name");}),
       fetchAllRows("supplier_items","id,supplier_id,catalog_item_id,source_mark,source_name,source_section,source_key,unit_volume_m3,link_method,link_state,source_import_row_id",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("source_mark");}),
-      fetchAllRows("supplier_prices_current","id,supplier_item_id,effective_from,price_basis,unit_price_gross,unit_volume_snapshot_m3,source_import_row_id,source_imported_at",function(q){return q.eq("project_id",project.id).order("effective_from");})
+      fetchAllRows("supplier_prices_current","id,supplier_item_id,effective_from,price_basis,unit_price_gross,unit_volume_snapshot_m3,source_import_row_id,source_imported_at",function(q){return q.eq("project_id",project.id).order("effective_from");}),
+      fetchAllRows("supply_documents","id,supplier_id,document_type,receipt_date,ttn_number,status,note,created_at",function(q){return q.eq("project_id",project.id).order("receipt_date");}),
+      fetchAllRows("supply_document_lines","id,document_id,sort_order,source_mark,source_name,catalog_item_id,supplier_item_id,qty_pieces,qty_m3,unit_volume_snapshot_m3,price_basis,unit_price,amount_net,vat_percent,vat_amount,amount_gross,match_state",function(q){return q.eq("project_id",project.id).order("sort_order");}),
+      fetchAllRows("supply_line_allocations","id,white_line_id,green_line_id,allocated_pieces,allocated_m3",function(q){return q.eq("project_id",project.id);}),
+      fetchAllRows("montage_events","id,specification_row_id,level_code,event_date,event_type,quantity,note",function(q){return q.eq("project_id",project.id).order("event_date");}),
+      fetchAllRows("estimate_work_links","id,material_row_id,work_row_id,link_method",function(q){return q.eq("project_id",project.id);}),
+      fetchAllRows("current_price_settings","*",function(q){return q.eq("project_id",project.id);}),
+      fetchAllRows("current_price_revisions","id,estimate_id,revision_no,settings_snapshot,is_current,created_at",function(q){return q.eq("project_id",project.id).order("created_at");}),
+      fetchAllRows("current_price_row_results","id,revision_id,estimate_row_id,quantity,unit_price_at_start,total_with_vat,with_tender,with_forecast,with_tender_and_forecast,contractor_total",function(q){return q.eq("project_id",project.id);}),
+      fetchAllRows("gpr_plans","id,name,status,start_month,end_month,created_at,updated_at",function(q){return q.eq("project_id",project.id).order("created_at");}),
+      fetchAllRows("gpr_months","id,plan_id,month,execution_index",function(q){return q.eq("project_id",project.id).order("month");}),
+      fetchAllRows("gpr_floor_assignments","id,plan_id,month_id,building_section,level_code",function(q){return q.eq("project_id",project.id);}),
+      fetchAllRows("gpr_row_assignments","id,plan_id,month_id,estimate_row_id,quantity,source_mode,source_specification_row_id,source_level_code,parent_assignment_id",function(q){return q.eq("project_id",project.id);}),
+      fetchAllRows("avr_documents","id,period_month,display_number,created_at,updated_at",function(q){return q.eq("project_id",project.id).order("period_month");}),
+      fetchAllRows("avr_versions","id,document_id,version_no,state,source_import_id,signed_at,created_at",function(q){return q.eq("project_id",project.id).order("created_at");}),
+      fetchAllRows("avr_rows","id,version_id,estimate_row_id,quantity,quantity_m3,amount,source_import_row_id",function(q){return q.eq("project_id",project.id);}),
+      fetchAllRows("accounting_rows","id,import_id,source_import_row_id,account_code,material_code,name,unit,quantity,unit_price,amount,source_row_no",function(q){return q.eq("project_id",project.id).order("source_row_no");}),
+      fetchAllRows("accounting_code_links","id,accounting_code,catalog_item_id,link_method,note",function(q){return q.eq("project_id",project.id);}),
+      fetchAllRows("accounting_period_sources","period_month,import_id,selected_at",function(q){return q.eq("project_id",project.id).order("period_month");}),
+      fetchAllRows("s29_documents","id,period_month,avr_version_id,accounting_import_id,status,fixed_at,created_at,updated_at",function(q){return q.eq("project_id",project.id).order("period_month");}),
+      fetchAllRows("s29_rows","id,document_id,catalog_item_id,avr_quantity_pieces,volume_per_piece_snapshot_m3,avr_quantity_m3,written_off_m3,economy_m3,overrun_m3,note",function(q){return q.eq("project_id",project.id);}),
+      fetchAllRows("s29_allocations","id,s29_row_id,accounting_row_id,allocated_m3",function(q){return q.eq("project_id",project.id);}),
+      fetchAllRows("s29_carryovers","id,origin_document_id,origin_row_id,catalog_item_id,kind,origin_month,created_m3,created_at",function(q){return q.eq("project_id",project.id);}),
+      fetchAllRows("s29_carryover_settlements","id,carryover_id,settlement_document_id,settlement_month,settled_m3,created_at",function(q){return q.eq("project_id",project.id);})
     ];
     const results = await Promise.all(requests);
     dataState = {
@@ -240,7 +263,30 @@
       reconciliationJournal:results[9] || [],
       suppliers:results[10] || [],
       supplierItems:results[11] || [],
-      supplierPrices:results[12] || []
+      supplierPrices:results[12] || [],
+      supplyDocuments:results[13] || [],
+      supplyDocumentLines:results[14] || [],
+      supplyLineAllocations:results[15] || [],
+      montageEvents:results[16] || [],
+      estimateWorkLinks:results[17] || [],
+      currentPriceSettings:results[18] || [],
+      currentPriceRevisions:results[19] || [],
+      currentPriceRowResults:results[20] || [],
+      gprPlans:results[21] || [],
+      gprMonths:results[22] || [],
+      gprFloorAssignments:results[23] || [],
+      gprRowAssignments:results[24] || [],
+      avrDocuments:results[25] || [],
+      avrVersions:results[26] || [],
+      avrRows:results[27] || [],
+      accountingRows:results[28] || [],
+      accountingCodeLinks:results[29] || [],
+      accountingPeriodSources:results[30] || [],
+      s29Documents:results[31] || [],
+      s29Rows:results[32] || [],
+      s29Allocations:results[33] || [],
+      s29Carryovers:results[34] || [],
+      s29CarryoverSettlements:results[35] || []
     };
   }
 
