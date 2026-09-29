@@ -1731,7 +1731,9 @@
   }
 
   function supplierMatchName(value) {
-    return importNorm(value).replace(/ё/g,"е");
+    return importNorm(value)
+      .replace(/ё/g,"е")
+      .replace(/\(\s*у\s*\)/g,"у");
   }
 
   function supplierColumnLabel(table,header,col) {
@@ -2141,9 +2143,11 @@
     const prices=Array.isArray(raw.prices)?raw.prices:[];
     const piecePrices=prices.filter(function(p){return (p.price_basis||"piece")==="piece";});
     const m3Prices=prices.filter(function(p){return p.price_basis==="m3";});
-    const piece=piecePrices.length===1?Number(piecePrices[0].unit_price_gross):null;
+    const piecePrice=supplierApplicablePrice(piecePrices);
+    const m3Price=supplierApplicablePrice(m3Prices);
+    const piece=piecePrice?Number(piecePrice.unit_price_gross):null;
     const supplierVolume=raw.unit_volume_m3==null?null:Number(raw.unit_volume_m3);
-    const perM3=m3Prices.length===1?Number(m3Prices[0].unit_price_gross):(piece!=null&&supplierVolume>0?piece/supplierVolume:null);
+    const perM3=m3Price?Number(m3Price.unit_price_gross):(piece!=null&&supplierVolume>0?piece/supplierVolume:null);
     const reasons=[];
     const candidates=snapshot.map(function(s){return {row:s,score:supplierCandidateScore(project,s)};}).filter(function(x){return x.score>0;}).sort(function(a,b){return b.score-a.score;});
     if(link&&!source) reasons.push("Нет в новой версии");
