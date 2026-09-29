@@ -1940,3 +1940,12 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   overflow:hidden!important;
   text-overflow:ellipsis!important;
 }
+
+
+/* GPR estimate identity columns must visually match the Estimate tab. */
+#workArea .gpr-table thead .e-sticky-2,
+#workArea .gpr-table thead .e-sticky-2 .header-label{
+  white-space:nowrap!important;
+  overflow-wrap:normal!important;
+  word-break:normal!important;
+}
