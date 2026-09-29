@@ -2308,7 +2308,7 @@
     const head = '<thead>' +
       '<tr>' +
         '<th class="e-sticky-1" rowspan="2">Тип</th>' +
-        '<th class="e-sticky-2 filterable-head" rowspan="2">' + filterHeader("Поз. сметы","position") + '</th>' +
+        '<th class="e-sticky-2" rowspan="2">Поз. сметы</th>' +
         '<th class="e-sticky-3 filterable-head" rowspan="2">' + filterHeader("Обоснование","basis") + '</th>' +
         '<th class="e-sticky-4 filterable-head" rowspan="2">' + filterHeader("Наименование","name") + '</th>' +
         '<th rowspan="2">Ед. изм.</th>' +
