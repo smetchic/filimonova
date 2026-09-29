@@ -2043,15 +2043,13 @@
       }
       const g = grouped.get(key);
       if (r.section.is_stairs) {
-        const s1Total=Number(r.total||0)/2;
-        const s2Total=Number(r.total||0)/2;
-        g.bySection["Секция 1"] += s1Total;
-        g.bySection["Секция 2"] += s2Total;
+        // Stairs are a house-wide block. Never invent a 50/50 S1/S2 allocation.
+        g.houseOnly=true;
+        g.houseTotal=Number(g.houseTotal||0)+Number(r.total||0);
+        if(!g.houseByLevel) g.houseByLevel=new Map();
         levels.forEach(function(code) {
           const v=Number(qtyAt(r,code)||0);
-          if (!v) return;
-          g.byLevel["Секция 1"].set(code,Number(g.byLevel["Секция 1"].get(code)||0)+v/2);
-          g.byLevel["Секция 2"].set(code,Number(g.byLevel["Секция 2"].get(code)||0)+v/2);
+          if (v) g.houseByLevel.set(code,Number(g.houseByLevel.get(code)||0)+v);
         });
       } else {
         const bs = r.section.building_section;
@@ -2148,7 +2146,7 @@
                 body += '<td class="summary-col num">' + fmt0((r.byLevel["Секция 1"] && r.byLevel["Секция 1"].get(code)) || 0) + '</td>';
                 body += '<td class="summary-col num">' + fmt0((r.byLevel["Секция 2"] && r.byLevel["Секция 2"].get(code)) || 0) + '</td>';
               });
-              body += '<td class="summary-col num strong-num">' + fmt0(s1+s2) + '</td>';
+              body += '<td class="summary-col num strong-num">' + fmt0(r.houseOnly?Number(r.houseTotal||0):s1+s2) + '</td>';
               body += '</tr>';
             });
           });
@@ -2163,12 +2161,10 @@
               const s2=Number(r.bySection["Секция 2"]||0);
               body += '<tr class="data-row" data-material-id="'+esc(r.catalogItemId||"")+'"><td class="sticky-1 center">'+(index+1)+'</td>'+
                 filterCell("mark",r.mark,esc(r.mark),"sticky-2")+filterCell("name",r.name,esc(r.name),"sticky-3")+
-                '<td class="qty-col num">'+fmt0(s1)+'</td><td class="vol-col num">'+fmt(s1*r.volumePerPiece)+'</td>'+
-                '<td class="qty-col num">'+fmt0(s2)+'</td><td class="vol-col num">'+fmt(s2*r.volumePerPiece)+'</td>'+
-                levels.map(function(code){
-                  return '<td class="summary-col num">'+fmt0((r.byLevel["Секция 1"]&&r.byLevel["Секция 1"].get(code))||0)+'</td>'+
-                    '<td class="summary-col num">'+fmt0((r.byLevel["Секция 2"]&&r.byLevel["Секция 2"].get(code))||0)+'</td>';
-                }).join("")+'<td class="summary-col num strong-num">'+fmt0(s1+s2)+'</td></tr>';
+                '<td class="qty-col num">—</td><td class="vol-col num">—</td>'+
+                '<td class="qty-col num">—</td><td class="vol-col num">—</td>'+
+                levels.map(function(){return '<td class="summary-col num">—</td><td class="summary-col num">—</td>';}).join("")+
+                '<td class="summary-col num strong-num">'+fmt0(r.houseTotal||0)+'</td></tr>';
             });
           }
         }
