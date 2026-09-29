@@ -571,31 +571,30 @@
       return Math.max(measureEngineeringText("Тип"),measureEngineeringText("М"),measureEngineeringText("Р"));
     }
     if(index===1){
-      let max=measureEngineeringText("Поз. см.");
+      let max=0;
       rows.forEach(function(r){max=Math.max(max,measureEngineeringText(r.position||""));});
       return max;
     }
     if(index===2){
-      let max=measureEngineeringText("Обоснование",28);
+      let max=0;
       rows.forEach(function(r){max=Math.max(max,measureEngineeringText(estimateDisplayBasis(r)||""));});
-      return Math.min(720,max);
+      return max;
     }
     if(index===3){
-      // Size from canonical project material nomenclature, not raw estimate text.
-      // This avoids unlinked/legacy material descriptions stretching the column.
-      let max=measureEngineeringText("Наименование",28);
-      (dataState.catalogItems||[]).filter(function(item){return !item.archived_at;}).forEach(function(item){
-        max=Math.max(max,measureEngineeringText(item.name||""));
+      // Work names never participate in the material-name column width.
+      let max=0;
+      rows.filter(function(r){return r.row_type==="material";}).forEach(function(r){
+        max=Math.max(max,measureEngineeringText(estimateDisplayName(r)||""));
       });
-      return Math.min(340,max);
+      return max;
     }
     if(index===4){
-      // Units of work rows do not participate; material units are short ("шт").
-      let max=measureEngineeringText("Ед. изм.");
+      // Units of work rows and the two-line header do not affect the width.
+      let max=0;
       rows.filter(function(r){return r.row_type==="material";}).forEach(function(r){
         max=Math.max(max,measureEngineeringText(r.unit||""));
       });
-      return Math.min(110,max);
+      return max;
     }
     return null;
   }
@@ -786,6 +785,14 @@
         if(tableColumnLocked(table,i)) return Math.max(min,intrinsicColumnWidth(table,i));
         return Number.isFinite(n) && n>=min ? n : min;
       });
+    }
+    if(table.classList.contains("est-table")) {
+      const policyKey="filimonova.tablewidths."+currentViewKey()+"."+(table.dataset.tableKey||table.className.replace(/\s+/g,"."))+".identity-policy";
+      if(localStorage.getItem(policyKey)!=="3") {
+        [1,2,3,4].forEach(function(i){if(i<count) widths[i]=Math.max(tableColumnMinimum(table,i),intrinsicColumnWidth(table,i));});
+        localStorage.setItem(policyKey,"3");
+        saveTableWidths(table,widths);
+      }
     }
     Array.from(cg.children).forEach(function(col,i){
       col.style.width=widths[i]+"px";
@@ -2554,10 +2561,10 @@
     const head = '<thead>' +
       '<tr>' +
         '<th class="e-sticky-1" rowspan="2">Тип</th>' +
-        '<th class="e-sticky-2" rowspan="2">Поз. см.</th>' +
+        '<th class="e-sticky-2" rowspan="2"><span class="column-header-stack"><span>Поз.</span><span>см.</span></span></th>' +
         '<th class="e-sticky-3 filterable-head" rowspan="2">' + filterHeader("Обоснование","basis") + '</th>' +
         '<th class="e-sticky-4 filterable-head" rowspan="2">' + filterHeader("Наименование","name") + '</th>' +
-        '<th rowspan="2">Ед. изм.</th>' +
+        '<th rowspan="2"><span class="column-header-stack"><span>Ед.</span><span>изм.</span></span></th>' +
         '<th rowspan="2">Количество</th>' +
         '<th rowspan="2">Остаток по смете</th>' +
         '<th colspan="2">Зарплата</th>' +
@@ -2867,7 +2874,7 @@
 
     $("workArea").className="work-area table-work";
     $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table est-table gpr-table" data-table-key="gpr-v2"><thead>'+
-      '<tr><th class="e-sticky-1" rowspan="2">Тип</th><th class="e-sticky-2 filterable-head" rowspan="2">'+filterHeader("Поз. сметы","position")+'</th><th class="e-sticky-3 filterable-head" rowspan="2">'+filterHeader("Обоснование","basis")+'</th><th class="e-sticky-4 filterable-head" rowspan="2">'+filterHeader("Наименование","name")+'</th><th rowspan="2">Ед. изм.</th><th rowspan="2">Кол-во</th><th rowspan="2">Цена на начало работ</th><th rowspan="2">Стоимость на начало работ</th>'+yearHead+'</tr>'+
+      '<tr><th class="e-sticky-1" rowspan="2">Тип</th><th class="e-sticky-2 filterable-head" rowspan="2">'+filterHeader("Поз. см.","position")+'</th><th class="e-sticky-3 filterable-head" rowspan="2">'+filterHeader("Обоснование","basis")+'</th><th class="e-sticky-4 filterable-head" rowspan="2">'+filterHeader("Наименование","name")+'</th><th rowspan="2"><span class="column-header-stack"><span>Ед.</span><span>изм.</span></span></th><th rowspan="2">Кол-во</th><th rowspan="2">Цена на начало работ</th><th rowspan="2">Стоимость на начало работ</th>'+yearHead+'</tr>'+
       '<tr>'+monthHead+'</tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
 
