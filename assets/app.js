@@ -3169,45 +3169,107 @@
     return value;
   }
 
+  function gprDisplayState() {
+    if(!ui.gprDisplay){
+      let saved=null;
+      try{saved=JSON.parse(localStorage.getItem("filimonova.gpr.display")||"null");}catch(_){saved=null;}
+      ui.gprDisplay=Object.assign({
+        price:true,
+        amount:true,
+        total:true,
+        months:true,
+        index:false,
+        materials:true,
+        works:true
+      },saved||{});
+    }
+    return ui.gprDisplay;
+  }
+
+  function saveGprDisplayState() {
+    localStorage.setItem("filimonova.gpr.display",JSON.stringify(gprDisplayState()));
+  }
+
+  function gprMoneyText(value) {
+    return moneyFmt.format(Number(value||0));
+  }
+
+  function gprNumberText(value,maxDigits) {
+    return new Intl.NumberFormat("ru-RU",{maximumFractionDigits:maxDigits==null?3:maxDigits}).format(Number(value||0));
+  }
+
   function gprRowAmounts(row,e,estimateRows,m,monthList) {
     const c=rowCost(row,m);
-    const unitAtStart=Number(c.total_unit||0)*gprCurrentPriceFactor(m);
+    const factor=gprCurrentPriceFactor(m);
+    const baseUnit=Number(c.total_unit||0);
+    const unitAtStart=baseUnit*factor;
     const totalAtStart=Number(row.quantity||0)*unitAtStart;
-    const months={};
+    const months={},monthQty={},monthIndex={};
+    let totalMonths=0;
     (monthList||gprMonths()).forEach(function(month){
       const q=gprRowMonthQty(row,e,month.key,estimateRows);
-      months[month.key]=q*unitAtStart*Number(month.index||1);
+      const idx=Number(month.index||1);
+      const amount=q*unitAtStart*idx;
+      monthQty[month.key]=q;
+      monthIndex[month.key]=idx;
+      months[month.key]=amount;
+      totalMonths+=amount;
     });
-    return {unit:unitAtStart,total:totalAtStart,months:months};
+    return {
+      baseUnit:baseUnit,
+      factor:factor,
+      unit:unitAtStart,
+      total:totalAtStart,
+      totalMonths:totalMonths,
+      months:months,
+      monthQty:monthQty,
+      monthIndex:monthIndex
+    };
   }
 
   function gprGroupRow(label,rows,e,key,depth,m,monthList) {
     registerGroup(key);
+    const display=gprDisplayState();
     const activeMonths=monthList||gprMonths();
     const monthTotals={};
-    let total=0;
+    let startTotal=0,totalMonths=0;
     activeMonths.forEach(function(mon){monthTotals[mon.key]=0;});
     rows.forEach(function(r){
       const a=gprRowAmounts(r,e,rows,m,activeMonths);
-      total+=a.total;
+      startTotal+=a.total;
+      totalMonths+=a.totalMonths;
       activeMonths.forEach(function(mon){monthTotals[mon.key]+=a.months[mon.key]||0;});
     });
     let html='<tr class="group-row group-toggle" data-group-key="'+esc(key)+'">';
     html+='<td colspan="4" class="est-group-title gpr-group-title" style="padding-left:'+(8+depth*14)+'px"><span class="group-arrow">'+groupArrow(key)+'</span>'+esc(label)+'</td>';
-    html+='<td></td><td></td><td></td><td class="num strong-num">'+money(total)+'</td>';
-    activeMonths.forEach(function(mon){html+='<td class="num gpr-month group-month">'+money(monthTotals[mon.key])+'</td>';});
+    html+='<td></td><td></td>';
+    if(display.price) html+='<td></td>';
+    if(display.amount){
+      html+='<td class="num strong-num gpr-value-cell" data-gpr-address="'+esc(label+' · Стоимость на начало работ')+'" data-gpr-formula="'+esc('Сумма строк = '+gprMoneyText(startTotal))+'">'+money(startTotal)+'</td>';
+    }
+    if(display.total){
+      const totalFormula=activeMonths.map(function(mon){return mon.label+' '+gprMoneyText(monthTotals[mon.key]||0);}).join(' + ')+' = '+gprMoneyText(totalMonths);
+      html+='<td class="num strong-num gpr-value-cell" data-gpr-address="'+esc(label+' · Стоимость всего')+'" data-gpr-formula="'+esc(totalFormula)+'">'+money(totalMonths)+'</td>';
+    }
+    if(display.months){
+      activeMonths.forEach(function(mon){
+        html+='<td class="num gpr-month group-month gpr-value-cell" data-gpr-address="'+esc(label+' · '+mon.label)+'" data-gpr-formula="'+esc('Сумма строк за '+mon.label+' = '+gprMoneyText(monthTotals[mon.key]||0))+'">'+money(monthTotals[mon.key])+'</td>';
+      });
+    }
     html+='</tr>';
     return html;
   }
 
   function renderGprPlaceholder() {
-    const m=maps(),months=gprMonths();
+    const m=maps(),months=gprMonths(),display=gprDisplayState();
     let body="";
     ui.currentGroupKeys=[];
 
     dataState.estimates.filter(function(e){return ui.estimates[e.number]!==false;}).forEach(function(e){
       let erows=dataState.estimateRows.filter(function(r){return r.estimate_id===e.id;});
       erows=erows.filter(function(r){
+        if(r.row_type==="material" && !display.materials) return false;
+        if(r.row_type==="work" && !display.works) return false;
         const displayBasis=estimateDisplayBasis(r), displayName=estimateDisplayName(r);
         return passesSearch([r.position,displayBasis,displayName,r.basis,r.name]) &&
           rowPassesColumnFilters({basis:displayBasis,name:displayName});
@@ -3218,7 +3280,7 @@
         name:function(r){return estimateDisplayName(r);}
       });
       if(!sortBucket()) erows.sort(function(x,y){return Number(x.sort_order||0)-Number(y.sort_order||0);});
-      if(!erows.length && (currentSearch()||Object.keys(filterBucket()).length)) return;
+      if(!erows.length) return;
 
       const eKey="gpr:estimate:"+e.number;
       body+=gprGroupRow("Смета №"+e.number+" · "+(e.name||""),erows,e,eKey,0,m,months);
@@ -3237,33 +3299,79 @@
           const item=estimateProjectItem(r);
           const displayBasis=estimateDisplayBasis(r);
           const displayName=estimateDisplayName(r);
+          const estimateLabel='Смета №'+e.number+' · поз. '+String(r.position||"");
           body+='<tr class="data-row '+(r.row_type==="material"?'gpr-material-row':'gpr-work-row')+'" '+(r.row_type==="material"?'data-material-id="'+esc(item?item.id:"")+'" data-material-mark="'+esc(displayBasis||"")+'"':'')+'>';
           body+='<td class="e-sticky-1 center"><span class="type-mark">'+(r.row_type==="material"?"М":"Р")+'</span></td>';
           body+=filterCell("position",r.position,esc(r.position),"e-sticky-2 center");
           body+=filterCell("basis",displayBasis,esc(displayBasis),"e-sticky-3");
           body+=filterCell("name",displayName,esc(displayName),"e-sticky-4");
-          body+='<td class="center">'+esc(r.unit||"")+'</td><td class="num">'+fmt(r.quantity)+'</td><td class="num">'+money(a.unit)+'</td><td class="num">'+money(a.total)+'</td>';
-          months.forEach(function(mon){body+='<td class="num gpr-month" title="Нарастающий прогнозный индекс: '+esc(Number(mon.index||1).toFixed(4).replace(".",","))+'">'+money(a.months[mon.key])+'</td>';});
+          body+='<td class="center">'+esc(r.unit||"")+'</td><td class="num">'+fmt(r.quantity)+'</td>';
+
+          if(display.price){
+            const formula='Базовая цена строки '+gprMoneyText(a.baseUnit)+' × коэффициент расчёта текущей цены '+Number(a.factor||0).toFixed(4).replace(".",",")+' = '+gprMoneyText(a.unit);
+            body+='<td class="num gpr-value-cell" data-gpr-address="'+esc(estimateLabel+' · Цена на начало работ')+'" data-gpr-formula="'+esc(formula)+'">'+money(a.unit)+'</td>';
+          }
+          if(display.amount){
+            const formula=gprNumberText(r.quantity,3)+' × '+gprMoneyText(a.unit)+' = '+gprMoneyText(a.total);
+            body+='<td class="num gpr-value-cell" data-gpr-address="'+esc(estimateLabel+' · Стоимость на начало работ')+'" data-gpr-formula="'+esc(formula)+'">'+money(a.total)+'</td>';
+          }
+          if(display.total){
+            const formula=months.map(function(mon){return mon.label+' '+gprMoneyText(a.months[mon.key]||0);}).join(' + ')+' = '+gprMoneyText(a.totalMonths);
+            body+='<td class="num gpr-value-cell" data-gpr-address="'+esc(estimateLabel+' · Стоимость всего')+'" data-gpr-formula="'+esc(formula)+'">'+money(a.totalMonths)+'</td>';
+          }
+          if(display.months){
+            months.forEach(function(mon){
+              const q=Number(a.monthQty[mon.key]||0),idx=Number(a.monthIndex[mon.key]||1),amount=Number(a.months[mon.key]||0);
+              const formula=gprNumberText(q,3)+' × '+gprMoneyText(a.unit)+' × '+idx.toFixed(4).replace(".",",")+' = '+gprMoneyText(amount);
+              body+='<td class="num gpr-month gpr-value-cell" data-gpr-address="'+esc(estimateLabel+' · '+mon.label)+'" data-gpr-formula="'+esc(formula)+'" title="Объём '+esc(gprNumberText(q,3))+' × цена '+esc(gprMoneyText(a.unit))+' × индекс '+esc(idx.toFixed(4).replace(".",","))+'">'+money(amount)+'</td>';
+            });
+          }
           body+='</tr>';
         });
       });
     });
 
-    if(!body) body=tableMessage(months.length?"Нет строк по текущему фильтру.":"Сначала задайте период ГПР.",8+months.length);
+    const dynamicCols=(display.price?1:0)+(display.amount?1:0)+(display.total?1:0)+(display.months?months.length:0);
+    if(!body) body=tableMessage(months.length?"Нет строк по текущему фильтру.":"Сначала задайте период ГПР.",6+dynamicCols);
 
     const years=[];
-    months.forEach(function(mon){
-      let y=years.find(function(x){return x.year===mon.year;});
-      if(!y){y={year:mon.year,count:0};years.push(y);}
-      y.count++;
-    });
+    if(display.months){
+      months.forEach(function(mon){
+        let y=years.find(function(x){return x.year===mon.year;});
+        if(!y){y={year:mon.year,count:0};years.push(y);}
+        y.count++;
+      });
+    }
+    const headerRows=display.months?(display.index?3:2):1;
     const yearHead=years.map(function(y){return '<th class="gpr-year" colspan="'+y.count+'">'+esc(y.year)+'</th>';}).join("");
-    const monthHead=months.map(function(mon){return '<th class="gpr-month-head" title="Индекс '+esc(Number(mon.index||1).toFixed(4).replace(".",","))+'">'+esc(mon.month)+'</th>';}).join("");
+    const monthHead=months.map(function(mon){return '<th class="gpr-month-head">'+esc(mon.month)+'</th>';}).join("");
+    const indexHead=months.map(function(mon){return '<th class="gpr-index-head" title="Нарастающий прогнозный индекс">'+esc(Number(mon.index||1).toFixed(4).replace(".",","))+'</th>';}).join("");
 
-    $("workArea").className="work-area table-work";
-    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table est-table gpr-table" data-table-key="gpr-v4"><thead>'+
-      '<tr><th class="e-sticky-1" rowspan="2">Тип</th><th class="e-sticky-2" rowspan="2">Поз. см.</th><th class="e-sticky-3 filterable-head" rowspan="2">'+filterHeader("Обоснование","basis")+'</th><th class="e-sticky-4 filterable-head" rowspan="2">'+filterHeader("Наименование","name")+'</th><th rowspan="2"><span class="column-header-stack"><span>Ед.</span><span>изм.</span></span></th><th rowspan="2">Кол-во</th><th rowspan="2">Цена на начало работ</th><th rowspan="2">Стоимость на начало работ</th>'+yearHead+'</tr>'+
-      '<tr>'+monthHead+'</tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    let top='<tr>'+
+      '<th class="e-sticky-1" rowspan="'+headerRows+'">Тип</th>'+
+      '<th class="e-sticky-2" rowspan="'+headerRows+'">Поз. см.</th>'+
+      '<th class="e-sticky-3 filterable-head" rowspan="'+headerRows+'">'+filterHeader("Обоснование","basis")+'</th>'+
+      '<th class="e-sticky-4 filterable-head" rowspan="'+headerRows+'">'+filterHeader("Наименование","name")+'</th>'+
+      '<th rowspan="'+headerRows+'"><span class="column-header-stack"><span>Ед.</span><span>изм.</span></span></th>'+
+      '<th rowspan="'+headerRows+'">Кол-во</th>';
+    if(display.price) top+='<th rowspan="'+headerRows+'">Цена на начало работ</th>';
+    if(display.amount) top+='<th rowspan="'+headerRows+'">Стоимость на начало работ</th>';
+    if(display.total) top+='<th rowspan="'+headerRows+'">Стоимость всего</th>';
+    if(display.months) top+=yearHead;
+    top+='</tr>';
+
+    let thead='<thead>'+top;
+    if(display.months) thead+='<tr>'+monthHead+'</tr>';
+    if(display.months&&display.index) thead+='<tr>'+indexHead+'</tr>';
+    thead+='</thead>';
+
+    $("workArea").className="work-area table-work gpr-work";
+    $("workArea").innerHTML='<div class="formula-strip gpr-formula-strip">'+
+      '<div class="formula-address">—</div>'+
+      '<div class="gpr-formula-fx">fx</div>'+
+      '<div class="formula-expression"><span class="formula-placeholder">Выберите числовую ячейку от «Цена на начало работ» и правее</span></div>'+
+      '</div>'+
+      '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table est-table gpr-table" data-table-key="gpr-v5">'+thead+'<tbody>'+body+'</tbody></table></div></div>';
   }
 
   function openGprSettingsModal() {
@@ -3438,20 +3546,57 @@
   }
 
   function openGprDisplay() {
+    const state=gprDisplayState();
     let pop=document.getElementById("gprDisplayPopover");
     if(!pop){
       pop=document.createElement("div");
       pop.id="gprDisplayPopover";
       pop.className="gpr-display-popover";
-      pop.innerHTML='<strong>Отображение</strong><label><input type="checkbox" checked data-gpr-show="price"> Цена на начало работ</label><label><input type="checkbox" checked data-gpr-show="amount"> Стоимость на начало работ</label><label><input type="checkbox" checked data-gpr-show="months"> Месячные суммы</label><label><input type="checkbox" data-gpr-show="index"> Индекс месяца</label><label><input type="checkbox" checked> Материалы</label><label><input type="checkbox" checked> Работы</label>';
       document.body.appendChild(pop);
     }
+    const options=[
+      ["price","Цена на начало работ"],
+      ["amount","Стоимость на начало работ"],
+      ["total","Стоимость всего"],
+      ["months","Месячные суммы"],
+      ["index","Индекс месяца"],
+      ["materials","Материалы"],
+      ["works","Работы"]
+    ];
+    pop.innerHTML='<strong>Отображение</strong>'+options.map(function(opt){
+      return '<label><input type="checkbox" data-gpr-show="'+opt[0]+'" '+(state[opt[0]]?'checked':'')+'> '+opt[1]+'</label>';
+    }).join("");
+    pop.querySelectorAll("[data-gpr-show]").forEach(function(input){
+      input.onchange=function(){
+        state[input.dataset.gprShow]=input.checked;
+        if(input.dataset.gprShow==="index" && input.checked) state.months=true;
+        saveGprDisplayState();
+        pop.classList.remove("open");
+        renderPage("estimates",2);
+      };
+    });
     const btn=document.querySelector('[data-gpr-action="display"]');
     if(!btn) return;
     const r=btn.getBoundingClientRect();
     pop.style.right=Math.max(8,window.innerWidth-r.right)+"px";
     pop.style.top=(r.bottom+5)+"px";
     pop.classList.toggle("open");
+  }
+
+  function wireGprFormulaBar() {
+    const strip=document.querySelector(".gpr-formula-strip");
+    if(!strip) return;
+    const address=strip.querySelector(".formula-address");
+    const expr=strip.querySelector(".formula-expression");
+    document.querySelectorAll(".gpr-value-cell").forEach(function(cell){
+      cell.onclick=function(e){
+        e.stopPropagation();
+        document.querySelectorAll(".gpr-value-cell.gpr-formula-active").forEach(function(x){x.classList.remove("gpr-formula-active");});
+        cell.classList.add("gpr-formula-active");
+        address.textContent=cell.dataset.gprAddress||"—";
+        expr.textContent=cell.dataset.gprFormula||"";
+      };
+    });
   }
 
   function wireGprControls() {
@@ -3463,6 +3608,7 @@
     if(spread) spread.onclick=openGprAllocationModal;
     if(display) display.onclick=openGprDisplay;
     if(excel) excel.onclick=function(){alert("Экспорт ГПР формируется только в Excel (.xlsx).");};
+    wireGprFormulaBar();
   }
 
   function renderSupplySummary() {
