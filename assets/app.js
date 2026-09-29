@@ -39,6 +39,14 @@
       showHomeTotal: localStorage.getItem("filimonova.spec.showHomeTotal") === "1"
     },
     estimates: { "200": true, "201": true, "202": true, "203": true, "207": true },
+    avr: {
+      period: localStorage.getItem("filimonova.avr.period") || "",
+      registryPeriod: localStorage.getItem("filimonova.avr.registryPeriod") || "all",
+      versionId: ""
+    },
+    s29: {
+      period: localStorage.getItem("filimonova.s29.period") || ""
+    },
     columnFilters: {},
     columnSort: {}
   };
@@ -244,7 +252,8 @@
       fetchAllRows("s29_rows","id,document_id,catalog_item_id,avr_quantity_pieces,volume_per_piece_snapshot_m3,avr_quantity_m3,written_off_m3,economy_m3,overrun_m3,note",function(q){return q.eq("project_id",project.id);}),
       fetchAllRows("s29_allocations","id,s29_row_id,accounting_row_id,allocated_m3",function(q){return q.eq("project_id",project.id);}),
       fetchAllRows("s29_carryovers","id,origin_document_id,origin_row_id,catalog_item_id,kind,origin_month,created_m3,created_at",function(q){return q.eq("project_id",project.id);}),
-      fetchAllRows("s29_carryover_settlements","id,carryover_id,settlement_document_id,settlement_month,settled_m3,created_at",function(q){return q.eq("project_id",project.id);})
+      fetchAllRows("s29_carryover_settlements","id,carryover_id,settlement_document_id,settlement_month,settled_m3,created_at",function(q){return q.eq("project_id",project.id);}),
+      fetchAllRows("imports","id,domain,source_name,source_period,status,report,imported_at,source_slot,applied_at",function(q){return q.eq("project_id",project.id).in("domain",["avr","accounting"]).order("imported_at",{ascending:false});})
     ];
     const results = await Promise.all(requests);
     dataState = {
@@ -286,7 +295,8 @@
       s29Rows:results[32] || [],
       s29Allocations:results[33] || [],
       s29Carryovers:results[34] || [],
-      s29CarryoverSettlements:results[35] || []
+      s29CarryoverSettlements:results[35] || [],
+      imports:results[36] || []
     };
   }
 
@@ -1960,6 +1970,8 @@
       el.innerHTML='<button class="action" data-estimate-import-open type="button">Импорт Excel</button><button class="action more" type="button" aria-label="Ещё">…</button>';
       const btn=el.querySelector("[data-estimate-import-open]");
       if(btn) btn.onclick=openEstimateImportModal;
+    }else if(pageKey==="avr" || pageKey==="s29"){
+      el.innerHTML="";
     }else{
       el.innerHTML='<button class="action" type="button">Настроить</button><button class="action more" type="button" aria-label="Ещё">…</button>';
     }
@@ -2007,13 +2019,35 @@
         '<button class="context-link" type="button">Сентябрь 2026 ▾</button>';
     }
     if (pageKey === "avr") {
-      if (tab === 0) return '<button class="context-link" type="button">Месяц ▾</button><span>·</span><button class="context-link" type="button">АВР ▾</button><span>·</span><button class="context-link" type="button">Версия ▾</button><span>·</span><span class="context-muted">Статус: нет акта</span>';
-      if (tab === 1) return '<button class="context-link" type="button">Период: Весь период ▾</button><button class="context-link" type="button">Импорт Excel АВР</button>';
+      if (tab === 0) {
+        const doc=selectedAvrDocument();
+        const version=selectedAvrVersion();
+        const versions=doc?versionsForDocument(doc.id):[];
+        return '<span class="context-caption">Месяц:</span>'+monthSelectHtml(ui.avr.period,'data-avr-period',false)+'<span>·</span><span class="context-caption">АВР:</span><strong>'+esc(doc&&doc.display_number||"нет")+'</strong><span>·</span><span class="context-caption">Версия:</span><select class="execution-select" data-avr-version '+(!versions.length?'disabled':'')+'>'+(!versions.length?'<option>—</option>':versions.map(function(v){return '<option value="'+v.id+'"'+(version&&v.id===version.id?' selected':'')+'>v'+v.version_no+'</option>';}).join(""))+'</select><span>·</span><span class="execution-status '+(version?version.state:'draft')+'">'+esc(avrStatus(version))+'</span>';
+      }
+      if (tab === 1) {
+        const filter=ui.avr.registryPeriod||"all";
+        return '<span class="context-caption">Период:</span>'+monthSelectHtml(filter,'data-avr-registry-period',true)+'<span class="spacer"></span><input class="execution-file" data-avr-file type="file" accept=".xlsx,.xls,.xlsm" hidden><button class="context-link" data-avr-import type="button" '+(filter==="all"?'disabled':'')+'>Импорт Excel АВР</button>';
+      }
       return buildEstimateContext(0);
     }
     if (pageKey === "s29") {
-      if (tab === 0) return '<button class="context-link" type="button">Месяц ▾</button><span>·</span><button class="context-link" type="button">АВР: нет ▾</button><span>·</span><span class="context-muted">остатки на дату —</span><span>·</span><span class="context-muted">бух. импорт —</span>';
-      return '<span class="context-muted">Контекст текущего представления</span>';
+      if (tab === 0) {
+        const doc=selectedS29Document();
+        const avrDoc=(dataState.avrDocuments||[]).find(function(x){return periodKey(x.period_month)===ui.s29.period;});
+        const signed=avrDoc?versionsForDocument(avrDoc.id).find(function(v){return v.state==="signed"||v.signed_at;}):null;
+        const periodSource=(dataState.accountingPeriodSources||[]).find(function(x){return periodKey(x.period_month)===ui.s29.period;});
+        const source=periodSource?(dataState.imports||[]).find(function(x){return x.id===periodSource.import_id;}):null;
+        const stale=!!doc&&!!signed&&!!periodSource&&(doc.avr_version_id!==signed.id||doc.accounting_import_id!==periodSource.import_id);
+        let actions='<button class="context-link" data-s29-excel type="button" '+(!doc?'disabled':'')+'>Сформировать Excel</button>';
+        if(signed&&periodSource&&(!doc||doc.status!=="fixed")) actions='<button class="context-link" data-s29-calculate type="button">'+(doc?(stale?'АВР месяца изменился · Обновить данные':'Пересчитать'):'Рассчитать С-29')+'</button>'+actions;
+        if(doc&&doc.status!=="fixed") actions+='<button class="context-link" data-s29-fix="'+doc.id+'" type="button">Зафиксировать</button>';
+        if(doc&&doc.status==="fixed") actions+='<span class="execution-status signed">Зафиксирован</span>';
+        return '<span class="context-caption">Месяц:</span>'+monthSelectHtml(ui.s29.period,'data-s29-period',false)+'<span>·</span><strong>'+(signed?'АВР v'+signed.version_no:'АВР: нет')+'</strong><span>·</span><span class="context-muted">бух. импорт '+esc(source&&source.source_name||"—")+'</span><span class="spacer"></span>'+actions;
+      }
+      if(tab===1) return '<span class="context-caption">Месяц:</span>'+monthSelectHtml(ui.s29.period,'data-accounting-period',false)+'<span class="context-muted">immutable snapshot</span><span class="spacer"></span><input class="execution-file" data-accounting-file type="file" accept=".xlsx,.xls,.xlsm" hidden><button class="context-link" data-accounting-import type="button">Импорт бухгалтерии</button>';
+      if(tab===2) return '<span class="context-caption">Сопоставление кодов бухгалтерии с проектной номенклатурой</span>';
+      return '<span class="context-caption">FIFO: сначала погашается экономия предыдущих месяцев</span>';
     }
     if (pageKey === "supply") {
       if (tab === 1) return '<span class="context-caption">Документы поставки</span><span>Белые ТТН фиксируют фактическое поступление сразу; зелёные ТТН документально подтверждают его.</span><span class="spacer"></span><span class="context-muted">Накладные будут подключены к данным поставки</span>';
@@ -2038,7 +2072,7 @@
     if (pageKey === "spec") return true;
     if (pageKey === "estimates") return tab === 0;
     if (pageKey === "supply") return tab === 0 || tab === 2;
-    if (pageKey === "avr") return tab === 2;
+    if (pageKey === "avr") return tab === 0 || tab === 2;
     return false;
   }
 
@@ -3112,55 +3146,254 @@
       days.map(function(d){return '<th class="day-cell">'+d+'</th>';}).join("") + '</tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
 
+  function exFmt(value) { return numFmt.format(Number(value)||0); }
+  function exFmt0(value) { return new Intl.NumberFormat("ru-RU",{maximumFractionDigits:0}).format(Number(value)||0); }
+  function exMoney(value) { return moneyFmt.format(Number(value)||0); }
+
+  function periodKey(value) {
+    return String(value || "").slice(0,7);
+  }
+
+  function periodDate(value) {
+    const key=periodKey(value);
+    return key ? key+"-01" : "";
+  }
+
+  function periodLabel(value,short) {
+    const key=periodKey(value);
+    if(!key) return "—";
+    const parts=key.split("-");
+    const date=new Date(Number(parts[0]),Number(parts[1])-1,1);
+    const text=new Intl.DateTimeFormat("ru-RU",{month:short?"short":"long",year:"numeric"}).format(date).replace(" г.","");
+    return text.charAt(0).toUpperCase()+text.slice(1);
+  }
+
+  function dateTimeLabel(value) {
+    if(!value) return "—";
+    const date=new Date(value);
+    return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat("ru-RU",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}).format(date);
+  }
+
+  function executionPeriods() {
+    const set=new Set();
+    (dataState.avrDocuments||[]).forEach(function(x){if(periodKey(x.period_month)) set.add(periodKey(x.period_month));});
+    (dataState.accountingPeriodSources||[]).forEach(function(x){if(periodKey(x.period_month)) set.add(periodKey(x.period_month));});
+    (dataState.s29Documents||[]).forEach(function(x){if(periodKey(x.period_month)) set.add(periodKey(x.period_month));});
+    (dataState.gprMonths||[]).forEach(function(x){if(periodKey(x.month)) set.add(periodKey(x.month));});
+    const now=new Date();
+    for(let i=0;i<12;i++) set.add(now.getFullYear()+"-"+String(i+1).padStart(2,"0"));
+    return Array.from(set).sort();
+  }
+
+  function monthSelectHtml(value,attr,includeAll) {
+    let html=includeAll?'<option value="all"'+(value==="all"?' selected':'')+'>Весь период</option>':"";
+    executionPeriods().forEach(function(key){html+='<option value="'+key+'"'+(key===value?' selected':'')+'>'+esc(periodLabel(key,false))+'</option>';});
+    return '<select class="execution-select" '+attr+'>'+html+'</select>';
+  }
+
+  function versionsForDocument(documentId) {
+    return (dataState.avrVersions||[]).filter(function(v){return v.document_id===documentId;}).sort(function(a,b){return Number(b.version_no)-Number(a.version_no);});
+  }
+
+  function sourceVersionForDocument(doc) {
+    const versions=versionsForDocument(doc.id);
+    return versions.find(function(v){return v.state==="signed" || !!v.signed_at;}) || versions.find(function(v){return v.state==="in_use";}) || versions[0] || null;
+  }
+
+  function selectedAvrDocument() {
+    let key=ui.avr.period;
+    const docs=(dataState.avrDocuments||[]).slice().sort(function(a,b){return String(b.period_month).localeCompare(String(a.period_month));});
+    if(!key){key=docs.length?periodKey(docs[0].period_month):periodKey(new Date().toISOString());ui.avr.period=key;}
+    return docs.find(function(d){return periodKey(d.period_month)===key;}) || null;
+  }
+
+  function selectedAvrVersion() {
+    const doc=selectedAvrDocument();
+    if(!doc) return null;
+    const versions=versionsForDocument(doc.id);
+    const requested=versions.find(function(v){return v.id===ui.avr.versionId;});
+    return requested || sourceVersionForDocument(doc);
+  }
+
+  function importForVersion(version) {
+    return version ? (dataState.imports||[]).find(function(x){return x.id===version.source_import_id;}) : null;
+  }
+
+  function avrStatus(version) {
+    if(!version) return "Нет акта";
+    if(version.state==="signed" || version.signed_at) return "Подписан";
+    if(version.state==="in_use") return "Используется";
+    return "Черновик";
+  }
+
+  function renderExecutionMetrics(items) {
+    return '<div class="execution-metrics">'+items.map(function(item){return '<div class="execution-metric'+(item.tone?' '+item.tone:'')+'"><span>'+esc(item.label)+'</span><strong>'+item.value+'</strong><small>'+esc(item.note||"")+'</small></div>';}).join("")+'</div>';
+  }
+
   function renderAvr(tab) {
-    if (tab === 2) {
-      renderKs6();
-      return;
+    if(tab===2){renderKs6();return;}
+    if(tab===1){renderAvrRegistry();return;}
+    const doc=selectedAvrDocument();
+    const version=selectedAvrVersion();
+    const rows=version?(dataState.avrRows||[]).filter(function(x){return x.version_id===version.id;}):[];
+    const estimateRowMap=new Map(dataState.estimateRows.map(function(x){return [x.id,x];}));
+    const materialRows=rows.filter(function(x){const r=estimateRowMap.get(x.estimate_row_id);return r&&r.row_type==="material";});
+    const qty=materialRows.reduce(function(s,x){return s+Number(x.quantity||0);},0);
+    const m3=materialRows.reduce(function(s,x){return s+Number(x.quantity_m3||0);},0);
+    const amount=rows.reduce(function(s,x){return s+Number(x.amount||0);},0);
+    let body="";
+    ui.currentGroupKeys=[];
+    if(version){
+      dataState.estimates.forEach(function(estimate){
+        const estimateRows=rows.map(function(x){return {fact:x,row:estimateRowMap.get(x.estimate_row_id)};}).filter(function(x){return x.row&&x.row.estimate_id===estimate.id&&passesSearch([x.row.position,x.row.basis,x.row.name]);});
+        if(!estimateRows.length) return;
+        const estimateKey="avr:"+estimate.id;
+        registerGroup(estimateKey);
+        body+='<tr class="group-row group-toggle" data-group-key="'+estimateKey+'"><td colspan="6"><span class="group-arrow">'+groupArrow(estimateKey)+'</span>'+esc("Смета №"+estimate.number+" · "+estimate.name)+'</td><td class="num">'+exFmt(estimateRows.reduce(function(s,x){return s+Number(x.fact.quantity||0);},0))+'</td><td class="num">'+exFmt(estimateRows.reduce(function(s,x){return s+Number(x.fact.quantity_m3||0);},0))+'</td><td class="num">'+exMoney(estimateRows.reduce(function(s,x){return s+Number(x.fact.amount||0);},0))+'</td></tr>';
+        if(ui.collapsed.has(estimateKey)) return;
+        const sections=dataState.estimateSections.filter(function(s){return s.estimate_id===estimate.id;});
+        sections.forEach(function(section){
+          const sectionRows=estimateRows.filter(function(x){return x.row.section_id===section.id;});
+          if(!sectionRows.length) return;
+          const sectionKey=estimateKey+":"+section.id;
+          registerGroup(sectionKey);
+          body+='<tr class="group-row group-toggle group-level-2" data-group-key="'+sectionKey+'"><td colspan="9"><span class="group-arrow">'+groupArrow(sectionKey)+'</span>'+esc(section.title)+'</td></tr>';
+          if(ui.collapsed.has(sectionKey)) return;
+          sectionRows.forEach(function(x){
+            const r=x.row;const f=x.fact;const item=(dataState.catalogItems||[]).find(function(c){return c.id===r.catalog_item_id;});
+            body+='<tr class="data-row"><td class="center"><span class="row-type '+(r.row_type==="work"?'work':'material')+'">'+(r.row_type==="work"?'Р':'М')+'</span></td><td class="center">'+esc(r.position||"")+'</td><td>'+esc(estimateDisplayBasis(r))+'</td><td>'+esc(item&&item.mark||"")+'</td><td>'+esc(estimateDisplayName(r))+'</td><td class="center">'+esc(r.unit||"")+'</td><td class="num">'+exFmt(f.quantity)+'</td><td class="num">'+(r.row_type==="material"?exFmt(f.quantity_m3):"—")+'</td><td class="num">'+exMoney(f.amount)+'</td></tr>';
+          });
+        });
+      });
     }
-    if (tab === 1) {
-      $("workArea").className = "work-area table-work";
-      let body=(dataState.avrDocuments||[]).map(function(d){
-        const versions=(dataState.avrVersions||[]).filter(function(v){return v.document_id===d.id;}).sort(function(a,b){return Number(b.version_no)-Number(a.version_no);});
-        if(!versions.length) return '<tr class="data-row"><td>'+esc(d.period_month||"")+'</td><td>'+esc(d.display_number||"")+'</td><td>—</td><td>—</td><td>Без версии</td></tr>';
-        return versions.map(function(v){
-          const status=v.signed_at?"Подписан":v.state==="active"?"Используется":v.state==="draft"?"Черновик":v.state;
-          return '<tr class="data-row"><td>'+esc(d.period_month||"")+'</td><td>'+esc(d.display_number||"")+'</td><td>—</td><td class="num">'+esc(v.version_no)+'</td><td>'+esc(status||"")+'</td></tr>';
-        }).join("");
-      }).join("");
-      if(!body) body=tableMessage("АВР ещё не импортировались.",5);
-      $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table compact-registry"><thead><tr><th>Период</th><th>№ АВР</th><th>Файл</th><th>Версия</th><th>Статус</th></tr></thead><tbody>' + body + '</tbody></table></div></div>';
-      return;
-    }
-    $("workArea").className = "work-area table-work";
-    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table avr-table"><thead><tr><th>Тип</th><th>Поз. сметы</th><th>Обоснование</th><th>Марка</th><th>Наименование</th><th>Ед. изм.</th><th>Кол-во в акте</th><th>Кол-во, м³</th><th>Стоимость по акту</th></tr></thead><tbody>' + tableMessage("Для тестовой базы текущий АВР ещё не создан.",9) + '</tbody></table></div></div>';
+    if(!body) body=tableMessage(doc?"В выбранной версии нет строк АВР.":"Для выбранного месяца АВР ещё не импортирован.",9);
+    $("workArea").className="work-area execution-work";
+    $("workArea").innerHTML=renderExecutionMetrics([
+      {label:"Панелей в акте",value:exFmt0(qty)+" шт.",note:materialRows.length+" позиций"},
+      {label:"Объём панелей",value:exFmt(m3)+" м³",note:"по проектным объёмам"},
+      {label:"Стоимость по акту",value:exMoney(amount)+" BYN",note:"материалы и связанные работы"},
+      {label:"Версия",value:version?"v"+version.version_no:"—",note:avrStatus(version),tone:version&&version.state==="signed"?"ok":""}
+    ])+'<div class="engineering-shell execution-table"><div class="engineering-scroll"><table class="eng-table avr-table" data-table-key="avr"><thead><tr><th>Тип</th><th>Поз. сметы</th><th>Обоснование</th><th>Марка</th><th>Наименование</th><th>Ед. изм.</th><th>Кол-во в акте</th><th>Кол-во, м³</th><th>Стоимость по акту</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+  }
+
+  function renderAvrRegistry() {
+    const filter=ui.avr.registryPeriod||"all";
+    let body="";
+    (dataState.avrDocuments||[]).slice().sort(function(a,b){return String(b.period_month).localeCompare(String(a.period_month));}).forEach(function(doc){
+      if(filter!=="all"&&periodKey(doc.period_month)!==filter) return;
+      const versions=versionsForDocument(doc.id);
+      versions.forEach(function(v){
+        const source=importForVersion(v);
+        let actions='<span class="context-muted">—</span>';
+        if(v.state!=="signed"&&!v.signed_at){
+          actions=(v.state!=="in_use"?'<button class="inline-action" data-avr-use="'+v.id+'">использовать</button>':'')+'<button class="inline-action" data-avr-sign="'+v.id+'">Отметить как подписанный</button>';
+        }
+        body+='<tr class="data-row"><td>'+esc(periodLabel(doc.period_month,false))+'</td><td>'+esc(doc.display_number||"—")+'</td><td>'+esc(source&&source.source_name||"—")+'</td><td class="num">'+v.version_no+'</td><td>'+dateTimeLabel(v.created_at)+'</td><td><span class="execution-status '+esc(v.state)+'">'+esc(avrStatus(v))+'</span></td><td class="registry-actions">'+actions+'</td></tr>';
+      });
+    });
+    if(!body) body=tableMessage("АВР за выбранный период ещё не импортировались.",7);
+    $("workArea").className="work-area table-work";
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table compact-registry execution-registry"><thead><tr><th>Период</th><th>№ АВР</th><th>Файл</th><th>Версия</th><th>Импортирован</th><th>Статус</th><th>Действия</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
 
   function renderKs6() {
-    const m = maps();
-    const estimates = dataState.estimates.filter(function(e){return ui.estimates[e.number] !== false;});
-    ui.currentGroupKeys = [];
-    let body = "";
-    estimates.forEach(function(e) {
-      let rows = dataState.estimateRows.filter(function(r){return r.estimate_id===e.id && passesSearch([r.position,r.basis,r.name]) && rowPassesColumnFilters({position:r.position,basis:r.basis,name:r.name});});
-      if (!rows.length && currentSearch()) return;
-      const key = "ks6:"+e.number;
-      registerGroup(key);
-      body += '<tr class="group-row group-toggle" data-group-key="'+key+'"><td colspan="5" class="est-group-title"><span class="group-arrow">'+groupArrow(key)+'</span>'+esc("Смета №"+e.number+" · "+e.name)+'</td><td class="num">'+fmt(rows.reduce(function(a,r){return a+Number(r.quantity||0);},0))+'</td><td></td><td></td><td class="num">'+fmt(rows.reduce(function(a,r){return a+Number(r.quantity||0);},0))+'</td></tr>';
-      if (ui.collapsed.has(key) || ui.collapseLeaves) return;
-      rows.forEach(function(r) {
-        body += '<tr class="data-row"><td>'+ (r.row_type==="work"?"Р":"М") +'</td><td>'+esc(r.position)+'</td><td>'+esc(r.basis)+'</td><td>'+esc(r.name)+'</td><td>'+esc(r.unit)+'</td><td class="num">'+fmt(r.quantity)+'</td><td class="num"></td><td class="num">0</td><td class="num">'+fmt(r.quantity)+'</td></tr>';
+    const docs=(dataState.avrDocuments||[]).slice().sort(function(a,b){return String(a.period_month).localeCompare(String(b.period_month));});
+    const sources=docs.map(function(doc){return {doc:doc,version:sourceVersionForDocument(doc)};}).filter(function(x){return !!x.version;});
+    const factByVersionRow=new Map();
+    (dataState.avrRows||[]).forEach(function(x){factByVersionRow.set(x.version_id+":"+x.estimate_row_id,Number(x.quantity||0));});
+    const estimates=dataState.estimates.filter(function(e){return ui.estimates[e.number]!==false;});
+    ui.currentGroupKeys=[];
+    let body="";
+    estimates.forEach(function(e){
+      const rows=dataState.estimateRows.filter(function(r){return r.estimate_id===e.id&&passesSearch([r.position,r.basis,r.name])&&rowPassesColumnFilters({position:r.position,basis:r.basis,name:r.name});});
+      if(!rows.length&&currentSearch()) return;
+      const key="ks6:"+e.id;registerGroup(key);
+      const totalEstimate=rows.reduce(function(s,r){return s+Number(r.quantity||0);},0);
+      const monthTotals=sources.map(function(x){return rows.reduce(function(s,r){return s+(factByVersionRow.get(x.version.id+":"+r.id)||0);},0);});
+      const accrued=monthTotals.reduce(function(s,v){return s+v;},0);
+      body+='<tr class="group-row group-toggle" data-group-key="'+key+'"><td colspan="5"><span class="group-arrow">'+groupArrow(key)+'</span>'+esc("Смета №"+e.number+" · "+e.name)+'</td><td class="num">'+exFmt(totalEstimate)+'</td>'+monthTotals.map(function(v){return '<td class="num">'+exFmt(v)+'</td>';}).join("")+'<td class="num">'+exFmt(accrued)+'</td><td class="num '+(totalEstimate-accrued<0?'warning-num':'')+'">'+exFmt(totalEstimate-accrued)+'</td></tr>';
+      if(ui.collapsed.has(key)) return;
+      rows.forEach(function(r){
+        const values=sources.map(function(x){return factByVersionRow.get(x.version.id+":"+r.id)||0;});
+        const sum=values.reduce(function(s,v){return s+v;},0);const rest=Number(r.quantity||0)-sum;
+        body+='<tr class="data-row"><td class="center"><span class="row-type '+(r.row_type==="work"?'work':'material')+'">'+(r.row_type==="work"?'Р':'М')+'</span></td><td>'+esc(r.position)+'</td><td>'+esc(estimateDisplayBasis(r))+'</td><td>'+esc(estimateDisplayName(r))+'</td><td>'+esc(r.unit)+'</td><td class="num">'+exFmt(r.quantity)+'</td>'+values.map(function(v){return '<td class="num">'+exFmt(v)+'</td>';}).join("")+'<td class="num">'+exFmt(sum)+'</td><td class="num '+(rest<0?'warning-num':'')+'">'+(rest<0?'<span class="warning-icon">⚠</span>':'')+exFmt(rest)+'</td></tr>';
       });
     });
-    if (!body) body = tableMessage("Нет строк по текущему фильтру.",9);
-    $("workArea").className = "work-area table-work";
-    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table ks-table" data-table-key="ks6"><thead><tr><th>Тип</th><th class="filterable-head">'+filterHeader("Поз. сметы","position")+'</th><th class="filterable-head">'+filterHeader("Обоснование","basis")+'</th><th class="filterable-head">'+filterHeader("Наименование","name")+'</th><th>Ед. изм.</th><th>По смете</th><th>Сен. 26</th><th>Запроцентовано</th><th>Остаток</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    const columnCount=8+sources.length;
+    if(!body) body=tableMessage("Нет строк по текущему фильтру.",columnCount);
+    $("workArea").className="work-area table-work";
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table ks-table" data-table-key="ks6"><thead><tr><th>Тип</th><th class="filterable-head">'+filterHeader("Поз. сметы","position")+'</th><th class="filterable-head">'+filterHeader("Обоснование","basis")+'</th><th class="filterable-head">'+filterHeader("Наименование","name")+'</th><th>Ед. изм.</th><th>По смете</th>'+sources.map(function(x){return '<th>'+esc(periodLabel(x.doc.period_month,true))+'</th>';}).join("")+'<th>Запроцентовано</th><th>Остаток</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+  }
+
+  function selectedS29Document() {
+    let key=ui.s29.period;
+    const docs=(dataState.s29Documents||[]).slice().sort(function(a,b){return String(b.period_month).localeCompare(String(a.period_month));});
+    if(!key){key=docs.length?periodKey(docs[0].period_month):periodKey(new Date().toISOString());ui.s29.period=key;}
+    return docs.find(function(d){return periodKey(d.period_month)===key;})||null;
   }
 
   function renderS29(tab) {
-    const titles = ["Расчёт С-29","Бухгалтерия","Связи с бухгалтерией","Экономия / перерасход"];
-    $("workArea").className = "work-area content-work";
-    $("workArea").innerHTML = '<div class="review-panel"><div class="review-panel-title">'+esc(titles[tab] || "С-29")+'</div>' +
-      '<div class="review-note">Тестовые спецификации и сметы уже в базе. Для С-29 нужен подписанный АВР и бухгалтерский снимок; их пока намеренно не создаём, чтобы не подменять реальную логику фиктивным фактом.</div></div>';
+    if(tab===1){renderAccounting();return;}
+    if(tab===2){renderAccountingLinks();return;}
+    if(tab===3){renderCarryovers();return;}
+    const doc=selectedS29Document();
+    const rows=doc?(dataState.s29Rows||[]).filter(function(x){return x.document_id===doc.id;}):[];
+    const catalog=new Map(dataState.catalogItems.map(function(x){return [x.id,x];}));
+    const totalPieces=rows.reduce(function(s,x){return s+Number(x.avr_quantity_pieces||0);},0);
+    const norm=rows.reduce(function(s,x){return s+Number(x.avr_quantity_m3||0);},0);
+    const actual=rows.reduce(function(s,x){return s+Number(x.written_off_m3||0);},0);
+    const economy=rows.reduce(function(s,x){return s+Number(x.economy_m3||0);},0);
+    const overrun=rows.reduce(function(s,x){return s+Number(x.overrun_m3||0);},0);
+    let body=rows.filter(function(x){const c=catalog.get(x.catalog_item_id)||{};return passesSearch([c.mark,c.name,x.note]);}).map(function(x){
+      const c=catalog.get(x.catalog_item_id)||{};const delta=Number(x.economy_m3||0)-Number(x.overrun_m3||0);
+      return '<tr class="data-row"><td>'+esc(c.mark||"")+'</td><td>'+esc(c.name||"")+'</td><td>Текущий месяц</td><td class="num">'+exFmt(x.avr_quantity_pieces)+'</td><td class="num">'+exFmt(x.volume_per_piece_snapshot_m3)+'</td><td class="num">'+exFmt(x.avr_quantity_m3)+'</td><td class="num">'+exFmt(x.written_off_m3)+'</td><td class="num '+(delta<0?'warning-num':'')+'">'+exFmt(delta)+'</td><td class="num">'+exFmt(x.written_off_m3)+'</td><td>—</td></tr>';
+    }).join("");
+    if(!body) body=tableMessage(doc?"В С-29 выбранного месяца нет строк.":"С-29 появится после выбора подписанного АВР и бухгалтерского снимка.",10);
+    $("workArea").className="work-area execution-work";
+    $("workArea").innerHTML=renderExecutionMetrics([
+      {label:"Панелей по АВР",value:exFmt0(totalPieces)+" шт.",note:rows.length+" позиций"},
+      {label:"Норма текущего месяца",value:exFmt(norm)+" м³",note:"по проектным объёмам"},
+      {label:"Фактически списано",value:exFmt(actual)+" м³",note:"по бухгалтерскому снимку"},
+      {label:"Экономия",value:exFmt(economy)+" м³",note:"переносится далее",tone:economy>0?"warn":""},
+      {label:"Перерасход",value:exFmt(overrun)+" м³",note:"контроль списания",tone:overrun>0?"danger":""}
+    ])+'<div class="engineering-shell execution-table"><div class="execution-table-title"><strong>Расчёт текущей С-29</strong><span>перерасход и текущий месяц — отдельные строки</span></div><div class="engineering-scroll"><table class="eng-table s29-table"><thead><tr><th>Марка</th><th>Наименование</th><th>Тип строки</th><th>АВР, шт.</th><th>1 шт., м³</th><th>По нормам, м³</th><th>Фактически, м³</th><th>Эконом(+)/перерасход(−)</th><th>Списание, м³</th><th>Месяц происхождения</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+  }
+
+  function renderAccounting() {
+    const imports=(dataState.imports||[]).filter(function(x){return x.domain==="accounting";}).sort(function(a,b){return String(b.imported_at).localeCompare(String(a.imported_at));});
+    let body=imports.map(function(imp){
+      const count=(dataState.accountingRows||[]).filter(function(x){return x.import_id===imp.id;}).length;
+      const selected=(dataState.accountingPeriodSources||[]).some(function(x){return x.import_id===imp.id;});
+      return '<tr class="data-row"><td>'+esc(periodLabel(imp.source_period,false))+'</td><td>'+esc(imp.source_name||"—")+'</td><td>'+dateTimeLabel(imp.imported_at)+'</td><td class="num">'+count+'</td><td><span class="execution-status '+(selected?'in_use':'draft')+'">'+(selected?'Используется':'Снимок')+'</span></td></tr>';
+    }).join("");
+    if(!body) body=tableMessage("Бухгалтерские отчёты ещё не импортировались.",5);
+    $("workArea").className="work-area table-work";
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table"><thead><tr><th>Период</th><th>Файл</th><th>Импортирован</th><th>Строк</th><th>Статус</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+  }
+
+  function renderAccountingLinks() {
+    const catalog=new Map(dataState.catalogItems.map(function(x){return [x.id,x];}));
+    const codes=Array.from(new Set((dataState.accountingRows||[]).map(function(x){return x.material_code;}))).sort();
+    let body=codes.map(function(code){
+      const rows=(dataState.accountingRows||[]).filter(function(x){return x.material_code===code;});
+      const link=(dataState.accountingCodeLinks||[]).find(function(x){return x.accounting_code===code;});const item=link?catalog.get(link.catalog_item_id):null;
+      return '<tr class="data-row"><td>'+esc(code)+'</td><td>'+esc(rows[0]&&rows[0].name||"")+'</td><td>'+esc(item&&item.mark||"—")+'</td><td>'+esc(item&&item.name||"Не сопоставлено")+'</td><td>'+esc(link&&link.link_method==="manual"?"Ручная":"Авто")+'</td></tr>';
+    }).join("");
+    if(!body) body=tableMessage("После импорта бухгалтерии здесь появятся коды для сопоставления.",5);
+    $("workArea").className="work-area table-work";
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table"><thead><tr><th>Код материала</th><th>Наименование бухгалтерии</th><th>Марка проекта</th><th>Номенклатура проекта</th><th>Связь</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+  }
+
+  function renderCarryovers() {
+    const catalog=new Map(dataState.catalogItems.map(function(x){return [x.id,x];}));
+    let body=(dataState.s29Carryovers||[]).slice().sort(function(a,b){return String(a.origin_month).localeCompare(String(b.origin_month));}).map(function(x){
+      const item=catalog.get(x.catalog_item_id)||{};const settled=(dataState.s29CarryoverSettlements||[]).filter(function(s){return s.carryover_id===x.id;}).reduce(function(sum,s){return sum+Number(s.settled_m3||0);},0);const rest=Number(x.created_m3||0)-settled;
+      const months=(dataState.s29CarryoverSettlements||[]).filter(function(s){return s.carryover_id===x.id;}).map(function(s){return periodLabel(s.settlement_month,false);}).join(", ")||"—";
+      return '<tr class="data-row"><td>'+esc(periodLabel(x.origin_month,false))+'</td><td>'+esc(item.mark||"")+'</td><td>'+esc(item.name||"")+'</td><td>'+esc(x.kind==="economy"?"Экономия":"Перерасход")+'</td><td class="num">'+exFmt(x.created_m3)+'</td><td class="num">'+exFmt(settled)+'</td><td>'+esc(months)+'</td><td class="num '+(rest>0?'warning-num':'')+'">'+exFmt(rest)+'</td></tr>';
+    }).join("");
+    if(!body) body=tableMessage("Накопительная экономия и перерасход пока отсутствуют.",8);
+    $("workArea").className="work-area table-work";
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table"><thead><tr><th>Месяц возникновения</th><th>Марка</th><th>Наименование</th><th>Вид</th><th>Возникло, м³</th><th>Погашено, м³</th><th>Месяц погашения</th><th>Остаток, м³</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
 
   function linkedSpecRowsForEstimateRow(row) {
@@ -3810,6 +4043,255 @@
     }
   }
 
+  function executionConfirm(title,text,actionLabel) {
+    return new Promise(function(resolve){
+      const backdrop=document.createElement("div");
+      backdrop.className="spec-import-backdrop open execution-confirm";
+      backdrop.innerHTML='<div class="spec-import-modal execution-confirm-card"><div class="spec-import-head"><div><strong>'+esc(title)+'</strong><span>'+esc(text)+'</span></div><button class="spec-import-close" type="button">×</button></div><div class="spec-import-foot"><button class="context-link execution-confirm-cancel" type="button">Отмена</button><span class="spacer"></span><button class="context-link execution-confirm-apply" type="button">'+esc(actionLabel)+'</button></div></div>';
+      document.body.appendChild(backdrop);
+      let done=false;
+      function finish(value){if(done)return;done=true;backdrop.remove();resolve(value);}
+      backdrop.querySelector(".spec-import-close").onclick=function(){finish(false);};
+      backdrop.querySelector(".execution-confirm-cancel").onclick=function(){finish(false);};
+      backdrop.querySelector(".execution-confirm-apply").onclick=function(){finish(true);};
+      backdrop.onclick=function(e){if(e.target===backdrop) finish(false);};
+    });
+  }
+
+  async function setAvrVersionState(versionId,action) {
+    const version=(dataState.avrVersions||[]).find(function(x){return x.id===versionId;});
+    if(!version) return;
+    if(action==="sign"){
+      const ok=await executionConfirm("Подписание АВР","Версия v"+version.version_no+" станет окончательным источником месяца для журнала 6-КС и С-29.","Отметить как подписанный");
+      if(!ok) return;
+    }
+    const result=await client.rpc("set_avr_version_state",{p_project_id:dataState.project.id,p_version_id:versionId,p_action:action});
+    if(result.error) throw result.error;
+    await loadProjectData(dataState.project);
+    renderPage("avr",1);
+  }
+
+  function detectWorkbookPeriod(rows,expectedKey) {
+    const months={"январ":"01","феврал":"02","март":"03","апрел":"04","мая":"05","май":"05","июн":"06","июл":"07","август":"08","сентябр":"09","октябр":"10","ноябр":"11","декабр":"12"};
+    const found=new Set();
+    rows.forEach(function(entry){
+      entry.values.forEach(function(value){
+        const text=String(value==null?"":value).toLowerCase();
+        Object.keys(months).forEach(function(stem){
+          const match=text.match(new RegExp(stem+"[^0-9]{0,12}(20[0-9]{2})"));
+          if(match) found.add(match[1]+"-"+months[stem]);
+        });
+        const iso=text.match(/(20[0-9]{2})[-./](0?[1-9]|1[0-2])(?:[-./][0-3]?[0-9])?/);
+        if(iso) found.add(iso[1]+"-"+String(Number(iso[2])).padStart(2,"0"));
+        const ru=text.match(/(?:^|\D)(?:[0-3]?\d)[./-](0?[1-9]|1[0-2])[./-](20[0-9]{2})(?:\D|$)/);
+        if(ru) found.add(ru[2]+"-"+String(Number(ru[1])).padStart(2,"0"));
+      });
+    });
+    if(found.has(expectedKey)) return expectedKey;
+    return found.size===1?Array.from(found)[0]:"";
+  }
+
+  function headerScore(rows,rowIndex,columnIndex) {
+    let text="";
+    for(let i=Math.max(0,rowIndex-7);i<rowIndex;i++) text+=" "+String(rows[i].values[columnIndex]||"").toLowerCase();
+    let score=0;
+    if(/колич|объем|объём/.test(text)) score+=3;
+    if(/отчет|отчёт|выполн|акт|текущ/.test(text)) score+=7;
+    if(/цена|стоим|руб|byn|итого/.test(text)) score-=8;
+    if(/процент|%/.test(text)) score-=5;
+    return score;
+  }
+
+  async function parseAvrWorkbook(file,expectedKey) {
+    if(!window.XLSX) throw new Error("Модуль чтения Excel не загрузился.");
+    const buffer=await file.arrayBuffer();
+    const workbook=XLSX.read(buffer,{type:"array",cellDates:true,cellFormula:false});
+    const rows=[];
+    workbook.SheetNames.forEach(function(sheetName){
+      const values=XLSX.utils.sheet_to_json(workbook.Sheets[sheetName],{header:1,defval:null,raw:true,blankrows:false});
+      values.forEach(function(row,index){rows.push({sheet:sheetName,rowNo:index+1,values:row});});
+    });
+    const detectedPeriod=detectWorkbookPeriod(rows,expectedKey);
+    if(!detectedPeriod) throw new Error("Не удалось однозначно определить отчётный месяц из шапки АВР.");
+    if(detectedPeriod!==expectedKey) throw new Error("В файле указан "+periodLabel(detectedPeriod,false)+", а выбран "+periodLabel(expectedKey,false)+".");
+    let actNo="";
+    rows.some(function(entry){
+      const text=entry.values.map(function(x){return String(x==null?"":x);}).join(" ");
+      const match=text.match(/(?:акт|с-?2а)[^№0-9]{0,18}№?\s*([0-9][0-9\/-]*)/i);
+      if(match){actNo=match[1];return true;}return false;
+    });
+    if(!actNo) throw new Error("Не удалось прочитать номер АВР из шапки файла.");
+    const estimateByNumber=new Map(dataState.estimates.map(function(x){return [String(x.number),x];}));
+    const basisMap=new Map();
+    dataState.estimateRows.filter(function(x){return x.row_type==="material";}).forEach(function(row){
+      const key=importNorm(estimateSourceValue(row,"basis"));
+      if(!basisMap.has(key)) basisMap.set(key,[]);basisMap.get(key).push(row);
+    });
+    const parsed=[];const errors=[];let currentEstimate=null;
+    rows.forEach(function(entry,rowIndex){
+      const joined=entry.values.map(function(x){return String(x==null?"":x);}).join(" ");
+      const estimateMatch=joined.match(/локальн\S*\s+смет\S*\s*№\s*([0-9]+)/i);
+      if(estimateMatch) currentEstimate=estimateByNumber.get(estimateMatch[1])||null;
+      entry.values.forEach(function(cell,basisIndex){
+        const key=importNorm(cell);
+        let candidates=basisMap.get(key)||[];
+        if(currentEstimate) candidates=candidates.filter(function(x){return x.estimate_id===currentEstimate.id;});
+        if(candidates.length>1){
+          const rowPosition=entry.values.map(function(x){return String(x==null?"":x).trim();});
+          candidates=candidates.filter(function(x){return rowPosition.includes(String(x.position));});
+        }
+        if(candidates.length!==1) return;
+        const estimateRow=candidates[0];
+        if(parsed.some(function(x){return x.estimate_row_id===estimateRow.id;})) return;
+        const numeric=[];
+        entry.values.forEach(function(value,columnIndex){
+          const number=typeof value==="number"?value:Number(String(value==null?"":value).replace(/\s/g,"").replace(",","."));
+          if(Number.isFinite(number)&&number>=0&&columnIndex!==basisIndex) numeric.push({value:number,columnIndex:columnIndex,score:headerScore(rows,rowIndex,columnIndex)+(columnIndex>basisIndex?1:0)});
+        });
+        numeric.sort(function(a,b){return b.score-a.score||a.columnIndex-b.columnIndex;});
+        const chosen=numeric[0];
+        if(!chosen){errors.push("Строка "+entry.rowNo+": не найдено количество для позиции "+estimateRow.position);return;}
+        const linked=linkedSpecRowsForEstimateRow(estimateRow);
+        const volumes=Array.from(new Set(linked.map(function(x){return Number(x.volumePerPiece||0);}).filter(function(x){return x>0;}).map(function(x){return x.toFixed(6);})));
+        if(volumes.length!==1){errors.push("Строка "+entry.rowNo+": не определён единый объём панели для позиции "+estimateRow.position);return;}
+        const volume=Number(volumes[0]);
+        const cost=(dataState.estimateCosts||[]).find(function(x){return x.estimate_row_id===estimateRow.id;});
+        parsed.push({estimate_row_id:estimateRow.id,source_row_no:entry.rowNo,basis:String(cell),quantity:chosen.value,quantity_m3:chosen.value*volume,amount:chosen.value*Number(cost&&cost.total_unit||0),raw_data:{sheet:entry.sheet,row:entry.values}});
+      });
+    });
+    if(errors.length) throw new Error(errors.slice(0,8).join("\n"));
+    if(!parsed.length) throw new Error("В файле не найдены материальные позиции, совпадающие с № сметы, позицией и обоснованием.");
+    return {buffer:buffer,actNo:actNo,period:detectedPeriod,rows:parsed};
+  }
+
+  async function importAvrFile(file,period) {
+    const control=document.querySelector("[data-avr-import]");
+    if(control) control.disabled=true;
+    try{
+      const parsed=await parseAvrWorkbook(file,period);
+      const hash=await sha256Hex(parsed.buffer);
+      const result=await client.rpc("apply_avr_import",{
+        p_project_id:dataState.project.id,p_period_month:periodDate(period),p_display_number:parsed.actNo,
+        p_source_name:file.name,p_source_sha256:hash,p_rows:parsed.rows
+      });
+      if(result.error) throw result.error;
+      ui.avr.period=period;ui.avr.versionId=result.data&&result.data.version_id||"";
+      await loadProjectData(dataState.project);
+      renderPage("avr",0);
+    }catch(err){alert("Импорт АВР остановлен:\n"+(err&&err.message?err.message:String(err)));if(control) control.disabled=false;}
+  }
+
+  function accountingHeaderIndex(values,patterns) {
+    return values.findIndex(function(value){const text=importNorm(value);return patterns.some(function(pattern){return pattern.test(text);});});
+  }
+
+  async function parseAccountingWorkbook(file,expectedKey) {
+    if(!window.XLSX) throw new Error("Модуль чтения Excel не загрузился.");
+    const buffer=await file.arrayBuffer();
+    const workbook=XLSX.read(buffer,{type:"array",cellDates:true,cellFormula:false});
+    const all=[];
+    workbook.SheetNames.forEach(function(sheet){
+      XLSX.utils.sheet_to_json(workbook.Sheets[sheet],{header:1,defval:null,raw:true,blankrows:false}).forEach(function(values,index){all.push({sheet:sheet,rowNo:index+1,values:values});});
+    });
+    const detected=detectWorkbookPeriod(all,expectedKey);
+    if(!detected) throw new Error("Не удалось определить месяц бухгалтерского отчёта.");
+    if(detected!==expectedKey) throw new Error("В отчёте указан "+periodLabel(detected,false)+", а выбран "+periodLabel(expectedKey,false)+".");
+    let headerAt=-1,columns=null;
+    for(let i=0;i<all.length;i++){
+      const cells=all[i].values;
+      const name=accountingHeaderIndex(cells,[/наимен/]);
+      const code=accountingHeaderIndex(cells,[/код.*материал/,/материал.*код/,/номенклатур.*код/,/^код$/]);
+      const qty=accountingHeaderIndex(cells,[/колич/,/списан/,/расход/]);
+      if(name>=0&&code>=0&&qty>=0){
+        headerAt=i;columns={name:name,code:code,qty:qty,account:accountingHeaderIndex(cells,[/счет/,/счёт/]),unit:accountingHeaderIndex(cells,[/ед.*изм/,/^ед$/]),price:accountingHeaderIndex(cells,[/цен/]),amount:accountingHeaderIndex(cells,[/сумм/,/стоим/])};break;
+      }
+    }
+    if(headerAt<0) throw new Error("Не найдена таблица с колонками Код материала, Наименование и Количество.");
+    const rows=[];
+    for(let i=headerAt+1;i<all.length;i++){
+      const entry=all[i];const code=String(entry.values[columns.code]||"").trim();const name=String(entry.values[columns.name]||"").trim();
+      const qty=Number(String(entry.values[columns.qty]==null?"":entry.values[columns.qty]).replace(/\s/g,"").replace(",","."));
+      if(!code&&!name) continue;
+      if(!code||!name||!Number.isFinite(qty)) continue;
+      const numberAt=function(index){if(index<0)return null;const value=Number(String(entry.values[index]==null?"":entry.values[index]).replace(/\s/g,"").replace(",","."));return Number.isFinite(value)?value:null;};
+      rows.push({source_row_no:entry.rowNo,account_code:columns.account>=0?String(entry.values[columns.account]||"").trim():null,material_code:code,name:name,unit:columns.unit>=0?String(entry.values[columns.unit]||"").trim():null,quantity:qty,unit_price:numberAt(columns.price),amount:numberAt(columns.amount),raw_data:{sheet:entry.sheet,row:entry.values}});
+    }
+    if(!rows.length) throw new Error("После проверки в бухгалтерском отчёте не осталось строк материалов.");
+    return {buffer:buffer,rows:rows};
+  }
+
+  async function importAccountingFile(file,period) {
+    const button=document.querySelector("[data-accounting-import]");if(button)button.disabled=true;
+    try{
+      const parsed=await parseAccountingWorkbook(file,period);const hash=await sha256Hex(parsed.buffer);
+      const result=await client.rpc("apply_accounting_import",{p_project_id:dataState.project.id,p_period_month:periodDate(period),p_source_name:file.name,p_source_sha256:hash,p_rows:parsed.rows});
+      if(result.error) throw result.error;
+      await loadProjectData(dataState.project);renderPage("s29",1);
+    }catch(err){alert("Импорт бухгалтерии остановлен:\n"+(err&&err.message?err.message:String(err)));if(button)button.disabled=false;}
+  }
+
+  async function calculateS29() {
+    const button=document.querySelector("[data-s29-calculate]");if(button)button.disabled=true;
+    try{
+      const result=await client.rpc("recalculate_s29",{p_project_id:dataState.project.id,p_period_month:periodDate(ui.s29.period)});
+      if(result.error) throw result.error;
+      await loadProjectData(dataState.project);renderPage("s29",0);
+    }catch(err){alert("Расчёт С-29 не выполнен:\n"+(err&&err.message?err.message:String(err)));if(button)button.disabled=false;}
+  }
+
+  async function fixS29(documentId) {
+    const ok=await executionConfirm("Фиксация С-29","Расчёт месяца станет неизменяемым снимком, а экономия и её погашение будут записаны в накопительный реестр.","Зафиксировать С-29");
+    if(!ok) return;
+    const result=await client.rpc("fix_s29",{p_project_id:dataState.project.id,p_document_id:documentId});
+    if(result.error) throw result.error;
+    await loadProjectData(dataState.project);renderPage("s29",0);
+  }
+
+  function exportS29Excel() {
+    if(!window.XLSX) return alert("Модуль Excel не загрузился.");
+    const doc=selectedS29Document();if(!doc) return;
+    const catalog=new Map(dataState.catalogItems.map(function(x){return [x.id,x];}));
+    const rows=(dataState.s29Rows||[]).filter(function(x){return x.document_id===doc.id;});
+    const table2=[
+      ["С-29 · Таблица 2"],["Объект",dataState.project&&dataState.project.name||"Филимонова"],["Отчётный месяц",periodLabel(doc.period_month,false)],["Статус",doc.status==="fixed"?"Зафиксирован":"Черновик"],[],
+      ["Код материального ресурса","Наименование материала","Ед. изм.","Количество по производственным нормам, м³","Фактически списано, м³","Экономия, м³","Перерасход, м³","Примечание"]
+    ];
+    rows.forEach(function(r){const item=catalog.get(r.catalog_item_id)||{};table2.push([item.mark||"",(item.name||"")+"\n1 шт. = "+exFmt(r.volume_per_piece_snapshot_m3)+" м³; по АВР — "+exFmt0(r.avr_quantity_pieces)+" шт.","м³",Number(r.avr_quantity_m3||0),Number(r.written_off_m3||0),Number(r.economy_m3||0),Number(r.overrun_m3||0),r.note||""]);});
+    table2.push([],['Материально ответственное лицо','',''],['Начальник участка','',''],['Дата составления',new Date().toLocaleDateString('ru-RU')]);
+    const detail=[["Расшифровка экономии/перерасхода за "+periodLabel(doc.period_month,false)],[],["Марка","Наименование","Вид","Месяц происхождения","Возникло, м³","Погашено, м³","Остаток, м³"]];
+    (dataState.s29Carryovers||[]).filter(function(x){return x.origin_document_id===doc.id;}).forEach(function(x){const item=catalog.get(x.catalog_item_id)||{};const settled=(dataState.s29CarryoverSettlements||[]).filter(function(s){return s.carryover_id===x.id;}).reduce(function(sum,s){return sum+Number(s.settled_m3||0);},0);detail.push([item.mark||"",item.name||"",x.kind==="economy"?"Экономия":"Перерасход",periodLabel(x.origin_month,false),Number(x.created_m3||0),settled,Number(x.created_m3||0)-settled]);});
+    const registry=[["Реестр экономии/перерасхода (накопительный)"],[],["Месяц возникновения","Марка","Наименование","Вид","Возникло, м³","Погашено, м³","Месяц погашения","Остаток, м³"]];
+    (dataState.s29Carryovers||[]).forEach(function(x){const item=catalog.get(x.catalog_item_id)||{};const settlements=(dataState.s29CarryoverSettlements||[]).filter(function(s){return s.carryover_id===x.id;});const settled=settlements.reduce(function(sum,s){return sum+Number(s.settled_m3||0);},0);registry.push([periodLabel(x.origin_month,false),item.mark||"",item.name||"",x.kind==="economy"?"Экономия":"Перерасход",Number(x.created_m3||0),settled,settlements.map(function(s){return periodLabel(s.settlement_month,false);}).join(", ")||"—",Number(x.created_m3||0)-settled]);});
+    const wb=XLSX.utils.book_new();
+    const ws1=XLSX.utils.aoa_to_sheet(table2);const ws2=XLSX.utils.aoa_to_sheet(detail);const ws3=XLSX.utils.aoa_to_sheet(registry);
+    ws1['!cols']=[{wch:22},{wch:58},{wch:10},{wch:22},{wch:20},{wch:16},{wch:16},{wch:28}];ws2['!cols']=[{wch:16},{wch:48},{wch:18},{wch:20},{wch:16},{wch:16},{wch:16}];ws3['!cols']=[{wch:20},{wch:16},{wch:48},{wch:18},{wch:16},{wch:16},{wch:22},{wch:16}];
+    XLSX.utils.book_append_sheet(wb,ws1,"С-29 (таблица 2)");XLSX.utils.book_append_sheet(wb,ws2,"Расшифровка "+periodKey(doc.period_month));XLSX.utils.book_append_sheet(wb,ws3,"Реестр экономии-перерасхода");
+    XLSX.writeFile(wb,"С-29_"+periodKey(doc.period_month)+".xlsx");
+  }
+
+  function wireExecutionControls() {
+    const period=document.querySelector("[data-avr-period]");
+    if(period) period.onchange=function(){ui.avr.period=period.value;ui.avr.versionId="";localStorage.setItem("filimonova.avr.period",period.value);renderPage("avr",0);};
+    const version=document.querySelector("[data-avr-version]");
+    if(version) version.onchange=function(){ui.avr.versionId=version.value;rerenderContent();};
+    const registry=document.querySelector("[data-avr-registry-period]");
+    if(registry) registry.onchange=function(){ui.avr.registryPeriod=registry.value;localStorage.setItem("filimonova.avr.registryPeriod",registry.value);renderPage("avr",1);};
+    const importButton=document.querySelector("[data-avr-import]");
+    const fileInput=document.querySelector("[data-avr-file]");
+    if(importButton&&fileInput){importButton.onclick=function(){fileInput.click();};fileInput.onchange=function(){const file=fileInput.files&&fileInput.files[0];if(file)importAvrFile(file,ui.avr.registryPeriod);};}
+    document.querySelectorAll("[data-avr-use]").forEach(function(btn){btn.onclick=function(){btn.disabled=true;setAvrVersionState(btn.dataset.avrUse,"use").catch(function(err){alert(err.message||err);btn.disabled=false;});};});
+    document.querySelectorAll("[data-avr-sign]").forEach(function(btn){btn.onclick=function(){btn.disabled=true;setAvrVersionState(btn.dataset.avrSign,"sign").catch(function(err){alert(err.message||err);btn.disabled=false;});};});
+    const s29=document.querySelector("[data-s29-period]");
+    if(s29) s29.onchange=function(){ui.s29.period=s29.value;localStorage.setItem("filimonova.s29.period",s29.value);renderPage("s29",0);};
+    const accountingPeriod=document.querySelector("[data-accounting-period]");
+    if(accountingPeriod) accountingPeriod.onchange=function(){ui.s29.period=accountingPeriod.value;localStorage.setItem("filimonova.s29.period",accountingPeriod.value);renderPage("s29",1);};
+    const accountingButton=document.querySelector("[data-accounting-import]");const accountingFile=document.querySelector("[data-accounting-file]");
+    if(accountingButton&&accountingFile){accountingButton.onclick=function(){accountingFile.click();};accountingFile.onchange=function(){const file=accountingFile.files&&accountingFile.files[0];if(file)importAccountingFile(file,ui.s29.period);};}
+    const calculate=document.querySelector("[data-s29-calculate]");if(calculate)calculate.onclick=calculateS29;
+    const fix=document.querySelector("[data-s29-fix]");if(fix)fix.onclick=function(){fix.disabled=true;fixS29(fix.dataset.s29Fix).catch(function(err){alert(err.message||err);fix.disabled=false;});};
+    const excel=document.querySelector("[data-s29-excel]");if(excel)excel.onclick=exportS29Excel;
+  }
+
   function wireTableControls() {
     document.querySelectorAll(".group-toggle[data-group-key]").forEach(function(row) {
       row.addEventListener("click",function(e) {
@@ -3856,6 +4338,7 @@
     wireServiceControls();
     wireGprControls();
     wireReconciliationControls();
+    wireExecutionControls();
 
     if (scrollState) {
       const nextScroller = document.querySelector("#workArea .engineering-scroll");
