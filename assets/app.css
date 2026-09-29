@@ -1682,3 +1682,5 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   display:block;margin-top:2px;font-size:9.5px;font-weight:400;color:#68758A;white-space:nowrap;
 }
 #reconciliationEditorModal .recon-table-note.occupied{color:#9A5A25}
+
+#reconciliationEditorModal .recon-col-accepted{width:135px}
