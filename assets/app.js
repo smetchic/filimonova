@@ -2311,7 +2311,7 @@
             : "Текущая цена рассчитана по сметам "+nums.join(", ");
         return '<span class="context-caption">Текущая цена</span><span class="context-muted">'+esc(note)+'</span>';
       }
-      if (tab === 2) return '<span class="context-caption">ГПР</span><span class="context-muted">Помесячный финансовый план · без недель и дней</span>' + gprPeriodControlsHtml() + '<span class="spacer"></span>' + (ui.isAdmin?'<button class="context-link" type="button" data-gpr-action="settings">Параметры ГПР</button>':'') + '<button class="context-link" type="button" data-gpr-action="spread">Разнести по графику</button><button class="context-link" type="button" data-gpr-action="display">Отображение</button><button class="context-link" type="button" data-gpr-action="excel">Экспорт Excel</button>';
+      if (tab === 2) return gprPeriodControlsHtml() + '<span class="spacer"></span>' + (ui.isAdmin?'<button class="context-link" type="button" data-gpr-action="settings">Параметры ГПР</button>':'') + '<button class="context-link" type="button" data-gpr-action="spread">Разнести по графику</button><button class="context-link" type="button" data-gpr-action="display">Отображение</button><button class="context-link" type="button" data-gpr-action="excel">Экспорт Excel</button>';
     }
     if (pageKey === "recon") {
       if (tab === 0) return buildSpecContext(0);
@@ -3004,7 +3004,7 @@
       ? months[0].label+" — "+months[months.length-1].label
       : "не установлен";
     const last=months.length?Number(months[months.length-1].index||1):1;
-    return '<span class="gpr-period-summary"><span class="gpr-period-label">Цена на начало работ:</span><strong>01.10.2026</strong><span>·</span><span class="gpr-period-label">Период:</span><strong>'+esc(period)+'</strong><span>·</span><span class="gpr-period-label">Прогноз:</span><strong>от цены на начало работ</strong><span class="context-muted">нарастающий индекс до '+esc(last.toFixed(6).replace(".",","))+'</span></span>';
+    return '<span class="gpr-period-summary"><span class="gpr-period-label">Цена на начало работ:</span><strong>01.10.2026</strong><span>·</span><span class="gpr-period-label">Период:</span><strong>'+esc(period)+'</strong><span>·</span><span class="gpr-period-label">Прогноз:</span><strong>от цены на начало работ</strong><span class="context-muted">нарастающий индекс до '+esc(last.toFixed(4).replace(".",","))+'</span></span>';
   }
 
   let gprAssignmentState=null;
@@ -3243,7 +3243,7 @@
           body+=filterCell("basis",displayBasis,esc(displayBasis),"e-sticky-3");
           body+=filterCell("name",displayName,esc(displayName),"e-sticky-4");
           body+='<td class="center">'+esc(r.unit||"")+'</td><td class="num">'+fmt(r.quantity)+'</td><td class="num">'+money(a.unit)+'</td><td class="num">'+money(a.total)+'</td>';
-          months.forEach(function(mon){body+='<td class="num gpr-month" title="Нарастающий прогнозный индекс: '+esc(Number(mon.index||1).toFixed(6).replace(".",","))+'">'+money(a.months[mon.key])+'</td>';});
+          months.forEach(function(mon){body+='<td class="num gpr-month" title="Нарастающий прогнозный индекс: '+esc(Number(mon.index||1).toFixed(4).replace(".",","))+'">'+money(a.months[mon.key])+'</td>';});
           body+='</tr>';
         });
       });
@@ -3258,7 +3258,7 @@
       y.count++;
     });
     const yearHead=years.map(function(y){return '<th class="gpr-year" colspan="'+y.count+'">'+esc(y.year)+'</th>';}).join("");
-    const monthHead=months.map(function(mon){return '<th class="gpr-month-head" title="Индекс '+esc(Number(mon.index||1).toFixed(6).replace(".",","))+'">'+esc(mon.month)+'</th>';}).join("");
+    const monthHead=months.map(function(mon){return '<th class="gpr-month-head" title="Индекс '+esc(Number(mon.index||1).toFixed(4).replace(".",","))+'">'+esc(mon.month)+'</th>';}).join("");
 
     $("workArea").className="work-area table-work";
     $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table est-table gpr-table" data-table-key="gpr-v4"><thead>'+
@@ -3281,14 +3281,12 @@
       return '<tr data-gpr-settings-row="'+esc(mon.id)+'" data-month-key="'+esc(mon.key)+'">'+
         '<td class="center"><input class="gpr-settings-check" type="checkbox" '+(mon.is_in_period?'checked':'')+' aria-label="Включить '+esc(mon.label)+'"></td>'+
         '<td>'+esc(mon.label)+'</td>'+
-        '<td class="num">'+(mon.key==="2026-10"
-          ? '<span class="gpr-index-base">1,000000 <small>на 01.10.2026</small></span>'
-          : '<input class="gpr-index-input" data-gpr-month-index="'+esc(mon.id)+'" value="'+esc(Number(mon.monthlyIndex||1).toFixed(6).replace(".",","))+'" inputmode="decimal" aria-label="Индекс '+esc(mon.label)+'">')+'</td>'+
-        '<td class="num gpr-cumulative-cell" data-gpr-cumulative="'+esc(mon.id)+'">'+esc(Number(mon.index||1).toFixed(6).replace(".",","))+'</td>'+
+        '<td class="num"><input class="gpr-index-input" data-gpr-month-index="'+esc(mon.id)+'" value="'+esc(Number(mon.monthlyIndex||1).toFixed(4).replace(".",","))+'" inputmode="decimal" aria-label="Индекс '+esc(mon.label)+'"></td>'+
+        '<td class="num gpr-cumulative-cell" data-gpr-cumulative="'+esc(mon.id)+'">'+esc(Number(mon.index||1).toFixed(4).replace(".",","))+'</td>'+
       '</tr>';
     }).join("");
     modal.innerHTML='<div class="gpr-modal gpr-settings-modal"><div class="gpr-modal-head"><strong>Параметры ГПР</strong><button type="button" class="gpr-modal-close">×</button></div>'+
-      '<div class="gpr-settings-note">Цена на начало работ берётся из расчёта «Текущая цена» и фиксируется на дату 01.10.2026. Поэтому для Октября 2026 коэффициент к этой цене равен 1,000000 и повторно не индексируется. Для последующих месяцев вводится месячный прогнозный индекс; нарастающий индекс рассчитывается относительно цены на 01.10.2026.</div>'+
+      '<div class="gpr-settings-note">Цена на начало работ берётся из расчёта «Текущая цена» на 01.10.2026. Индекс Октября применяется за период 01.10.2026–31.10.2026; далее месячные прогнозные индексы применяются последовательно, а нарастающий индекс рассчитывается относительно цены на 01.10.2026.</div>'+
       '<div class="gpr-modal-body"><div class="gpr-alloc-scroll"><table class="gpr-settings-table"><thead><tr><th>Период</th><th>Месяц</th><th>Индекс месяца</th><th>Индекс нарастающим итогом</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>'+
       '<div class="gpr-modal-foot"><span class="gpr-settings-state"></span><button type="button" class="context-link gpr-cancel">Отмена</button><span class="spacer"></span><button type="button" class="context-link gpr-settings-save">Сохранить</button></div></div>';
     modal.classList.add("open");
@@ -3302,10 +3300,10 @@
       let cumulative=1;
       months.forEach(function(mon){
         const input=modal.querySelector('[data-gpr-month-index="'+CSS.escape(mon.id)+'"]');
-        const n=mon.key==="2026-10" ? 1 : numberValue(input);
-        if(mon.key!=="2026-10" && n!=null) cumulative*=n;
+        const n=numberValue(input);
+        if(n!=null) cumulative*=n;
         const cell=modal.querySelector('[data-gpr-cumulative="'+CSS.escape(mon.id)+'"]');
-        if(cell) cell.textContent=(n==null?"—":cumulative.toFixed(6).replace(".",","));
+        if(cell) cell.textContent=(n==null?"—":cumulative.toFixed(4).replace(".",","));
       });
     }
     modal.querySelectorAll(".gpr-index-input").forEach(function(input){input.oninput=recalc;});
@@ -3327,16 +3325,18 @@
       const payload=[];
       for(const mon of months){
         const input=modal.querySelector('[data-gpr-month-index="'+CSS.escape(mon.id)+'"]');
-        const monthly=mon.key==="2026-10" ? 1 : numberValue(input);
-        if(monthly==null){state.textContent="Проверьте индекс для "+mon.label+".";return;}
-        if(mon.key!=="2026-10") cumulative*=monthly;
+        const rawMonthly=numberValue(input);
+        if(rawMonthly==null){state.textContent="Проверьте индекс для "+mon.label+".";return;}
+        const monthly=Math.round(rawMonthly*10000)/10000;
+        cumulative*=monthly;
+        const cumulativeStored=Math.round(cumulative*10000)/10000;
         payload.push({
           id:mon.id,
           project_id:dataState.project.id,
           plan_id:plan.id,
           month:String(mon.month).slice(0,10),
           monthly_index:monthly,
-          execution_index:cumulative,
+          execution_index:cumulativeStored,
           is_in_period:checked.some(function(x){return x.id===mon.id;})
         });
       }
