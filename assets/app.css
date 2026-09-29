@@ -1451,3 +1451,10 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   max-width:none;
   box-sizing:border-box;
 }
+
+/* Sticky header offsets are calculated from rendered row heights in JS.
+   Legacy fixed 30px offsets break wrapped multi-level headers and cover row 1. */
+#workArea .spec-table thead tr:nth-child(2) th,
+#workArea .eng-table thead tr:nth-child(2) th{
+  top:auto;
+}
