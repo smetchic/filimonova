@@ -1297,6 +1297,42 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   .supplier-import-fields{grid-template-columns:1fr}
 }
 
+/* Supplier price reconciliation is a separate full working window. */
+.supplier-check-backdrop{padding:18px}
+.supplier-check-modal{
+  width:min(1760px,calc(100vw - 36px));height:min(900px,calc(100vh - 36px));
+  display:flex;flex-direction:column;min-width:0;min-height:0;
+  background:#F7F7F8;border:1px solid #CFCFD4;border-radius:9px;box-shadow:0 18px 60px rgba(24,24,27,.22);overflow:hidden
+}
+.supplier-check-tabs{display:flex;gap:18px;height:38px;align-items:end;padding:0 14px;background:#fff;border-bottom:1px solid #DCDCE0}
+.supplier-check-tabs button{height:38px;border:0;border-bottom:2px solid transparent;background:transparent;padding:0 2px;color:#62636A;font:inherit;font-size:12px;cursor:pointer}
+.supplier-check-tabs button.active{color:#202126;border-bottom-color:#2F6FD6;font-weight:600}
+.supplier-check-content{display:flex;flex:1;min-height:0;min-width:0;flex-direction:column;padding:8px}
+.supplier-check-content>.engineering-scroll{flex:1;min-height:0;background:#fff;border:1px solid #DCDCE0}
+.supplier-check-summary{height:30px;display:flex;align-items:center;padding:0 4px;color:#62636A;font-size:11px}
+.supplier-check-table{width:max-content;min-width:100%;table-layout:fixed}
+.supplier-check-table th,.supplier-check-table td{min-width:86px;max-width:none}
+.supplier-check-table th:nth-child(3),.supplier-check-table td:nth-child(3),
+.supplier-check-table th:nth-child(9),.supplier-check-table td:nth-child(9){min-width:230px}
+.supplier-check-table th:nth-child(16),.supplier-check-table td:nth-child(16){min-width:210px}
+.supplier-check-reasons{color:#555861}
+.supplier-check-journal{width:max-content;min-width:100%;table-layout:fixed}
+.supplier-check-journal th,.supplier-check-journal td{min-width:115px}
+.supplier-check-journal th:nth-child(7),.supplier-check-journal td:nth-child(7){min-width:190px}
+.supplier-check-journal-filter{height:30px;display:flex;align-items:center;padding:0 4px}
+.supplier-match-backdrop{z-index:1250}
+.supplier-match-modal{width:min(1180px,calc(100vw - 36px));height:min(680px,calc(100vh - 52px));display:flex;flex-direction:column}
+.supplier-match-source{display:flex;align-items:baseline;gap:10px;padding:9px 12px;background:#FAFAFA;border-bottom:1px solid #E4E4E7}
+.supplier-match-source span,.supplier-match-source small{color:#71717A;font-size:10.5px}.supplier-match-source strong{font-size:12px}
+.supplier-match-list{flex:1;min-height:0;overflow:auto;padding:8px 12px;background:#fff}
+.supplier-match-list table{width:100%}.supplier-match-list th{position:sticky;top:0;z-index:2}
+.supplier-candidate-row{cursor:pointer}.supplier-candidate-row:hover{background:#F7F9FC}.supplier-candidate-row.is-selected{background:#DCEBFF}
+.supplier-candidate-row input[type="radio"]{appearance:none;width:14px;height:14px;border:1px solid #A1A1AA;border-radius:50%;background:#fff;display:inline-grid;place-items:center}
+.supplier-candidate-row input[type="radio"]:checked{border-color:#2F6FD6}.supplier-candidate-row input[type="radio"]:checked:after{content:"";width:7px;height:7px;border-radius:50%;background:#2F6FD6}
+.supplier-candidate-row input[type="radio"]:disabled{background:#F1F1F3;cursor:not-allowed}
+.supplier-candidate-row .recon-table-note{display:block;color:#6B7280;font-size:9px;font-weight:500}
+.supplier-link-remove.hidden{display:none}
+
 
 /* Estimate colgroup is authoritative: allow user widths down to the technical minimum. */
 .est-table th,.est-table td,.ks-table th,.ks-table td{
