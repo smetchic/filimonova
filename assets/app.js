@@ -743,11 +743,12 @@
   function lockTableToColumnSum(table,widths) {
     if(!table) return;
     const total=Math.max(1,widths.reduce(function(sum,w){return sum+(Number(w)||0);},0));
-    // One owner for horizontal geometry: COLGROUP + explicit table width.
-    // The parent .engineering-scroll owns scrolling.
-    table.style.setProperty("width",total+"px");
-    table.style.setProperty("min-width",total+"px");
-    table.style.removeProperty("max-width");
+    // COLGROUP + this exact pixel width are the single source of truth.
+    // Use !important because legacy .est-table{width:max-content!important}
+    // previously overrode the runtime width and let long work text expand columns.
+    table.style.setProperty("width",total+"px","important");
+    table.style.setProperty("min-width",total+"px","important");
+    table.style.setProperty("max-width","none","important");
   }
 
   function tableColumnLocked(table,index) {
@@ -2552,7 +2553,7 @@
           body += filterCell("position",r.position,esc(r.position || ""),"e-sticky-2 center");
           body += filterCell("basis",displayBasis,esc(displayBasis || ""),"e-sticky-3");
           body += filterCell("name",displayName,esc(displayName || ""),"e-sticky-4");
-          body += '<td class="center">' + esc(r.unit || "") + '</td>';
+          body += '<td class="center estimate-unit-cell" title="'+esc(r.unit||"")+'">' + esc(r.unit || "") + '</td>';
           body += '<td class="num">' + fmt(r.quantity) + '</td>';
           body += '<td class="num"></td>';
           body += '<td class="num">' + money(c.salary_unit) + '</td><td class="num">' + money(c.salary_amount) + '</td>';
@@ -2586,7 +2587,7 @@
     '</thead>';
 
     $("workArea").className = "work-area table-work";
-    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table est-table" data-table-key="estimate-main-v5">' + head + '<tbody>' + body + '</tbody></table></div></div>';
+    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table est-table" data-table-key="estimate-main-v6">' + head + '<tbody>' + body + '</tbody></table></div></div>';
   }
 
   function currentPriceModel() {
