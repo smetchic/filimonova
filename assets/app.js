@@ -2324,7 +2324,7 @@
     '</thead>';
 
     $("workArea").className = "work-area table-work";
-    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table est-table" data-table-key="estimate-main-v2">' + head + '<tbody>' + body + '</tbody></table></div></div>';
+    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table est-table" data-table-key="estimate-main-v3">' + head + '<tbody>' + body + '</tbody></table></div></div>';
   }
 
   function currentPriceModel() {
