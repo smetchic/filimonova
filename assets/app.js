@@ -634,7 +634,11 @@
         return Number.isFinite(n) && n>=12 ? n : tableColumnMinimum(table,i);
       });
     }
-    Array.from(cg.children).forEach(function(col,i){col.style.width=widths[i]+"px";});
+    Array.from(cg.children).forEach(function(col,i){
+      col.style.width=widths[i]+"px";
+      col.style.minWidth=widths[i]+"px";
+      col.style.maxWidth=widths[i]+"px";
+    });
     updateStickyOffsets(table,widths);
     updateStickyHeaderOffsets(table);
 
@@ -649,6 +653,8 @@
         function move(ev){
           widths[index]=Math.max(12,Math.min(720,start+ev.clientX-startX));
           cg.children[index].style.width=widths[index]+"px";
+          cg.children[index].style.minWidth=widths[index]+"px";
+          cg.children[index].style.maxWidth=widths[index]+"px";
           updateStickyOffsets(table,widths);
           updateStickyHeaderOffsets(table);
         }
@@ -659,6 +665,8 @@
         e.preventDefault();e.stopPropagation();
         widths[index]=intrinsicColumnWidth(table,index);
         cg.children[index].style.width=widths[index]+"px";
+        cg.children[index].style.minWidth=widths[index]+"px";
+        cg.children[index].style.maxWidth=widths[index]+"px";
         updateStickyOffsets(table,widths);
         updateStickyHeaderOffsets(table);
         saveTableWidths(table,widths);
