@@ -3229,6 +3229,22 @@
     modal.querySelector(".recon-edit-cancel").onclick=close;
     modal.onclick=function(e){if(e.target===modal) close();};
     modal.querySelector(".recon-edit-save").onclick=saveManualReconciliation;
+    const card=modal.querySelector(".recon-edit-modal");
+    const handle=modal.querySelector(".spec-import-head");
+    handle.addEventListener("mousedown",function(ev){
+      if(ev.target.closest("button")) return;
+      const rect=card.getBoundingClientRect();
+      const dx=ev.clientX-rect.left,dy=ev.clientY-rect.top;
+      card.style.position="fixed";card.style.left=rect.left+"px";card.style.top=rect.top+"px";card.style.margin="0";
+      handle.classList.add("dragging");
+      function move(e){
+        const left=Math.max(8,Math.min(window.innerWidth-card.offsetWidth-8,e.clientX-dx));
+        const top=Math.max(8,Math.min(window.innerHeight-card.offsetHeight-8,e.clientY-dy));
+        card.style.left=left+"px";card.style.top=top+"px";
+      }
+      function up(){document.removeEventListener("mousemove",move);document.removeEventListener("mouseup",up);handle.classList.remove("dragging");}
+      document.addEventListener("mousemove",move);document.addEventListener("mouseup",up);
+    });
     return modal;
   }
 
@@ -3244,30 +3260,47 @@
         (!e.building_section || e.building_section===sr.section.building_section) &&
         (!e.zone || e.zone===sr.section.zone);
     });
+    const specPeers=specJoinedRows().filter(function(x){
+      return x.section && sr.section &&
+        x.section.building_section===sr.section.building_section &&
+        x.section.zone===sr.section.zone;
+    }).sort(function(a,b){return Number(a.sort_order||a.position_no||0)-Number(b.sort_order||b.position_no||0);});
+    const specIndex=Math.max(0,specPeers.findIndex(function(x){return x.id===sr.id;}));
+    const specRatio=specPeers.length>1?specIndex/(specPeers.length-1):0;
     const ranked=candidates.map(function(r){
       const e=dataState.estimates.find(function(x){return x.id===r.estimate_id;});
-      let score=0;
-      if(importNorm(estimateSourceValue(r,"basis"))===importNorm(sr.mark)) score+=100;
-      if(importNorm(estimateSourceValue(r,"name"))===importNorm(sr.name)) score+=80;
-      if(importNorm(estimateSourceValue(r,"name")).includes(importNorm(sr.name)) || importNorm(sr.name).includes(importNorm(estimateSourceValue(r,"name")))) score+=30;
-      return {row:r,estimate:e,score:score};
+      const peers=dataState.estimateRows.filter(function(x){return x.estimate_id===r.estimate_id&&x.row_type==="material";})
+        .sort(function(a,b){return Number(a.sort_order||0)-Number(b.sort_order||0);});
+      const ri=Math.max(0,peers.findIndex(function(x){return x.id===r.id;}));
+      const rr=peers.length>1?ri/(peers.length-1):0;
+      let score=(1-Math.min(1,Math.abs(specRatio-rr)))*120;
+      if(importNorm(estimateSourceValue(r,"basis"))===importNorm(sr.mark)) score+=1000;
+      if(importNorm(estimateSourceValue(r,"name"))===importNorm(sr.name)) score+=500;
+      const occupied=dataState.reconciliationLinks.some(function(l){return l.estimate_row_id===r.id&&l.specification_row_id!==sr.id;});
+      return {row:r,estimate:e,score:score,occupied:occupied};
     }).sort(function(a,b){return b.score-a.score || String(a.estimate.number).localeCompare(String(b.estimate.number),"ru",{numeric:true}) || Number(a.row.sort_order||0)-Number(b.row.sort_order||0);});
     const modal=reconciliationEditorModal();
+    const card=modal.querySelector(".recon-edit-modal");
+    card.style.position="";card.style.left="";card.style.top="";card.style.margin="";
     modal.dataset.estimateRowId="";
     modal.dataset.specRowId=sr.id;
-    modal.querySelector(".recon-source-position").textContent="Спецификация · поз. "+sr.position_no;
+    modal.querySelector(".spec-import-head strong").textContent="Связь позиции спецификации со сметой";
+    modal.querySelector(".recon-edit-caption").textContent="Выберите строку сметы";
+    modal.querySelector(".recon-block-label").textContent="Позиция спецификации — привязываем";
+    modal.querySelector(".recon-source-position").textContent="Поз. "+sr.position_no+" · "+(sr.section&&sr.section.building_section?sr.section.building_section:"");
     modal.querySelector(".recon-source-basis").textContent=sr.mark||"—";
     modal.querySelector(".recon-source-name").textContent=sr.name||"—";
-    modal.querySelector(".recon-target-head strong").textContent="Строки сметы — выбираем, к чему привязать";
-    modal.querySelector(".recon-target-head span").textContent="Выберите одну строку сметы";
-    const head=modal.querySelector(".recon-choice-header");
-    head.innerHTML="<span></span><span>Смета</span><span>Поз.</span><span>Обоснование / Наименование</span><span>Кол-во</span>";
+    modal.querySelector(".recon-target-head strong").textContent="Строки сметы — выбираем";
+    modal.querySelector(".recon-target-head span").textContent="Одна строка; наиболее вероятная показана первой";
+    modal.querySelector(".recon-choice-header").innerHTML="<span></span><span>Смета</span><span>Поз.</span><span>Обоснование / Наименование</span><span>Кол-во</span>";
     modal.querySelector(".recon-edit-list").innerHTML=ranked.map(function(c,index){
-      return '<label class="recon-choice'+(index===0?' recon-choice-suggested':'')+'>'+
+      const basis=estimateSourceValue(c.row,"basis")||"—";
+      const name=estimateSourceValue(c.row,"name")||"—";
+      return '<label class="recon-choice recon-estimate-choice'+(index===0?' recon-choice-suggested':'')+(c.occupied?' recon-choice-occupied':'')+'>'+
         '<input type="radio" name="recon-estimate-candidate" data-recon-estimate="'+esc(c.row.id)+'">'+
         '<span class="recon-choice-position">№'+esc(c.estimate.number)+'</span>'+
         '<span class="recon-choice-mark">'+esc(c.row.position)+(index===0?'<small class="recon-suggested-label">Предлагаем</small>':'')+'</span>'+
-        '<span class="recon-choice-name" title="'+esc(estimateSourceValue(c.row,"name")||"")+'">'+esc(estimateSourceValue(c.row,"basis")||"—")+' · '+esc(estimateSourceValue(c.row,"name")||"—")+'</span>'+
+        '<span class="recon-choice-name" title="'+esc(basis+" · "+name)+'"><strong>'+esc(basis)+'</strong><small>'+esc(name)+(c.occupied?' · Уже есть связь':'')+'</small></span>'+
         '<span class="recon-choice-meta">'+esc(c.row.quantity==null?"—":fmt(c.row.quantity))+'</span>'+
       '</label>';
     }).join("") || '<div class="table-message">Подходящих строк сметы не найдено.</div>';
