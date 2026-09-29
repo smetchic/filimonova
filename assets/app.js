@@ -821,6 +821,21 @@
       return sum+Number(c&&c.total_amount||0);
     },0);
     const estimateQty=linkedEstimateRows.reduce(function(sum,r){return sum+Number(r.quantity||0);},0);
+    // Unit figures are shown only when the source has one unambiguous price per piece.
+    const unitCosts=linkedEstimateRows.map(function(r){
+      return (dataState.estimateCosts||[]).find(function(c){return c.estimate_row_id===r.id;});
+    }).filter(Boolean);
+    function singleUnitCost(field){
+      const values=Array.from(new Set(unitCosts.map(function(c){return Number(c[field]||0);}).filter(function(v){return v>0;}).map(function(v){return v.toFixed(2);})));
+      return values.length===1?Number(values[0]):null;
+    }
+    const materialUnit=singleUnitCost("materials_unit");
+    const transportUnit=singleUnitCost("transport_unit");
+    const supplierModel=item.id?supplierPriceModel(item.id,volumePerPiece):null;
+    const supplierUnit=supplierModel && supplierModel.prices.length===1 &&
+      supplierModel.prices[0].price_basis==="piece" && supplierModel.state!=="Проверить"
+      ?Number(supplierModel.prices[0].unit_price_gross):null;
+    function unitMoney(value){return value!=null && Number.isFinite(value)?money(value)+" BYN":"—";}
     const sectionLabel=st.rows.length&&st.rows[0].section?st.rows[0].section.name:"Раздел";
     const allNames=Array.from(new Set(dataState.catalogItems.map(function(x){return x.name;}).filter(Boolean))).sort(function(a,b){return a.localeCompare(b,"ru",{numeric:true});});
     let modal=document.getElementById("materialCardModal");
@@ -847,7 +862,14 @@
           '<div class="mv-qty"><b>Осталось поставить</b><strong>'+fmt0(Math.max(0,st.qty-suppliedQty))+' шт.</strong><span>'+fmt(Math.max(0,st.qty-suppliedQty)*volumePerPiece)+' м³</span></div>'+
           '<div class="mv-qty"><b>Осталось смонтировать</b><strong>'+fmt0(Math.max(0,st.qty-mountedQty))+' шт.</strong><span>'+fmt(Math.max(0,st.qty-mountedQty)*volumePerPiece)+' м³</span></div></div>');
         const cost=block("Стоимость",'<div class="mv-cost-grid"><div class="mv-cost"><b>По смете</b><strong>'+(estimateAmount?money(estimateAmount)+" BYN":"—")+'</strong><span>связанные позиции материала</span></div><div class="mv-cost"><b>Запроцентовано</b><strong>'+(avrAmount?money(avrAmount)+" BYN":"—")+'</strong><span>по действующим АВР</span></div><div class="mv-cost"><b>Остаток</b><strong>'+(estimateAmount?money(Math.max(0,estimateAmount-avrAmount))+" BYN":"—")+'</strong><span>по сметной стоимости</span></div></div>','mv-mt');
-        b.innerHTML='<div class="mv-overview-two">'+exec+qty+'</div>'+cost+(sourceOnly?'<div class="mv-note">Исходная строка не связана с проектной номенклатурой. Карточка открыта в source-only режиме.</div>':'');
+        const unitCost=block('Стоимость единицы <span class="mv-badge">с НДС</span>',
+          '<div class="mv-unit-grid">'+
+          '<div class="mv-unit"><b>Материал по смете, 1 шт.</b><strong>'+unitMoney(materialUnit)+'</strong><span>сметная стоимость материала</span></div>'+
+          '<div class="mv-unit"><b>Транспорт по смете, 1 шт.</b><strong>'+unitMoney(transportUnit)+'</strong><span>отдельная сметная составляющая</span></div>'+
+          '<div class="mv-unit"><b>Цена поставщика, 1 шт.</b><strong>'+unitMoney(supplierUnit)+'</strong><span>действующий прайс поставщика</span></div>'+
+          '<div class="mv-unit"><b>Монтаж, 1 шт.</b><strong>—</strong><span>стоимость единицы не рассчитана</span></div>'+
+          '</div>','mv-mt');
+        b.innerHTML='<div class="mv-overview-two">'+exec+qty+'</div>'+cost+unitCost+(sourceOnly?'<div class="mv-note">Исходная строка не связана с проектной номенклатурой. Карточка открыта в source-only режиме.</div>':'');
       } else if(tab==="projectEstimate"){
         const project='<div class="mv-grid2 mv-mb">'+block("Проект",'<div class="mv-kpi2">'+kpi("Всего",fmt0(st.qty)+" шт.",fmt(st.m3)+" м³")+kpi("Объём 1 шт.",volumePerPiece?fmt(volumePerPiece)+" м³":"—","для учёта и списания")+'</div>')+
           block("Смета",'<div class="mv-kpi2">'+kpi("Количество по смете",estimateQty?fmt(estimateQty)+" шт.":"—","связанные позиции")+kpi("Контроль",estimateQty&&Math.abs(estimateQty-st.qty)<1e-9?"Совпадает":(linkedEstimateRows.length?"Проверить":"Нет связи"),linkedEstimateRows.length?"проект ↔ смета":"связь не создана",estimateQty&&Math.abs(estimateQty-st.qty)<1e-9?"good":"warn")+'</div>')+'</div>';
