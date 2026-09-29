@@ -1371,3 +1371,8 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   border:1px solid var(--line-strong);border-radius:4px;background:#fff;
   color:var(--text);font:inherit;font-size:12px;outline:none
 }
+
+.table-checkbox{
+  width:14px;height:14px;margin:0;vertical-align:middle;
+  accent-color:#2f6fd6;cursor:pointer
+}
