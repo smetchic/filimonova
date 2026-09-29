@@ -557,6 +557,49 @@
     return grid;
   }
 
+  function measureEngineeringText(text,extra) {
+    const canvas=intrinsicColumnWidth.canvas||(intrinsicColumnWidth.canvas=document.createElement("canvas"));
+    const ctx=canvas.getContext("2d");
+    ctx.font='12px "Segoe UI Variable","Segoe UI",Arial,sans-serif';
+    return Math.ceil(ctx.measureText(String(text==null?"":text)).width)+18+Number(extra||0);
+  }
+
+  function estimateIntrinsicColumnWidth(table,index) {
+    if(!table.classList.contains("est-table")) return null;
+    const rows=(dataState.estimateRows||[]).filter(function(r){return !r.archived_at;});
+    if(index===0){
+      return Math.max(measureEngineeringText("Тип"),measureEngineeringText("М"),measureEngineeringText("Р"));
+    }
+    if(index===1){
+      let max=measureEngineeringText("Поз. см.");
+      rows.forEach(function(r){max=Math.max(max,measureEngineeringText(r.position||""));});
+      return max;
+    }
+    if(index===2){
+      let max=measureEngineeringText("Обоснование",28);
+      rows.forEach(function(r){max=Math.max(max,measureEngineeringText(estimateDisplayBasis(r)||""));});
+      return Math.min(720,max);
+    }
+    if(index===3){
+      // Work names are deliberately excluded: the estimate name column is sized
+      // from material rows only, so long work descriptions never stretch the grid.
+      let max=measureEngineeringText("Наименование",28);
+      rows.filter(function(r){return r.row_type==="material";}).forEach(function(r){
+        max=Math.max(max,measureEngineeringText(estimateDisplayName(r)||""));
+      });
+      return Math.min(720,max);
+    }
+    if(index===4){
+      // Same rule as the name column: units of work rows do not participate.
+      let max=measureEngineeringText("Ед. изм.");
+      rows.filter(function(r){return r.row_type==="material";}).forEach(function(r){
+        max=Math.max(max,measureEngineeringText(r.unit||""));
+      });
+      return Math.min(720,max);
+    }
+    return null;
+  }
+
   function intrinsicColumnWidth(table,index) {
     if (table.classList.contains("working-summary")) {
       if (index === 3 || index === 5) return 58;
@@ -583,6 +626,8 @@
         return 42;
       }
     }
+    const estimateWidth=estimateIntrinsicColumnWidth(table,index);
+    if(estimateWidth!=null) return estimateWidth;
     let max=40;
     const cells=[];
     if(table.tHead) Array.from(table.tHead.rows).forEach(function(row){
@@ -671,11 +716,11 @@
   function tableColumnMinimum(table,index) {
     // One width policy for every estimate-derived grid (estimate, KS and GPR).
     if(table.classList.contains("est-table")) {
-      if(index===0) return 42;   // type
-      if(index===1) return 72;   // estimate position
-      if(index===2) return 190;  // basis / material mark
-      if(index===3) return 420;  // name
-      if(index===4) return 92;   // unit
+      if(index===0) return 32;   // type: actual width is content-driven and locked
+      if(index===1) return 48;   // estimate position: content-driven and locked
+      if(index===2) return 96;   // basis
+      if(index===3) return 140;  // material name
+      if(index===4) return 56;   // material unit
       return 82;
     }
     if(table.classList.contains("ks-table")) {
@@ -706,6 +751,17 @@
     table.style.removeProperty("max-width");
   }
 
+  function tableColumnLocked(table,index) {
+    return table.classList.contains("est-table") && (index===0 || index===1);
+  }
+
+  function tableColumnResizeMinimum(table,index) {
+    if(table.classList.contains("est-table") && index>=2 && index<=4) {
+      return Math.max(tableColumnMinimum(table,index),intrinsicColumnWidth(table,index));
+    }
+    return tableColumnMinimum(table,index);
+  }
+
   function installResizeAutofit(table) {
     if(!table || !table.tHead) return;
     const grid=logicalHeaderGrid(table);
@@ -726,7 +782,9 @@
       // Saved widths are the user's choice. Never expand them because cell text is long.
       widths=widths.map(function(w,i){
         const n=Number(w);
-        return Number.isFinite(n) && n>=12 ? n : tableColumnMinimum(table,i);
+        const min=tableColumnResizeMinimum(table,i);
+        if(tableColumnLocked(table,i)) return Math.max(min,intrinsicColumnWidth(table,i));
+        return Number.isFinite(n) && n>=min ? n : min;
       });
     }
     Array.from(cg.children).forEach(function(col,i){
@@ -743,12 +801,13 @@
       if(Number(th.dataset.logicalSpan||th.colSpan||1)!==1) return;
       if(th.querySelector(".resize-handle")) return;
       const index=Number(th.dataset.logicalStart);
+      if(tableColumnLocked(table,index)) return;
       const h=document.createElement("span");h.className="resize-handle";th.appendChild(h);
       h.addEventListener("mousedown",function(e){
         e.preventDefault();e.stopPropagation();
         const startX=e.clientX,start=widths[index];
         function move(ev){
-          widths[index]=Math.max(12,Math.min(720,start+ev.clientX-startX));
+          widths[index]=Math.max(tableColumnResizeMinimum(table,index),Math.min(720,start+ev.clientX-startX));
           cg.children[index].style.width=widths[index]+"px";
           cg.children[index].style.minWidth=widths[index]+"px";
           cg.children[index].style.maxWidth=widths[index]+"px";
@@ -762,7 +821,7 @@
       });
       h.addEventListener("dblclick",function(e){
         e.preventDefault();e.stopPropagation();
-        widths[index]=intrinsicColumnWidth(table,index);
+        widths[index]=Math.max(tableColumnResizeMinimum(table,index),intrinsicColumnWidth(table,index));
         cg.children[index].style.width=widths[index]+"px";
         cg.children[index].style.minWidth=widths[index]+"px";
         cg.children[index].style.maxWidth=widths[index]+"px";
@@ -2057,14 +2116,21 @@
     return '<span class="context-muted">Контекст страницы</span>';
   }
 
-  function buildServiceLeft(pageKey) {
+  function buildServiceLeft(pageKey,tab) {
     if (pageKey === "spec") {
       return '<span class="legend-item"><span class="legend-dot supply"></span>Поставка</span>' +
         '<span class="legend-item"><span class="legend-dot montage"></span>Монтаж</span>' +
         '<span class="legend-item"><span class="legend-dot avr"></span>АВР</span>';
     }
+    if (pageKey === "estimates" && tab===0) {
+      const selected=dataState.estimates.filter(function(e){return ui.estimates[e.number]!==false;});
+      const ids=new Set(selected.map(function(e){return e.id;}));
+      const rows=(dataState.estimateRows||[]).filter(function(r){return ids.has(r.estimate_id) && !r.archived_at;});
+      const works=rows.filter(function(r){return r.row_type==="work";}).length;
+      const materials=rows.filter(function(r){return r.row_type==="material";}).length;
+      return '<span class="context-muted">'+selected.length+' смет · '+works+' работ · '+materials+' материалов</span>';
+    }
     if (pageKey === "montage") return '<span class="context-muted">ЛКМ +1 · ПКМ −1</span>';
-    if (dataState.source === "supabase") return '<span class="context-muted">Данные проекта · Supabase</span>';
     return "";
   }
 
@@ -2464,7 +2530,7 @@
           const item=estimateProjectItem(r);
           const displayBasis=estimateDisplayBasis(r);
           const displayName=estimateDisplayName(r);
-          body += '<tr class="data-row" data-estimate-row-id="'+esc(r.id)+'" ' +
+          body += '<tr class="data-row" data-row-type="'+esc(r.row_type||"")+'" data-estimate-row-id="'+esc(r.id)+'" ' +
             (r.row_type==="material" ? 'data-material-id="'+esc(item?item.id:"")+'" data-material-mark="'+esc(displayBasis||"")+'"' : '') + '>';
           body += '<td class="e-sticky-1 center"><span class="type-mark">' + (r.row_type === "work" ? "Р" : "М") + '</span></td>';
           body += filterCell("position",r.position,esc(r.position || ""),"e-sticky-2 center");
@@ -2488,7 +2554,7 @@
     const head = '<thead>' +
       '<tr>' +
         '<th class="e-sticky-1" rowspan="2">Тип</th>' +
-        '<th class="e-sticky-2" rowspan="2">Поз. сметы</th>' +
+        '<th class="e-sticky-2" rowspan="2">Поз. см.</th>' +
         '<th class="e-sticky-3 filterable-head" rowspan="2">' + filterHeader("Обоснование","basis") + '</th>' +
         '<th class="e-sticky-4 filterable-head" rowspan="2">' + filterHeader("Наименование","name") + '</th>' +
         '<th rowspan="2">Ед. изм.</th>' +
@@ -2504,7 +2570,7 @@
     '</thead>';
 
     $("workArea").className = "work-area table-work";
-    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table est-table" data-table-key="estimate-main-v3">' + head + '<tbody>' + body + '</tbody></table></div></div>';
+    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table est-table" data-table-key="estimate-main-v4">' + head + '<tbody>' + body + '</tbody></table></div></div>';
   }
 
   function currentPriceModel() {
@@ -4420,7 +4486,7 @@
     $("globalSearch").classList.toggle("has-value",!!$("searchInput").value);
 
     $("contextRow").innerHTML = buildContext(pageKey,tab);
-    $("serviceLeft").innerHTML = buildServiceLeft(pageKey);
+    $("serviceLeft").innerHTML = buildServiceLeft(pageKey,tab);
     // Project UI rule: page-level controls belong in the existing service row;
     // do not add local button bars above working tables.
     if(pageKey==="recon" && tab===0){
