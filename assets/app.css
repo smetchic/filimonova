@@ -1421,3 +1421,8 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 #workArea table thead th:not(.filterable-head) > .column-filter-trigger{
   display:none!important;
 }
+
+/* Reconciliation journal: highlight only the differing value/fragment, never the whole row. */
+.journal-table .journal-name-cell{white-space:normal;line-height:15px}
+.journal-diff-text{background:#FDECEC;color:#A52A2A;padding:0 1px;border-radius:2px}
+.journal-table .journal-diff-number{color:#B42318;font-weight:600;background:#FFF7F6}
