@@ -582,6 +582,27 @@
     table.querySelectorAll(".gpr-sticky").forEach(function(cell){cell.style.left="0px";});
   }
 
+  function tableColumnMinimum(table,index) {
+    // One width policy for every estimate-derived grid (estimate, KS and GPR).
+    if(table.classList.contains("est-table")) {
+      if(index===0) return 42;   // type
+      if(index===1) return 72;   // estimate position
+      if(index===2) return 190;  // basis / material mark
+      if(index===3) return 420;  // name
+      if(index===4) return 92;   // unit
+      return 82;
+    }
+    if(table.classList.contains("ks-table")) {
+      if(index===0) return 42;
+      if(index===1) return 72;
+      if(index===2) return 190;
+      if(index===3) return 420;
+      if(index===4) return 92;
+      return 90;
+    }
+    return 28;
+  }
+
   function installResizeAutofit(table) {
     if(!table || !table.tHead) return;
     const grid=logicalHeaderGrid(table);
@@ -594,8 +615,20 @@
     }
     let widths=loadTableWidths(table);
     if(!Array.isArray(widths)||widths.length!==count) {
-      widths=Array.from({length:count},function(_,i){return intrinsicColumnWidth(table,i);});
+      widths=Array.from({length:count},function(_,i){
+        return Math.max(tableColumnMinimum(table,i),intrinsicColumnWidth(table,i));
+      });
       saveTableWidths(table,widths);
+    } else {
+      // Migrate previously saved widths so an old narrow localStorage value
+      // cannot override the current estimate UI minimums.
+      let migrated=false;
+      widths=widths.map(function(w,i){
+        const next=Math.max(Number(w)||0,tableColumnMinimum(table,i));
+        if(next!==Number(w)) migrated=true;
+        return next;
+      });
+      if(migrated) saveTableWidths(table,widths);
     }
     Array.from(cg.children).forEach(function(col,i){col.style.width=widths[i]+"px";});
     updateStickyOffsets(table,widths);
@@ -610,7 +643,7 @@
         e.preventDefault();e.stopPropagation();
         const startX=e.clientX,start=widths[index];
         function move(ev){
-          widths[index]=Math.max(28,Math.min(520,start+ev.clientX-startX));
+          widths[index]=Math.max(tableColumnMinimum(table,index),Math.min(720,start+ev.clientX-startX));
           cg.children[index].style.width=widths[index]+"px";
           updateStickyOffsets(table,widths);
           updateStickyHeaderOffsets(table);
@@ -620,7 +653,7 @@
       });
       h.addEventListener("dblclick",function(e){
         e.preventDefault();e.stopPropagation();
-        widths[index]=intrinsicColumnWidth(table,index);
+        widths[index]=Math.max(tableColumnMinimum(table,index),intrinsicColumnWidth(table,index));
         cg.children[index].style.width=widths[index]+"px";
         updateStickyOffsets(table,widths);
         updateStickyHeaderOffsets(table);
