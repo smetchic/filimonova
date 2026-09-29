@@ -3111,22 +3111,23 @@
     rows=rows.filter(function(r){
       return rowPassesColumnFilters({position:r.position,basis:estimateDisplayBasis(r),name:estimateDisplayName(r)});
     });
-    // Reconciliation is project-first: its canonical row order follows the original
-    // specification order. Estimate order is only a fallback for rows without a link.
-    const specOrder=new Map();
-    dataState.specRows.slice().sort(function(a,b){
-      return Number(a.sort_order||0)-Number(b.sort_order||0) ||
-        String(a.position_no||"").localeCompare(String(b.position_no||""),"ru",{numeric:true});
-    }).forEach(function(sr,index){specOrder.set(sr.id,index);});
-    function reconSpecOrder(r){
-      const indexes=dataState.reconciliationLinks
-        .filter(function(l){return l.estimate_row_id===r.id;})
-        .map(function(l){return specOrder.has(l.specification_row_id)?specOrder.get(l.specification_row_id):Number.MAX_SAFE_INTEGER;});
-      return indexes.length?Math.min.apply(null,indexes):Number.MAX_SAFE_INTEGER;
+    // Reconciliation is ordered by the visible specification position number.
+    // Linked rows come first in numeric/natural position order; unlinked estimate rows follow.
+    function reconPositionSortKey(r){
+      const srows=linkedSpecRowsForEstimateRow(r);
+      if(!srows.length) return {linked:false,value:""};
+      const values=srows.map(function(sr){return String(sr.position_no==null?"":sr.position_no);})
+        .filter(Boolean)
+        .sort(function(a,b){return a.localeCompare(b,"ru",{numeric:true,sensitivity:"base"});});
+      return {linked:true,value:values[0]||""};
     }
     rows.sort(function(a,b){
-      const ao=reconSpecOrder(a), bo=reconSpecOrder(b);
-      if(ao!==bo) return ao-bo;
+      const ak=reconPositionSortKey(a), bk=reconPositionSortKey(b);
+      if(ak.linked!==bk.linked) return ak.linked?-1:1;
+      if(ak.linked){
+        const pos=ak.value.localeCompare(bk.value,"ru",{numeric:true,sensitivity:"base"});
+        if(pos) return pos;
+      }
       const ea=dataState.estimates.find(function(x){return x.id===a.estimate_id;});
       const eb=dataState.estimates.find(function(x){return x.id===b.estimate_id;});
       const en=String(ea?ea.number:"").localeCompare(String(eb?eb.number:""),"ru",{numeric:true});
@@ -3212,7 +3213,7 @@
 
     if(!body)body=tableMessage("Нет строк по текущему фильтру.",16);
     $("workArea").className="work-area table-work";
-    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table recon-table" data-table-key="estimate-recon-v3"><thead><tr><th colspan="4">Спецификация</th><th colspan="6">Смета</th><th rowspan="2">Разница</th><th rowspan="2">Сопоставление</th><th rowspan="2">Способ</th><th rowspan="2">Расхождение</th><th rowspan="2">Журнал</th><th rowspan="2">Действия</th></tr>'+
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table recon-table" data-table-key="estimate-recon-v4"><thead><tr><th colspan="4">Спецификация</th><th colspan="6">Смета</th><th rowspan="2">Разница</th><th rowspan="2">Сопоставление</th><th rowspan="2">Способ</th><th rowspan="2">Расхождение</th><th rowspan="2">Журнал</th><th rowspan="2">Действия</th></tr>'+
       '<tr><th>Поз. спецификации</th><th>Марка</th><th>Наименование по спецификации</th><th>Проект, шт.</th><th>№ сметы</th><th class="filterable-head">'+filterHeader("Поз. сметы","position")+'</th><th class="filterable-head">'+filterHeader("Обоснование","basis")+'</th><th>Принятое обоснование</th><th class="filterable-head">'+filterHeader("Наименование по смете","name")+'</th><th>Смета, шт.</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
 
