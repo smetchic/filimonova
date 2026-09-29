@@ -1727,7 +1727,7 @@
     const v = estimateGroupVector(rows,m);
     let html = '<tr class="group-row group-toggle" data-group-key="' + esc(key) + '">';
     html += '<td colspan="4" class="est-group-title" style="padding-left:' + (8+depth*14) + 'px"><span class="group-arrow">' + groupArrow(key) + '</span>' + esc(label) + '</td>';
-    html += '<td></td><td class="num">' + fmt(v.qty) + '</td><td class="num">' + fmt(v.qty) + '</td>';
+    html += '<td></td><td class="num">' + fmt(v.qty) + '</td><td class="num"></td>';
     html += '<td></td><td class="num">' + money(v.salary) + '</td>';
     html += '<td></td><td class="num">' + money(v.machines) + '</td>';
     html += '<td></td><td class="num">' + money(v.materials) + '</td>';
@@ -1735,6 +1735,28 @@
     html += '<td></td><td class="num strong-num">' + money(v.total) + '</td>';
     html += '</tr>';
     return html;
+  }
+
+  function estimateProjectItem(row) {
+    return row && row.catalog_item_id
+      ? dataState.catalogItems.find(function(x){return x.id===row.catalog_item_id;}) || null
+      : null;
+  }
+
+  function estimateSourceValue(row,key) {
+    return row && row.source_original && row.source_original[key]!=null
+      ? row.source_original[key]
+      : row && row[key]!=null ? row[key] : "";
+  }
+
+  function estimateDisplayBasis(row) {
+    const item=estimateProjectItem(row);
+    return row.row_type==="material" && item ? item.mark : row.basis;
+  }
+
+  function estimateDisplayName(row) {
+    const item=estimateProjectItem(row);
+    return row.row_type==="material" && item ? item.name : row.name;
   }
 
   function renderEstimateTable() {
@@ -1745,12 +1767,19 @@
 
     selected.forEach(function(e) {
       let rows = dataState.estimateRows.filter(function(r){ return r.estimate_id === e.id; });
-      rows = rows.filter(function(r){ return passesSearch([r.position,r.basis,r.name]); })
-        .filter(function(r){return rowPassesColumnFilters({position:r.position,basis:r.basis,name:r.name});});
+      rows = rows.filter(function(r){
+        return passesSearch([r.position,estimateDisplayBasis(r),estimateDisplayName(r),r.basis,r.name]);
+      }).filter(function(r){
+        return rowPassesColumnFilters({
+          position:r.position,
+          basis:estimateDisplayBasis(r),
+          name:estimateDisplayName(r)
+        });
+      });
       rows = sortRows(rows,{
         position:function(r){return r.position;},
-        basis:function(r){return r.basis;},
-        name:function(r){return r.name;}
+        basis:function(r){return estimateDisplayBasis(r);},
+        name:function(r){return estimateDisplayName(r);}
       });
       if (!sortBucket()) rows.sort(function(a,b){ return Number(a.sort_order||0)-Number(b.sort_order||0); });
       if (!rows.length && (currentSearch() || Object.keys(filterBucket()).length)) return;
@@ -1759,25 +1788,28 @@
       body += estimateGroupRow("Смета №"+e.number+" · "+(e.name||""),rows,eKey,0,m);
       if (ui.collapsed.has(eKey)) return;
 
-      const sections = dataState.estimateSections.filter(function(s){ return s.estimate_id === e.id; });
-      sections.forEach(function(s) {
-        const sRows = rows.filter(function(r){ return r.section_id === s.id; });
+      const sections = dataState.estimateSections.filter(function(sec){ return sec.estimate_id === e.id; });
+      sections.forEach(function(sec) {
+        const sRows = rows.filter(function(r){ return r.section_id === sec.id; });
         if (!sRows.length) return;
-        const sKey = "est:section:"+e.number+":"+s.id;
-        body += estimateGroupRow(s.title,sRows,sKey,1,m);
+        const sKey = "est:section:"+e.number+":"+sec.id;
+        body += estimateGroupRow(sec.title,sRows,sKey,1,m);
         if (ui.collapsed.has(sKey) || ui.collapseLeaves) return;
 
         sRows.forEach(function(r) {
           const c = rowCost(r,m);
-          const item=dataState.catalogItems.find(function(x){return x.mark===r.basis;});
-          body += '<tr class="data-row" ' + (r.row_type==="material" ? 'data-material-id="'+esc(item?item.id:"")+'" data-material-mark="'+esc(r.basis||"")+'"' : '') + '>';
+          const item=estimateProjectItem(r);
+          const displayBasis=estimateDisplayBasis(r);
+          const displayName=estimateDisplayName(r);
+          body += '<tr class="data-row" data-estimate-row-id="'+esc(r.id)+'" ' +
+            (r.row_type==="material" ? 'data-material-id="'+esc(item?item.id:"")+'" data-material-mark="'+esc(displayBasis||"")+'"' : '') + '>';
           body += '<td class="e-sticky-1 center"><span class="type-mark">' + (r.row_type === "work" ? "Р" : "М") + '</span></td>';
           body += filterCell("position",r.position,esc(r.position || ""),"e-sticky-2 center");
-          body += filterCell("basis",r.basis,esc(r.basis || ""),"e-sticky-3");
-          body += filterCell("name",r.name,esc(r.name || ""),"e-sticky-4");
+          body += filterCell("basis",displayBasis,esc(displayBasis || ""),"e-sticky-3");
+          body += filterCell("name",displayName,esc(displayName || ""),"e-sticky-4");
           body += '<td class="center">' + esc(r.unit || "") + '</td>';
           body += '<td class="num">' + fmt(r.quantity) + '</td>';
-          body += '<td class="num">' + fmt(r.quantity) + '</td>';
+          body += '<td class="num"></td>';
           body += '<td class="num">' + money(c.salary_unit) + '</td><td class="num">' + money(c.salary_amount) + '</td>';
           body += '<td class="num">' + money(c.machines_unit) + '</td><td class="num">' + money(c.machines_amount) + '</td>';
           body += '<td class="num">' + money(c.materials_unit) + '</td><td class="num">' + money(c.materials_amount) + '</td>';
@@ -1809,7 +1841,7 @@
     '</thead>';
 
     $("workArea").className = "work-area table-work";
-    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table est-table" data-table-key="estimate-main">' + head + '<tbody>' + body + '</tbody></table></div></div>';
+    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table est-table" data-table-key="estimate-main-v2">' + head + '<tbody>' + body + '</tbody></table></div></div>';
   }
 
   function currentPriceModel() {
@@ -2389,28 +2421,220 @@
       '<div class="review-note">Тестовые спецификации и сметы уже в базе. Для С-29 нужен подписанный АВР и бухгалтерский снимок; их пока намеренно не создаём, чтобы не подменять реальную логику фиктивным фактом.</div></div>';
   }
 
+  function linkedSpecRowsForEstimateRow(row) {
+    const ids=new Set(
+      dataState.reconciliationLinks
+        .filter(function(l){return l.estimate_row_id===row.id;})
+        .map(function(l){return l.specification_row_id;})
+    );
+    return specJoinedRows().filter(function(sr){return ids.has(sr.id);});
+  }
+
+  function estimateQuantityPieces(row,linkedRows) {
+    const q=Number(row.quantity);
+    if(!Number.isFinite(q)) return null;
+    const u=importNorm(row.unit).replace(/\./g,"").replace(/\s+/g,"");
+    if(["шт","штука","штук"].includes(u)) return q;
+    if(u==="100шт" || u==="100штук") return q*100;
+    if(u==="м3" || u==="м³" || u==="кубм"){
+      const vols=linkedRows.map(function(x){return Number(x.volumePerPiece||0);});
+      if(!vols.length || vols.some(function(v){return !(v>0);})) return null;
+      const first=vols[0];
+      if(vols.some(function(v){return Math.abs(v-first)>1e-9;})) return null;
+      return q/first;
+    }
+    return null;
+  }
+
+  function reconPositionText(rows) {
+    const list=rows.map(function(r){return r.position_no;});
+    if(!list.length) return "—";
+    if(list.length<=4) return list.join(", ");
+    return list.slice(0,3).join(", ")+"… ("+list.length+")";
+  }
+
   function renderRecon() {
-    const qm=quantityMap();
-    let rows=dataState.estimateRows.filter(function(r){return r.row_type==="material" && passesSearch([r.position,r.basis,r.name]);});
-    rows=rows.filter(function(r){return rowPassesColumnFilters({position:r.position,basis:r.basis,name:r.name});});
-    rows=sortRows(rows,{position:function(r){return r.position;},basis:function(r){return r.basis;},name:function(r){return r.name;}});
+    let rows=dataState.estimateRows.filter(function(r){
+      return r.row_type==="material" &&
+        passesSearch([r.position,estimateDisplayBasis(r),estimateDisplayName(r),r.basis,r.name]);
+    });
+    rows=rows.filter(function(r){
+      return rowPassesColumnFilters({position:r.position,basis:estimateDisplayBasis(r),name:estimateDisplayName(r)});
+    });
+    rows=sortRows(rows,{
+      position:function(r){return r.position;},
+      basis:function(r){return estimateDisplayBasis(r);},
+      name:function(r){return estimateDisplayName(r);}
+    });
+
+    const claimCount=new Map();
+    dataState.reconciliationLinks.forEach(function(l){
+      claimCount.set(l.specification_row_id,(claimCount.get(l.specification_row_id)||0)+1);
+    });
+
     let body=rows.map(function(r){
       const e=dataState.estimates.find(function(x){return x.id===r.estimate_id;});
-      const item=dataState.catalogItems.find(function(x){return x.mark===r.basis;});
-      const srows=item?dataState.specRows.filter(function(x){return x.catalog_item_id===item.id;}):[];
-      let projectQty=0;srows.forEach(function(sr){const m=qm.get(sr.id);if(m)m.forEach(function(v){projectQty+=Number(v||0);});});
-      const diff=projectQty-Number(r.quantity||0),linked=!!item;
-      return '<tr class="data-row" '+(item?'data-material-id="'+esc(item.id)+'"':'data-material-mark="'+esc(r.basis||"")+'"')+'>'+
-        '<td class="center">'+esc(srows[0]?srows[0].position_no:"—")+'</td><td>'+esc(item?item.mark:"—")+'</td><td>'+esc(item?item.name:"—")+'</td><td class="num">'+(linked?fmt0(projectQty):"—")+'</td>'+
-        '<td class="center">'+esc(e?e.number:"")+'</td>'+filterCell("position",r.position,esc(r.position),"center")+filterCell("basis",r.basis,esc(r.basis),"")+
-        '<td>'+esc(item?item.mark:r.basis)+'</td>'+filterCell("name",r.name,esc(r.name),"")+'<td class="num">'+fmt(r.quantity)+'</td>'+
-        '<td class="num '+(diff<0?"warning":"")+'">'+(linked?fmt(diff):"—")+'</td>'+
-        '<td><span class="soft-status '+(linked?"ok":"warn")+'">'+(linked?"Связано":"Без связи")+'</span></td><td>Авто</td><td>'+(linked && diff===0?"Нет":linked?"Количество":"Связь")+'</td><td class="center">□</td><td><span class="link">Изменить</span></td></tr>';
+      const links=dataState.reconciliationLinks.filter(function(l){return l.estimate_row_id===r.id;});
+      const srows=linkedSpecRowsForEstimateRow(r);
+      const projectQty=srows.reduce(function(sum,x){return sum+Number(x.total||0);},0);
+      const estimatePieces=estimateQuantityPieces(r,srows);
+      const diff=estimatePieces==null ? null : projectQty-estimatePieces;
+      const items=Array.from(new Map(srows.map(function(x){
+        const item=dataState.catalogItems.find(function(ci){return ci.id===x.catalog_item_id;});
+        return [x.catalog_item_id,item];
+      })).values()).filter(Boolean);
+      const marks=Array.from(new Set(items.map(function(x){return x.mark;})));
+      const names=Array.from(new Set(items.map(function(x){return x.name;})));
+      const linked=links.length>0;
+      const conflict=links.some(function(l){return (claimCount.get(l.specification_row_id)||0)>1;});
+      const method=links.some(function(l){return l.link_method==="manual";}) ? "Manual" : linked ? "Auto" : "—";
+      const sourceName=String(estimateSourceValue(r,"name")||"");
+      const nameMismatch=linked && names.length===1 && importNorm(names[0])!==importNorm(sourceName);
+      const reasons=[];
+      if(nameMismatch) reasons.push("Наименование");
+      if(linked && (estimatePieces==null || Math.abs(diff)>1e-9)) reasons.push("Количество");
+      const discrepancy=conflict ? "Конфликт" : linked ? (reasons.length?reasons.join(" + "):"Нет") : "—";
+      const status=conflict?"Конфликт":linked?"Связано":"Без связи";
+      const statusClass=conflict?"bad":linked?"ok":"warn";
+      const projectMark=marks.length===1?marks[0]:(marks.length?marks.join(" / "):"—");
+      const projectName=names.length===1?names[0]:(names.length?names.join(" / "):"—");
+      const accepted=linked?projectMark:r.basis;
+
+      return '<tr class="data-row" data-recon-row="'+esc(r.id)+'">'+
+        '<td class="center" title="'+esc(srows.map(function(x){return x.position_no;}).join(", "))+'">'+esc(reconPositionText(srows))+'</td>'+
+        '<td>'+esc(projectMark)+'</td>'+
+        '<td>'+esc(projectName)+'</td>'+
+        '<td class="num">'+(linked?fmt0(projectQty):"—")+'</td>'+
+        '<td class="center">'+esc(e?e.number:"")+'</td>'+
+        filterCell("position",r.position,esc(r.position),"center")+
+        filterCell("basis",r.basis,esc(r.basis),"")+
+        '<td>'+esc(accepted)+'</td>'+
+        filterCell("name",r.name,esc(r.name),"")+
+        '<td class="num">'+(estimatePieces==null?"—":fmt(estimatePieces))+'</td>'+
+        '<td class="num '+(diff!=null&&Math.abs(diff)>1e-9?"warning":"")+'">'+(diff==null?"—":fmt(diff))+'</td>'+
+        '<td><span class="soft-status '+statusClass+'">'+status+'</span></td>'+
+        '<td>'+method+'</td>'+
+        '<td>'+esc(discrepancy)+'</td>'+
+        '<td class="center">□</td>'+
+        '<td><button class="table-text-action" type="button" data-recon-edit="'+esc(r.id)+'">Изменить</button></td>'+
+      '</tr>';
     }).join("");
+
     if(!body)body=tableMessage("Нет строк по текущему фильтру.",16);
     $("workArea").className="work-area table-work";
-    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table recon-table" data-table-key="estimate-recon"><thead><tr><th colspan="4">Спецификация</th><th colspan="6">Смета</th><th rowspan="2">Разница</th><th rowspan="2">Сопоставление</th><th rowspan="2">Способ</th><th rowspan="2">Расхождение</th><th rowspan="2">Журнал</th><th rowspan="2">Действия</th></tr>'+
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table recon-table" data-table-key="estimate-recon-v2"><thead><tr><th colspan="4">Спецификация</th><th colspan="6">Смета</th><th rowspan="2">Разница</th><th rowspan="2">Сопоставление</th><th rowspan="2">Способ</th><th rowspan="2">Расхождение</th><th rowspan="2">Журнал</th><th rowspan="2">Действия</th></tr>'+
       '<tr><th>Поз. спецификации</th><th>Марка</th><th>Наименование по спецификации</th><th>Проект, шт.</th><th>№ сметы</th><th class="filterable-head">'+filterHeader("Поз. сметы","position")+'</th><th class="filterable-head">'+filterHeader("Обоснование","basis")+'</th><th>Принятое обоснование</th><th class="filterable-head">'+filterHeader("Наименование по смете","name")+'</th><th>Смета, шт.</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+  }
+
+  function reconciliationEditorModal() {
+    let modal=document.getElementById("reconciliationEditorModal");
+    if(modal) return modal;
+    modal=document.createElement("div");
+    modal.id="reconciliationEditorModal";
+    modal.className="spec-import-backdrop";
+    modal.innerHTML='<div class="recon-edit-modal"><div class="spec-import-head"><div><strong>Ручное сопоставление</strong><span class="recon-edit-caption"></span></div><button class="spec-import-close" type="button">×</button></div><div class="recon-edit-list"></div><div class="spec-import-foot"><span class="recon-edit-state"></span><span class="spacer"></span><button class="context-link recon-edit-cancel" type="button">Отмена</button><button class="context-link recon-edit-save" type="button">Сохранить</button></div></div>';
+    document.body.appendChild(modal);
+    const close=function(){modal.classList.remove("open");};
+    modal.querySelector(".spec-import-close").onclick=close;
+    modal.querySelector(".recon-edit-cancel").onclick=close;
+    modal.onclick=function(e){if(e.target===modal) close();};
+    modal.querySelector(".recon-edit-save").onclick=saveManualReconciliation;
+    return modal;
+  }
+
+  function openReconciliationEditor(rowId) {
+    const row=dataState.estimateRows.find(function(x){return x.id===rowId;});
+    if(!row) return;
+    const estimate=dataState.estimates.find(function(x){return x.id===row.estimate_id;});
+    if(!estimate) return;
+    const estSection=dataState.estimateSections.find(function(x){return x.id===row.section_id;});
+    const allSpec=specJoinedRows().filter(function(sr){
+      const ss=sr.section;
+      if(estimate.is_stairs) return !!ss.is_stairs;
+      return !ss.is_stairs &&
+        (!estimate.building_section || ss.building_section===estimate.building_section) &&
+        (!estimate.zone || ss.zone===estimate.zone);
+    });
+    const matchingSections=Array.from(new Set(allSpec.filter(function(sr){
+      return estSection && importNorm(sr.section.name)===importNorm(estSection.title);
+    }).map(function(sr){return sr.section.id;})));
+    const scoped=matchingSections.length===1
+      ? allSpec.filter(function(sr){return sr.section.id===matchingSections[0];})
+      : allSpec;
+
+    const groups=new Map();
+    scoped.forEach(function(sr){
+      if(!groups.has(sr.catalog_item_id)){
+        groups.set(sr.catalog_item_id,{id:sr.catalog_item_id,mark:sr.mark,name:sr.name,rows:[],qty:0});
+      }
+      const g=groups.get(sr.catalog_item_id);
+      g.rows.push(sr); g.qty+=Number(sr.total||0);
+    });
+    const linkedIds=new Set(
+      dataState.reconciliationLinks.filter(function(l){return l.estimate_row_id===row.id;})
+        .map(function(l){return l.specification_row_id;})
+    );
+    const modal=reconciliationEditorModal();
+    modal.dataset.estimateRowId=row.id;
+    modal.querySelector(".recon-edit-caption").textContent=
+      "Смета №"+estimate.number+" · поз. "+row.position+" · "+estimateSourceValue(row,"basis")+" · "+estimateSourceValue(row,"name");
+    modal.querySelector(".recon-edit-state").textContent="";
+    modal.querySelector(".recon-edit-list").innerHTML=Array.from(groups.values())
+      .sort(function(a,b){return a.mark.localeCompare(b.mark,"ru");})
+      .map(function(g){
+        const checked=g.rows.some(function(sr){return linkedIds.has(sr.id);});
+        return '<label class="recon-choice">'+
+          '<input type="checkbox" data-recon-catalog="'+esc(g.id)+'" '+(checked?'checked':'')+'>'+
+          '<span class="recon-choice-mark">'+esc(g.mark)+'</span>'+
+          '<span class="recon-choice-name">'+esc(g.name)+'</span>'+
+          '<span class="recon-choice-meta">'+g.rows.length+' поз. · '+fmt0(g.qty)+' шт.</span>'+
+        '</label>';
+      }).join("") || '<div class="empty-note">В области этой сметы нет проектных позиций.</div>';
+    modal.classList.add("open");
+  }
+
+  async function saveManualReconciliation() {
+    const modal=reconciliationEditorModal();
+    const rowId=modal.dataset.estimateRowId;
+    const selectedCatalogs=new Set(
+      Array.from(modal.querySelectorAll("[data-recon-catalog]:checked")).map(function(x){return x.dataset.reconCatalog;})
+    );
+    const row=dataState.estimateRows.find(function(x){return x.id===rowId;});
+    const estimate=row && dataState.estimates.find(function(x){return x.id===row.estimate_id;});
+    const estSection=row && dataState.estimateSections.find(function(x){return x.id===row.section_id;});
+    if(!row || !estimate) return;
+    let scoped=specJoinedRows().filter(function(sr){
+      const ss=sr.section;
+      if(estimate.is_stairs) return !!ss.is_stairs;
+      return !ss.is_stairs &&
+        (!estimate.building_section || ss.building_section===estimate.building_section) &&
+        (!estimate.zone || ss.zone===estimate.zone);
+    });
+    const matchingSections=Array.from(new Set(scoped.filter(function(sr){
+      return estSection && importNorm(sr.section.name)===importNorm(estSection.title);
+    }).map(function(sr){return sr.section.id;})));
+    if(matchingSections.length===1) scoped=scoped.filter(function(sr){return sr.section.id===matchingSections[0];});
+    const ids=scoped.filter(function(sr){return selectedCatalogs.has(sr.catalog_item_id);}).map(function(sr){return sr.id;});
+    const state=modal.querySelector(".recon-edit-state");
+    state.textContent="Сохраняю…";
+    try{
+      const result=await client.rpc("set_manual_reconciliation",{
+        p_estimate_row_id:rowId,
+        p_specification_row_ids:ids
+      });
+      if(result.error) throw result.error;
+      await loadProjectData(dataState.project);
+      modal.classList.remove("open");
+      renderPage("estimates",3);
+    }catch(err){
+      state.textContent=err&&err.message?err.message:String(err);
+    }
+  }
+
+  function wireReconciliationControls() {
+    document.querySelectorAll("[data-recon-edit]").forEach(function(btn){
+      btn.onclick=function(){openReconciliationEditor(btn.dataset.reconEdit);};
+    });
   }
 
   function renderEstimateJournal() {
@@ -2421,14 +2645,14 @@
   function renderHome() {
     $("workArea").className = "work-area content-work";
     $("workArea").innerHTML =
-      '<div class="review-panel"><div class="review-panel-title">Тестовая рабочая база подключена</div>' +
+      '<div class="review-panel"><div class="review-panel-title">Рабочая база проекта подключена</div>' +
       '<div class="review-grid">' +
         '<div><span>Позиции спецификации</span><strong>'+dataState.specRows.length+'</strong></div>' +
         '<div><span>Номенклатура</span><strong>'+dataState.catalogItems.length+'</strong></div>' +
         '<div><span>Сметы</span><strong>'+dataState.estimates.length+'</strong></div>' +
         '<div><span>Строки смет</span><strong>'+dataState.estimateRows.length+'</strong></div>' +
       '</div>' +
-      '<div class="review-note">Эти данные предназначены только для отработки интерфейса. Перед реальным импортом тестовый набор будет удалён.</div></div>';
+      '<div class="review-note">Спецификация загружена из реальных Excel. Сметы и связи отображаются после импорта соответствующих файлов.</div></div>';
   }
 
   function renderSimple(text) {
@@ -2559,6 +2783,7 @@
     wireTableControls();
     wireServiceControls();
     wireGprControls();
+    wireReconciliationControls();
 
     if (scrollState) {
       const nextScroller = document.querySelector("#workArea .engineering-scroll");
@@ -2618,6 +2843,7 @@
     wireTableControls();
     wireServiceControls();
     wireGprControls();
+    wireReconciliationControls();
 
     if (previousScroll && previousPage === pageKey && previousTab === tab) {
       const nextScroller = document.querySelector("#workArea .engineering-scroll");
