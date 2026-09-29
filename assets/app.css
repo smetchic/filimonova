@@ -1648,3 +1648,27 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   border-color:#3978C5;
   color:#fff;
 }
+
+/* Final selector grid fix: hidden native radio must not consume a grid track. */
+#reconciliationEditorModal .recon-estimate-choice{position:relative!important}
+#reconciliationEditorModal .recon-estimate-choice > .recon-choice-native{
+  position:absolute!important;
+  left:8px!important;top:50%!important;
+  transform:translateY(-50%)!important;
+  width:1px!important;height:1px!important;
+  margin:0!important;padding:0!important;
+  opacity:0!important;
+  pointer-events:none!important;
+}
+#reconciliationEditorModal .recon-estimate-choice > .recon-choice-box{
+  grid-column:1!important;
+  position:static!important;
+  visibility:visible!important;
+  opacity:1!important;
+  z-index:2!important;
+}
+#reconciliationEditorModal .recon-est-no{grid-column:2!important}
+#reconciliationEditorModal .recon-est-pos{grid-column:3!important}
+#reconciliationEditorModal .recon-est-basis{grid-column:4!important}
+#reconciliationEditorModal .recon-est-name{grid-column:5!important}
+#reconciliationEditorModal .recon-est-qty{grid-column:6!important}
