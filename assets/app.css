@@ -2188,3 +2188,14 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 .gpr-formula-c2{color:#2F8A61}
 .gpr-formula-c3{color:#B27622}
 .gpr-formula-result{color:#8057B3;font-weight:650}
+
+
+/* Supplier price manual match: keep source quantity visible and compact. */
+.supplier-match-candidate-table th:nth-child(5),
+.supplier-match-candidate-table td:nth-child(5){
+  width:112px;
+  min-width:112px;
+  max-width:112px;
+  text-align:right;
+  white-space:nowrap;
+}
