@@ -3416,23 +3416,32 @@
     let body=rows.map(function(j){
       const r=dataState.estimateRows.find(function(x){return x.id===j.estimate_row_id;});
       const e=r?dataState.estimates.find(function(x){return x.id===r.estimate_id;}):null;
-      const s=r?dataState.estimateSections.find(function(x){return x.id===r.section_id;}):null;
       const snap=j.snapshot||{};
-      const reasons=Array.isArray(j.reasons)?j.reasons.join("; "):"";
+      const srows=r?linkedSpecRowsForEstimateRow(r):[];
+      const marks=srows.length?Array.from(new Set(srows.map(function(x){return x.mark;}))):(snap.specification_marks||[]);
+      const names=srows.length?Array.from(new Set(srows.map(function(x){return x.name;}))):(snap.specification_names||[]);
+      const projectQty=srows.length?srows.reduce(function(sum,x){return sum+Number(x.total||0);},0):Number(snap.project_quantity_pieces||0);
+      const estimateQty=r?estimateQuantityPieces(r,srows):snap.estimate_quantity_pieces;
+      const diff=estimateQty==null?null:projectQty-Number(estimateQty||0);
+      const reasons=Array.isArray(j.reasons)?j.reasons:[];
+      const discrepancy=reasons.filter(function(x){return /наимен|колич/i.test(x);}).join(" + ") || reasons.join("; ") || "Добавлено пользователем";
       return '<tr class="data-row">'+
-        '<td>'+esc(e?e.number:"—")+'</td>'+
-        '<td>'+esc(s?s.title:"—")+'</td>'+
-        '<td>'+esc(r?r.position:(snap.estimate_position||"—"))+'</td>'+
-        '<td>'+esc(r?estimateDisplayBasis(r):(snap.estimate_basis||"—"))+'</td>'+
-        '<td>'+esc(reasons||"Добавлено пользователем")+'</td>'+
-        '<td>'+esc(j.comment||"")+'</td>'+
-        '<td><span class="soft-status warn">Открыто</span></td>'+
+        '<td title="'+esc(srows.map(function(x){return x.position_no;}).join(", "))+'">'+esc(srows.length?reconPositionText(srows):((snap.specification_positions||[]).join(", ")||"—"))+'</td>'+
+        '<td>'+esc(marks.length?marks.join(" / "):"—")+'</td>'+
+        '<td>'+esc(names.length?names.join(" / "):"—")+'</td>'+
+        '<td class="num">'+fmt(projectQty)+'</td>'+
+        '<td class="center">'+esc(e?e.number:"—")+'</td>'+
+        '<td class="center">'+esc(r?r.position:(snap.estimate_position||"—"))+'</td>'+
+        '<td>'+esc(r?estimateSourceValue(r,"name"):(snap.estimate_name||"—"))+'</td>'+
+        '<td class="num">'+(estimateQty==null?"—":fmt(estimateQty))+'</td>'+
+        '<td class="num '+(diff!=null&&Math.abs(diff)>1e-9?"warning":"")+'">'+(diff==null?"—":fmt(diff))+'</td>'+
+        '<td>'+esc(discrepancy)+'</td>'+
         '<td><button class="table-text-action" type="button" data-journal-remove="'+esc(j.id)+'">Убрать</button></td>'+
       '</tr>';
     }).join("");
-    if(!body) body=tableMessage("В журнал ещё не добавлены контрольные записи.",8);
+    if(!body) body=tableMessage("В журнал ещё не добавлены контрольные записи.",11);
     $("workArea").className="work-area table-work";
-    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table journal-table" data-table-key="estimate-journal"><thead><tr><th>№ сметы</th><th>Раздел</th><th>Поз. сметы</th><th>Обоснование</th><th>Расхождение</th><th>Комментарий</th><th>Состояние</th><th>Действия</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table journal-table" data-table-key="reconciliation-journal"><thead><tr><th colspan="4">Спецификация</th><th colspan="4">Смета</th><th colspan="3">Контроль</th></tr><tr><th>Поз. спецификации</th><th>Марка</th><th>Наименование по спецификации</th><th>Проект, шт.</th><th>№ сметы</th><th>Поз. сметы</th><th>Наименование по смете</th><th>Смета, шт.</th><th>Разница</th><th>Расхождение</th><th>Действия</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
     document.querySelectorAll("[data-journal-remove]").forEach(function(btn){
       btn.onclick=async function(){
         const j=dataState.reconciliationJournal.find(function(x){return x.id===btn.dataset.journalRemove;});
