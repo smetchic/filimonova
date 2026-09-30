@@ -558,8 +558,17 @@
     const field = trigger.dataset.columnFilter;
     const viewKey=currentViewKey();
     const pop = ensureFilterPopup();
-    const cells = Array.from(document.querySelectorAll('#workArea [data-filter-field="' + CSS.escape(field) + '"]'));
-    let values = Array.from(new Set(cells.map(function(c){ return c.dataset.filterValue || ""; })));
+    let values;
+    if(ui.page==="spec" && (field==="mark" || field==="name")){
+      const tab=ui.tabs.spec||0;
+      const base=tab===0
+        ? specJoinedRows().filter(passesSpecFilters).filter(rowMatchesSpecSearch)
+        : buildWorkingSummaryRows();
+      values=Array.from(new Set(base.map(function(r){return String(r[field]==null?"":r[field]);})));
+    }else{
+      const cells = Array.from(document.querySelectorAll('#workArea [data-filter-field="' + CSS.escape(field) + '"]'));
+      values = Array.from(new Set(cells.map(function(c){ return c.dataset.filterValue || ""; })));
+    }
     values.sort(function(a,b){ return a.localeCompare(b,"ru",{numeric:true,sensitivity:"base"}); });
     const viewFilters=(ui.columnFilters&&ui.columnFilters[viewKey])||{};
     const existing = viewFilters[field];
@@ -653,7 +662,8 @@
           .map(function(x){return x.dataset.filterValueChoice;}));
       }
       const allValues = values;
-      if (!search.value.trim() && chosen.size === allValues.length && allValues.every(function(v){return chosen.has(v);})) {
+      const hadExisting=!!existing;
+      if (!hadExisting && !search.value.trim() && chosen.size === allValues.length && allValues.every(function(v){return chosen.has(v);})) {
         if(ui.columnFilters&&ui.columnFilters[viewKey]){
           const next=Object.assign({},ui.columnFilters[viewKey]);
           delete next[field];
@@ -3410,13 +3420,9 @@
       }
     });
 
-    return Array.from(grouped.values()).sort(function(a,b) {
-      const z = a.zone.localeCompare(b.zone,"ru");
-      if (z) return z;
-      const s = a.sectionName.localeCompare(b.sectionName,"ru");
-      if (s) return s;
-      return a.mark.localeCompare(b.mark,"ru");
-    });
+    // Map preserves first appearance in the source specification.
+    // This is the canonical unsorted order of the Working Summary.
+    return Array.from(grouped.values());
   }
 
   function summaryVector(rows, levels) {
