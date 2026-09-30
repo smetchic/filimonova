@@ -5760,11 +5760,38 @@
     if(!detectedPeriod) throw new Error("Не удалось однозначно определить отчётный месяц из шапки АВР.");
     if(detectedPeriod!==expectedKey) throw new Error("В файле указан "+periodLabel(detectedPeriod,false)+", а выбран "+periodLabel(expectedKey,false)+".");
     let actNo="";
-    rows.some(function(entry){
-      const text=entry.values.map(function(x){return String(x==null?"":x);}).join(" ");
-      const match=text.match(/(?:акт|с-?2а)[^№0-9]{0,18}№?\s*([0-9][0-9\/-]*)/i);
-      if(match){actNo=match[1];return true;}return false;
-    });
+    const actNumberPatterns=[
+      /акт.{0,320}?(?:№|номер|n(?:o)?\.?)\s*[:.]?\s*([0-9]+(?:\s*[\/-]\s*[0-9]+)*)/i,
+      /(?:№|номер|n(?:o)?\.?)\s*[:.]?\s*([0-9]+(?:\s*[\/-]\s*[0-9]+)*)[^а-яёa-z0-9]{0,80}акт/i,
+      /акт\s*[:.\-]?\s*([0-9]+(?:\s*[\/-]\s*[0-9]+)*)/i
+    ];
+    for(let rowIndex=0;rowIndex<rows.length&&!actNo;rowIndex++){
+      const entry=rows[rowIndex];
+      const parts=[];
+      for(let offset=0;offset<3;offset++){
+        const candidate=rows[rowIndex+offset];
+        if(!candidate||candidate.sheet!==entry.sheet) break;
+        parts.push(candidate.values.map(function(x){return String(x==null?"":x);}).join(" "));
+      }
+      const text=parts.join(" ").replace(/\s+/g," ").trim();
+      if(!/акт/i.test(text)) continue;
+      for(let patternIndex=0;patternIndex<actNumberPatterns.length;patternIndex++){
+        const match=text.match(actNumberPatterns[patternIndex]);
+        if(match){
+          actNo=match[1].replace(/\s+/g,"");
+          break;
+        }
+      }
+    }
+    if(!actNo){
+      rows.some(function(entry){
+        const text=entry.values.map(function(x){return String(x==null?"":x);}).join(" ").replace(/\s+/g," ").trim();
+        if(/форма\s*с-?2а/i.test(text)) return false;
+        const match=text.match(/с-?2а.{0,60}?(?:№|номер|n(?:o)?\.?)\s*[:.]?\s*([0-9]+(?:\s*[\/-]\s*[0-9]+)*)/i);
+        if(match){actNo=match[1].replace(/\s+/g,"");return true;}
+        return false;
+      });
+    }
     if(!actNo) throw new Error("Не удалось прочитать номер АВР из шапки файла.");
     const estimateByNumber=new Map(dataState.estimates.map(function(x){return [String(x.number),x];}));
     const basisMap=new Map();
