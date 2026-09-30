@@ -995,7 +995,7 @@
       btn.onclick=function(e){e.preventDefault();e.stopPropagation();openColumnFilter(btn);};
     });
     document.querySelectorAll('#workArea .data-row[data-material-id],#workArea .data-row[data-material-mark]').forEach(function(row){
-      row.ondblclick=function(e){e.preventDefault();openMaterialCard(row.dataset.materialId||"",row.dataset.materialMark||"");};
+      row.ondblclick=function(e){e.preventDefault();openMaterialCard(row.dataset.materialId||"",row.dataset.materialMark||"",row.dataset.materialName||"");};
     });
   }
 
@@ -1010,11 +1010,11 @@
     return {rows:rows,qty:qty,m3:m3,floors:floors,est:est};
   }
 
-  function openMaterialCard(id,mark) {
+  function openMaterialCard(id,mark,sourceName) {
     let item=dataState.catalogItems.find(function(x){return x.id===id;});
     if(!item && mark) item=dataState.catalogItems.find(function(x){return x.mark===mark;});
     const sourceOnly=!item;
-    if(!item) item={id:"",mark:mark||"Материал",name:"Исходная строка без связи"};
+    if(!item) item={id:"",mark:mark||"Материал",name:sourceName||"Исходная строка без связи"};
     const st=materialStats(sourceOnly?null:item);
     const levels=levelCodes();
     const linkedEstimateRows=sourceOnly?[]:dataState.estimateRows.filter(function(r){
@@ -6164,7 +6164,7 @@
               const link=wl.find(function(x){return x.material_row_id===m.id;});
               const method=link&&link.link_method==="manual"?"ручная":"авто";
               const geometry=workLinkMaterialGeometry(m);
-              sectionBody+='<tr class="data-row work-link-material-child" data-estimate-row-id="'+esc(m.id)+'" data-material-id="'+esc(m.catalog_item_id||"")+'" data-material-mark="'+esc(estimateDisplayBasis(m)||"")+'" title="Двойной щелчок — карточка панели">'+
+              sectionBody+='<tr class="data-row work-link-material-child" data-estimate-row-id="'+esc(m.id)+'" data-material-id="'+esc(m.catalog_item_id||"")+'" data-material-mark="'+esc(estimateDisplayBasis(m)||"")+'" data-material-name="'+esc(estimateDisplayName(m)||"")+'" title="Двойной щелчок — карточка панели">'+
                 '<td class="center"><span class="type-mark">М</span></td>'+
                 '<td class="center">'+esc(m.position||"")+'</td>'+
                 '<td>'+esc(estimateDisplayBasis(m)||"")+'</td>'+
@@ -6188,7 +6188,7 @@
             if(!ui.collapsed.has(uk) && !ui.collapseLeaves){
               unmatched.forEach(function(m){
                 const geometry=workLinkMaterialGeometry(m);
-                sectionBody+='<tr class="data-row work-link-unmatched-row" data-estimate-row-id="'+esc(m.id)+'" data-material-id="'+esc(m.catalog_item_id||"")+'" data-material-mark="'+esc(estimateDisplayBasis(m)||"")+'" title="Двойной щелчок — карточка панели">'+
+                sectionBody+='<tr class="data-row work-link-unmatched-row" data-estimate-row-id="'+esc(m.id)+'" data-material-id="'+esc(m.catalog_item_id||"")+'" data-material-mark="'+esc(estimateDisplayBasis(m)||"")+'" data-material-name="'+esc(estimateDisplayName(m)||"")+'" title="Двойной щелчок — карточка панели">'+
                   '<td class="center"><span class="type-mark">М</span></td>'+
                   '<td class="center">'+esc(m.position||"")+'</td>'+
                   '<td>'+esc(estimateDisplayBasis(m)||"")+'</td>'+
@@ -6237,7 +6237,7 @@
       cell.onclick=function(e){
         e.stopPropagation();
         const row=cell.closest("[data-material-id]");
-        if(row) openMaterialCard(row.dataset.materialId||"",row.dataset.materialMark||"");
+        if(row) openMaterialCard(row.dataset.materialId||"",row.dataset.materialMark||"",row.dataset.materialName||"");
       };
     });
     document.querySelectorAll("[data-work-link-edit]").forEach(function(btn){
