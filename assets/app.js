@@ -259,9 +259,9 @@
       fetchAllRows("s29_carryovers","id,origin_document_id,origin_row_id,catalog_item_id,kind,origin_month,created_m3,created_at",function(q){return q.eq("project_id",project.id);}),
       fetchAllRows("s29_carryover_settlements","id,carryover_id,settlement_document_id,settlement_month,settled_m3,created_at",function(q){return q.eq("project_id",project.id);}),
       fetchAllRows("imports","id,domain,source_name,source_period,status,report,imported_at,source_slot,applied_at",function(q){return q.eq("project_id",project.id).in("domain",["avr","accounting","supplier_price"]).order("imported_at",{ascending:false});}),
-      fetchAllRows("supplier_price_links","id,supplier_id,catalog_item_id,supplier_item_id,link_method,validation_state,last_checked_import_id,created_at,updated_at",function(q){return q.eq("project_id",project.id);}),
+      fetchAllRows("supplier_price_links","id,supplier_id,catalog_item_id,supplier_item_id,scope_key,link_method,validation_state,last_checked_import_id,created_at,updated_at",function(q){return q.eq("project_id",project.id);}),
       fetchAllRows("supplier_price_journal","id,import_id,catalog_item_id,supplier_item_id,event_type,before_value,after_value,link_method,actor_id,created_at",function(q){return q.eq("project_id",project.id).order("created_at",{ascending:false});}),
-      fetchAllRows("supplier_price_snapshot_rows","import_id,source_name,imported_at,version_no,supplier_id,import_row_id,source_row_no,source_key,raw_data,normalized_data,supplier_item_id,catalog_item_id,link_method,validation_state",function(q){return q.eq("project_id",project.id).order("imported_at",{ascending:false}).order("source_row_no");}),
+      fetchAllRows("supplier_price_snapshot_rows","import_id,source_name,imported_at,version_no,supplier_id,import_row_id,source_row_no,source_key,raw_data,normalized_data,supplier_item_id,catalog_item_id,link_method,validation_state,scope_key",function(q){return q.eq("project_id",project.id).order("imported_at",{ascending:false}).order("source_row_no");}),
       fetchAllRows("supplier_price_control_journal","id,catalog_item_id,supplier_item_id,issue_key,reasons,status,snapshot,created_at,updated_at",function(q){return q.eq("project_id",project.id).order("created_at",{ascending:false});})
     ];
     const results = await Promise.all(requests);
@@ -2208,16 +2208,48 @@
     return all.filter(function(x){return x.import_id===latest;});
   }
 
+  function supplierScopeNorm(value) {
+    return String(value==null?"":value).toLowerCase().replace(/ё/g,"е").replace(/\s+/g," ").trim();
+  }
+
+  function supplierProjectScopeKey(zone,sectionName) {
+    return supplierScopeNorm(zone)+"|"+supplierScopeNorm(sectionName);
+  }
+
+  function supplierSourceScopeKey(row) {
+    const raw=row&&row.raw_data||row||{};
+    const group=supplierScopeNorm(raw.source_group);
+    const section=supplierScopeNorm(raw.source_section);
+    let zone="";
+    if(group.indexOf("ниже отметки")>=0 || group.indexOf("цокол")>=0) zone="цоколь";
+    else if(group.indexOf("выше отметки")>=0 || group.indexOf("выше 0.000")>=0) zone="выше 0.000";
+    else if(group.indexOf("лестниц")>=0 || section.indexOf("элемент")>=0&&section.indexOf("лестниц")>=0) zone="лестницы";
+    return zone+"|"+section;
+  }
+
+  function supplierLinkScopeKey(link,snapshot) {
+    if(link&&link.scope_key) return link.scope_key;
+    const source=link&&snapshot?snapshot.find(function(x){return x.supplier_item_id===link.supplier_item_id;}):null;
+    return source?supplierSourceScopeKey(source):"";
+  }
+
   function supplierCheckProjectRows() {
-    const out=new Map();
-    buildWorkingSummaryRows().forEach(function(r){
-      if(!r.catalogItemId) return;
-      if(!out.has(r.catalogItemId)) out.set(r.catalogItemId,{catalogItemId:r.catalogItemId,mark:r.mark,name:r.name,qty:0,volumes:new Set()});
-      const x=out.get(r.catalogItemId);
-      x.qty+=r.houseOnly?Number(r.houseTotal||0):Number(r.bySection["Секция 1"]||0)+Number(r.bySection["Секция 2"]||0);
-      if(Number(r.volumePerPiece)>0) x.volumes.add(Number(r.volumePerPiece).toFixed(6));
+    return buildWorkingSummaryRows().filter(function(r){return !!r.catalogItemId;}).map(function(r){
+      const qty=r.houseOnly?Number(r.houseTotal||0):Number(r.bySection["Секция 1"]||0)+Number(r.bySection["Секция 2"]||0);
+      const volume=Number(r.volumePerPiece)>0?Number(r.volumePerPiece):null;
+      const scopeKey=supplierProjectScopeKey(r.zone,r.sectionName);
+      return {
+        catalogItemId:r.catalogItemId,
+        projectKey:r.catalogItemId+"::"+scopeKey,
+        scopeKey:scopeKey,
+        zone:r.zone,
+        sectionName:r.sectionName,
+        mark:r.mark,
+        name:r.name,
+        qty:qty,
+        volume:volume
+      };
     });
-    return Array.from(out.values()).map(function(x){x.volume=x.volumes.size===1?Number(Array.from(x.volumes)[0]):null;return x;});
   }
 
   function supplierCandidateScore(project,row) {
@@ -2225,6 +2257,9 @@
     let score=0;
     const pm=supplierMatchMark(project.mark),sm=supplierMatchMark(raw.source_mark);
     const pn=supplierMatchName(project.name),sn=supplierMatchName(raw.source_name);
+    const sourceScope=supplierSourceScopeKey(row);
+    if(sourceScope&&project.scopeKey===sourceScope) score+=5000;
+    else if(sourceScope) score-=1200;
     if(pm===sm) score+=1000;
     if(pn===sn) score+=1200;
     if(pm&&sm&&(pm.includes(sm)||sm.includes(pm))) score+=180;
@@ -2236,7 +2271,9 @@
   }
 
   function supplierCheckRow(project,snapshot) {
-    const link=(dataState.supplierPriceLinks||[]).find(function(x){return x.catalog_item_id===project.catalogItemId;});
+    const link=(dataState.supplierPriceLinks||[]).find(function(x){
+      return x.catalog_item_id===project.catalogItemId && supplierLinkScopeKey(x,snapshot)===project.scopeKey;
+    });
     const source=link?snapshot.find(function(x){return x.supplier_item_id===link.supplier_item_id;}):null;
     const raw=source&&source.raw_data||{};
     const prices=Array.isArray(raw.prices)?raw.prices:[];
