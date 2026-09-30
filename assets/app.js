@@ -676,15 +676,15 @@
 
   function intrinsicColumnWidth(table,index) {
     if (table.classList.contains("working-summary")) {
-      if (index === 3 || index === 5) return 58;
-      if (index === 4 || index === 6) return 64;
+      if (index === 3 || index === 4 || index === 6) return 58;
+      if (index === 5 || index === 7) return 64;
       // Floor subcolumns contain only quantities. Keep them compact and stable:
       // size from the complete project dataset, not from the currently visible grouping.
-      if (index >= 7) {
+      if (index >= 8) {
         const levels=levelCodes();
-        const floorEnd=7+levels.length*2;
+        const floorEnd=8+levels.length*2;
         if(index < floorEnd){
-          const rel=index-7, section=rel%2===0?"Секция 1":"Секция 2";
+          const rel=index-8, section=rel%2===0?"Секция 1":"Секция 2";
           const code=levels[Math.floor(rel/2)];
           let maxText="0";
           buildWorkingSummaryRows().forEach(function(r){
@@ -3138,7 +3138,7 @@
       v1 += a * Number(r.volumePerPiece || 0);
       v2 += b * Number(r.volumePerPiece || 0);
     });
-    out.push(s1,v1,s2,v2);
+    out.push(s1+s2,s1,v1,s2,v2);
     levels.forEach(function(code) {
       let a = 0, b = 0;
       rows.forEach(function(r) {
@@ -3147,7 +3147,6 @@
       });
       out.push(a,b);
     });
-    out.push(s1+s2);
     return out;
   }
 
@@ -3157,8 +3156,9 @@
     let html = '<tr class="group-row group-toggle" data-group-key="' + esc(key) + '">';
     html += '<td colspan="3" class="group-title spec-group-title" style="padding-left:' + (8+depth*14) + 'px"><span class="group-arrow">' + groupArrow(key) + '</span>' + esc(label) + '</td>';
     vector.forEach(function(v,i){
-      const cls = i === 1 || i === 3 ? "vol-col" : "summary-col";
-      html += '<td class="' + cls + ' num">' + (i === 1 || i === 3 ? fmt(v) : fmt0(v)) + '</td>';
+      const isVolume = i === 2 || i === 4;
+      const cls = isVolume ? "vol-col" : "summary-col";
+      html += '<td class="' + cls + ' num">' + (isVolume ? fmt(v) : fmt0(v)) + '</td>';
     });
     html += '</tr>';
     return html;
@@ -3171,6 +3171,7 @@
     ui.currentGroupKeys = [];
 
     let body = "";
+    let displayNo = 0;
     if (!rows.length) {
       body = tableMessage("Нет строк по текущему фильтру.",3+4+levels.length*2+1);
     } else {
@@ -3189,20 +3190,22 @@
             const sKey = "spec-summary:section:"+zone+":"+name;
             body += summaryGroupRow(name,sRows,sKey,2,levels);
             if (ui.collapsed.has(sKey) || ui.collapseLeaves) return;
-            sRows.forEach(function(r,index) {
+            sRows.forEach(function(r) {
               const s1 = Number(r.bySection["Секция 1"] || 0);
               const s2 = Number(r.bySection["Секция 2"] || 0);
+              const total=r.houseOnly?Number(r.houseTotal||0):s1+s2;
+              displayNo++;
               body += '<tr class="data-row" data-material-id="' + esc(r.catalogItemId||"") + '">';
-              body += '<td class="sticky-1 center">' + (index+1) + '</td>';
+              body += '<td class="sticky-1 center">' + displayNo + '</td>';
               body += filterCell("mark",r.mark,esc(r.mark),"sticky-2");
               body += filterCell("name",r.name,esc(r.name),"sticky-3");
+              body += '<td class="summary-col num strong-num">' + fmt0(total) + '</td>';
               body += '<td class="qty-col num">' + fmt0(s1) + '</td><td class="vol-col num">' + fmt(s1*r.volumePerPiece) + '</td>';
               body += '<td class="qty-col num">' + fmt0(s2) + '</td><td class="vol-col num">' + fmt(s2*r.volumePerPiece) + '</td>';
               levels.forEach(function(code) {
                 body += '<td class="summary-col num">' + fmt0((r.byLevel["Секция 1"] && r.byLevel["Секция 1"].get(code)) || 0) + '</td>';
                 body += '<td class="summary-col num">' + fmt0((r.byLevel["Секция 2"] && r.byLevel["Секция 2"].get(code)) || 0) + '</td>';
               });
-              body += '<td class="summary-col num strong-num">' + fmt0(r.houseOnly?Number(r.houseTotal||0):s1+s2) + '</td>';
               body += '</tr>';
             });
           });
@@ -3212,15 +3215,15 @@
           const stairKey="spec-summary:stairs";
           body += summaryGroupRow("Элементы лестниц",stairRows,stairKey,1,levels);
           if(!ui.collapsed.has(stairKey) && !ui.collapseLeaves){
-            stairRows.forEach(function(r,index){
-              const s1=Number(r.bySection["Секция 1"]||0);
-              const s2=Number(r.bySection["Секция 2"]||0);
-              body += '<tr class="data-row" data-material-id="'+esc(r.catalogItemId||"")+'"><td class="sticky-1 center">'+(index+1)+'</td>'+
+            stairRows.forEach(function(r){
+              displayNo++;
+              body += '<tr class="data-row" data-material-id="'+esc(r.catalogItemId||"")+'"><td class="sticky-1 center">'+displayNo+'</td>'+
                 filterCell("mark",r.mark,esc(r.mark),"sticky-2")+filterCell("name",r.name,esc(r.name),"sticky-3")+
+                '<td class="summary-col num strong-num">'+fmt0(r.houseTotal||0)+'</td>'+
                 '<td class="qty-col num">—</td><td class="vol-col num">—</td>'+
                 '<td class="qty-col num">—</td><td class="vol-col num">—</td>'+
                 levels.map(function(){return '<td class="summary-col num">—</td><td class="summary-col num">—</td>';}).join("")+
-                '<td class="summary-col num strong-num">'+fmt0(r.houseTotal||0)+'</td></tr>';
+                '</tr>';
             });
           }
         }
@@ -3231,9 +3234,9 @@
       '<th class="sticky-1" rowspan="2">№</th>' +
       '<th class="sticky-2 filterable-head" rowspan="2">' + filterHeader("Марка","mark") + '</th>' +
       '<th class="sticky-3 filterable-head" rowspan="2">' + filterHeader("Наименование","name") + '</th>' +
+      '<th rowspan="2" class="summary-col">Итого, шт.</th>' +
       '<th colspan="2">Секция 1</th><th colspan="2">Секция 2</th>' +
       levels.map(function(x){ return '<th colspan="2" class="floor-parent">' + esc(summaryLevelLabel(x)) + '</th>'; }).join("") +
-      '<th rowspan="2" class="summary-col">Итого, шт.</th>' +
       '</tr>';
     const head2 = '<tr>' +
       '<th class="qty-col">Кол-во, шт.</th><th class="vol-col">Объём, м³</th>' +
@@ -3242,7 +3245,7 @@
       '</tr>';
 
     $("workArea").className = "work-area table-work spec-work";
-    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="spec-table working-summary" data-table-key="spec-summary-v5"><thead>' + head1 + head2 + '</thead><tbody>' + body + '</tbody></table></div></div>';
+    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="spec-table working-summary" data-table-key="spec-summary-v6"><thead>' + head1 + head2 + '</thead><tbody>' + body + '</tbody></table></div></div>';
   }
 
   function rowCost(row,m) {
