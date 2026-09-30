@@ -2467,6 +2467,8 @@
       if(!remove&&!chosenSupplier){state.textContent="Выберите позицию поставщика.";return;}
       supplierItemId=remove?null:chosenSupplier.dataset.supplierCandidate;
     }
+    const checkScroll=document.querySelector("#supplierCheckModal .supplier-check-content>.engineering-scroll");
+    const savedScroll=checkScroll?{top:checkScroll.scrollTop,left:checkScroll.scrollLeft}:null;
     state.textContent="Сохраняю…";
     const result=await client.rpc("set_supplier_price_link",{
       p_project_id:dataState.project.id,
@@ -2477,6 +2479,15 @@
     await loadProjectData(dataState.project);
     modal.classList.remove("open");
     renderSupplierCheck();
+    if(savedScroll){
+      requestAnimationFrame(function(){
+        const restored=document.querySelector("#supplierCheckModal .supplier-check-content>.engineering-scroll");
+        if(restored){
+          restored.scrollTop=savedScroll.top;
+          restored.scrollLeft=savedScroll.left;
+        }
+      });
+    }
     renderSupplierPrice();
   }
 
