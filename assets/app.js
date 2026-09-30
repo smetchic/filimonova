@@ -3681,18 +3681,22 @@
           id:mon.id,
           project_id:dataState.project.id,
           plan_id:plan.id,
-          month:String(mon.month).slice(0,10),
+          month:mon.key+"-01",
           monthly_index:monthly,
           execution_index:cumulativeStored,
           is_in_period:checked.some(function(x){return x.id===mon.id;})
         });
       }
+      if(payload.some(function(x){return !/^\d{4}-\d{2}-01$/.test(x.month);})){
+        state.textContent="Ошибка периода: некорректная дата месяца.";
+        return;
+      }
       state.textContent="Сохраняю…";
       const saveMonths=await client.from("gpr_months").upsert(payload,{onConflict:"id"});
       if(saveMonths.error){state.textContent=saveMonths.error.message;return;}
       const savePlan=await client.from("gpr_plans").update({
-        start_month:String(checked[0].month).slice(0,10),
-        end_month:String(checked[checked.length-1].month).slice(0,10)
+        start_month:checked[0].key+"-01",
+        end_month:checked[checked.length-1].key+"-01"
       }).eq("id",plan.id).eq("project_id",dataState.project.id);
       if(savePlan.error){state.textContent=savePlan.error.message;return;}
       await loadProjectData(dataState.project);
