@@ -2334,7 +2334,8 @@
 
   function supplierAbsenceAllowed(project) {
     const name=String(project&&project.name||"").replace(/\u00a0/g," ").trim().toLowerCase();
-    return name.indexOf("лестничная площадка")===0;
+    return name.indexOf("лестничная площадка")===0 ||
+      name.indexOf("лестничный марш")===0;
   }
 
   function supplierCheckRow(project,snapshot) {
