@@ -474,6 +474,24 @@
     return ui.columnSort[key] || null;
   }
 
+  function clearColumnFilter(field) {
+    const key=currentViewKey();
+    if(!ui.columnFilters || !ui.columnFilters[key]) return;
+    const next=Object.assign({},ui.columnFilters[key]);
+    delete next[field];
+    if(Object.keys(next).length) ui.columnFilters[key]=next;
+    else delete ui.columnFilters[key];
+  }
+
+  function clearColumnSort() {
+    const key=currentViewKey();
+    if(ui.columnSort && Object.prototype.hasOwnProperty.call(ui.columnSort,key)){
+      const next=Object.assign({},ui.columnSort);
+      delete next[key];
+      ui.columnSort=next;
+    }
+  }
+
   function columnFilterPass(field,value) {
     const set = filterBucket()[field];
     if (!set) return true;
@@ -605,13 +623,17 @@
       };
     });
     pop.querySelector("[data-sort-clear]").onclick=function(){
-      if(ui.columnSort) delete ui.columnSort[currentViewKey()];
+      clearColumnSort();
       pop.classList.remove("open");
       rerenderContent();
     };
     pop.querySelector("[data-filter-cancel]").onclick=function(){pop.classList.remove("open");};
     pop.querySelector(".filter-clear").onclick=function(){
-      delete filterBucket()[field];
+      clearColumnFilter(field);
+      if(ui.page==="spec"){
+        ui.collapseLeaves=false;
+        ui.collapsed.clear();
+      }
       pop.classList.remove("open");
       rerenderContent();
     };
