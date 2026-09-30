@@ -2232,3 +2232,52 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   box-sizing:border-box;
   scroll-padding-bottom:44px;
 }
+
+
+/* Supplier reconciliation source structure */
+.supplier-check-structure-row td{
+  height:25px!important;
+  padding:0 8px!important;
+  border-bottom:1px solid var(--line-strong)!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+}
+.supplier-check-structure-group td{
+  background:#E9EBEE!important;
+  color:#3F4248;
+  font-weight:600;
+  text-transform:uppercase;
+}
+.supplier-check-structure-section td{
+  background:#F4F5F6!important;
+  color:#4E5259;
+  font-weight:600;
+  padding-left:24px!important;
+}
+.supplier-match-section{
+  min-width:190px!important;
+  max-width:260px!important;
+}
+.supplier-match-section strong{
+  display:block;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.supplier-match-section small{
+  display:block;
+  margin-top:2px;
+  color:#8A8D94;
+  font-size:10px;
+  font-weight:400;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.supplier-match-candidate-table th:nth-child(6),
+.supplier-match-candidate-table td:nth-child(6){
+  width:112px;
+  min-width:112px;
+  max-width:112px;
+  text-align:right;
+  white-space:nowrap;
+}
