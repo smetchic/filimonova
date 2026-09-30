@@ -2338,3 +2338,15 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   border-color:#8FADE6;
   box-shadow:0 0 0 1px #C8D7F2;
 }
+
+
+/* Sticky header stacking repair */
+#workArea .spec-table thead,
+#workArea .eng-table thead{
+  position:static!important;
+  z-index:auto!important;
+}
+#workArea .spec-table thead th,
+#workArea .eng-table thead th{
+  z-index:40!important;
+}
