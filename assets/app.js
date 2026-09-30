@@ -2362,12 +2362,21 @@
     const autoAttentionNotes=source&&link&&link.link_method==="auto"
       ? supplierAutoAttentionNotes(project,raw)
       : [];
+    const projectNums=supplierNumericSignature(project.name);
+    const supplierNums=source?supplierNumericSignature(raw.source_name):"";
+    const numericDesignationMismatch=!!(
+      source&&link&&link.link_method==="auto"&&
+      projectNums&&supplierNums&&projectNums!==supplierNums
+    );
     if(source){
       if(supplierCompareMark(project.mark)!==supplierCompareMark(raw.source_mark)) reasons.push("Марка");
       if(supplierCompareName(project.name)!==supplierCompareName(raw.source_name)) reasons.push("Наименование");
       autoAttentionNotes.forEach(function(note){
         if(!reasons.includes(note)) reasons.push(note);
       });
+      if(numericDesignationMismatch){
+        reasons.push("Числа в обозначении: "+projectNums+" ≠ "+supplierNums);
+      }
       if(!prices.length) reasons.push("Без цены");
       if(new Set(prices.map(function(p){return String(p.effective_from)+"|"+String(p.unit_price_gross);})).size!==prices.length) reasons.push("Несколько цен");
       if(raw.qty_house!=null&&Math.abs(Number(raw.qty_house)-project.qty)>1e-6) reasons.push("Количество: "+fmt0(raw.qty_house)+" ≠ "+fmt0(project.qty));
@@ -2383,6 +2392,7 @@
     else if(!source) status="Нет в новой версии";
     else if(!prices.length) status="Без цены";
     else if(changed) status="Изменена цена";
+    else if(numericDesignationMismatch) status="Требует проверки";
     else if(manualConfirmed) status="Сопоставлено вручную";
     else if(raw.qty_house!=null&&Math.abs(Number(raw.qty_house)-project.qty)>1e-6) status="Расхождение количества";
     else if(supplierVolume!=null&&project.volume!=null&&Math.abs(supplierVolume-project.volume)>1e-6) status="Расхождение объёма";
@@ -2707,9 +2717,22 @@
     }
   }
 
-  function openSupplierCheck() {
+  async function openSupplierCheck() {
     ui.supplierCheckTab="recon";ui.supplierCheckCatalog="";
-    const modal=supplierCheckModal();renderSupplierCheck();modal.classList.add("open");
+    const modal=supplierCheckModal();
+    modal.classList.add("open");
+    modal.querySelector(".supplier-check-content").innerHTML='<div class="supplier-check-summary">Обновляю сверку…</div>';
+    try{
+      const results=await Promise.all([
+        fetchAllRows("supplier_price_links","id,supplier_id,catalog_item_id,supplier_item_id,scope_key,link_method,validation_state,last_checked_import_id,created_at,updated_at",function(q){return q.eq("project_id",dataState.project.id);}),
+        fetchAllRows("supplier_price_snapshot_rows","import_id,source_name,imported_at,version_no,supplier_id,import_row_id,source_row_no,source_key,raw_data,normalized_data,supplier_item_id,catalog_item_id,link_method,validation_state,scope_key",function(q){return q.eq("project_id",dataState.project.id).order("imported_at",{ascending:false}).order("source_row_no");})
+      ]);
+      dataState.supplierPriceLinks=results[0]||[];
+      dataState.supplierSnapshotRows=results[1]||[];
+    }catch(err){
+      console.error(err);
+    }
+    renderSupplierCheck();
   }
 
   function supplierMatchEditorModal() {
