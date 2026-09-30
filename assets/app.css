@@ -2313,3 +2313,28 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   color:#A13D31;
   font-weight:600;
 }
+
+
+.supplier-check-status-filter{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  white-space:nowrap;
+  color:#62636A;
+  font-size:11px;
+}
+.supplier-check-status-filter select{
+  height:24px;
+  min-width:210px;
+  padding:0 24px 0 8px;
+  border:1px solid #D3D4D8;
+  border-radius:4px;
+  background:#fff;
+  color:#33353A;
+  font:inherit;
+}
+.supplier-check-status-filter select:focus{
+  outline:none;
+  border-color:#8FADE6;
+  box-shadow:0 0 0 1px #C8D7F2;
+}
