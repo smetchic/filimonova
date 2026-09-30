@@ -2332,6 +2332,11 @@
     return score;
   }
 
+  function supplierAbsenceAllowed(project) {
+    const name=String(project&&project.name||"").replace(/\u00a0/g," ").trim().toLowerCase();
+    return name.indexOf("лестничная площадка")===0;
+  }
+
   function supplierCheckRow(project,snapshot) {
     const link=(dataState.supplierPriceLinks||[]).find(function(x){
       return x.catalog_item_id===project.catalogItemId && supplierLinkScopeKey(x,snapshot)===project.scopeKey;
@@ -2348,9 +2353,11 @@
     const perM3=m3Price?Number(m3Price.unit_price_gross):(piece!=null&&supplierVolume>0?piece/supplierVolume:null);
     const reasons=[];
     const candidates=snapshot.map(function(s){return {row:s,score:supplierCandidateScore(project,s)};}).filter(function(x){return x.score>0;}).sort(function(a,b){return b.score-a.score;});
+    const absenceAllowed=!link&&supplierAbsenceAllowed(project);
     if(link&&!source) reasons.push("Нет в новой версии");
-    if(!link && candidates.length>1) reasons.push("Несколько кандидатов");
-    if(!link && candidates.length<=1) reasons.push("Нет подтверждённой связи");
+    if(absenceAllowed) reasons.push("Допустимое отсутствие у поставщика");
+    else if(!link && candidates.length>1) reasons.push("Несколько кандидатов");
+    else if(!link && candidates.length<=1) reasons.push("Нет подтверждённой связи");
     const autoAttentionNotes=source&&link&&link.link_method==="auto"
       ? supplierAutoAttentionNotes(project,raw)
       : [];
@@ -2370,7 +2377,8 @@
     if(changed) reasons.push("Изменена цена");
     let status="Сопоставлено";
     const manualConfirmed=!!(link&&source&&link.link_method==="manual"&&link.validation_state==="confirmed");
-    if(!link || (link&&link.validation_state==="review") || (!source&&link&&link.validation_state!=="confirmed")) status="Требует проверки";
+    if(absenceAllowed) status="Не требуется в прайсе";
+    else if(!link || (link&&link.validation_state==="review") || (!source&&link&&link.validation_state!=="confirmed")) status="Требует проверки";
     else if(!source) status="Нет в новой версии";
     else if(!prices.length) status="Без цены";
     else if(changed) status="Изменена цена";
@@ -2383,6 +2391,7 @@
 
   function supplierStatusClass(status) {
     if(status==="Сопоставлено"||status==="Сопоставлено вручную") return "ok";
+    if(status==="Не требуется в прайсе") return "none";
     if(status==="Изменена цена"||status.indexOf("Расхождение")===0||status==="Требует проверки"||status==="Сопоставлено с замечанием") return "review";
     return "none";
   }
@@ -2599,7 +2608,8 @@
       "Требует проверки",
       "Только у поставщика",
       "Нет в новой версии",
-      "Сопоставлено вручную"
+      "Сопоставлено вручную",
+      "Не требуется в прайсе"
     ];
     const statusOptions=statusOrder.filter(function(s){return availableStatuses.has(s);});
     Array.from(availableStatuses).forEach(function(s){if(!statusOptions.includes(s)) statusOptions.push(s);});
@@ -2636,7 +2646,7 @@
     if(!body) body=tableMessage(ui.supplierCheckStatus==="all"?"Нет данных для проверки. Сначала импортируйте прайс поставщика.":"Нет строк с выбранным статусом.",18);
 
     const attentionCount=rows.filter(function(x){
-      return x.status!=="Сопоставлено"&&x.status!=="Сопоставлено вручную";
+      return x.status!=="Сопоставлено"&&x.status!=="Сопоставлено вручную"&&x.status!=="Не требуется в прайсе";
     }).length + snapshot.filter(function(s){return !linkedBySupplierItem.has(s.supplier_item_id);}).length;
 
     const statusSelect='<label class="supplier-check-status-filter"><span>Статус</span><select data-supplier-check-status>'+
