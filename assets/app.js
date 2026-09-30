@@ -2212,22 +2212,38 @@
   }
 
   function renderSupplierCheckRecon(content) {
-    const snapshot=latestSupplierSnapshotRows();
+    const snapshot=latestSupplierSnapshotRows().slice().sort(function(a,b){
+      const an=Number(a.source_row_no),bn=Number(b.source_row_no);
+      if(Number.isFinite(an)&&Number.isFinite(bn)&&an!==bn) return an-bn;
+      return String(a.source_row_no||"").localeCompare(String(b.source_row_no||""),"ru",{numeric:true});
+    });
     const rows=supplierCheckProjectRows().map(function(p){return supplierCheckRow(p,snapshot);});
-    let body=rows.map(function(x,index){
+    const linkedBySupplierItem=new Map();
+    rows.forEach(function(x){if(x.source&&x.link) linkedBySupplierItem.set(x.link.supplier_item_id,x);});
+    let displayNo=0;
+    function projectRowHtml(x) {
       const r=x.raw||{};
-      return '<tr class="data-row"><td class="center">'+(index+1)+'</td><td>'+esc(x.project.mark)+'</td><td>'+esc(x.project.name)+'</td><td class="num">'+fmt0(x.project.qty)+'</td><td class="num">'+(x.project.volume==null?'—':fmt(x.project.volume))+'</td><td class="num">'+(x.project.volume==null?'—':fmt(x.project.qty*x.project.volume))+'</td>'+
+      displayNo++;
+      return '<tr class="data-row"><td class="center">'+displayNo+'</td><td>'+esc(x.project.mark)+'</td><td>'+esc(x.project.name)+'</td><td class="num">'+fmt0(x.project.qty)+'</td><td class="num">'+(x.project.volume==null?'—':fmt(x.project.volume))+'</td><td class="num">'+(x.project.volume==null?'—':fmt(x.project.qty*x.project.volume))+'</td>'+
         '<td class="center">'+(x.source?esc(x.source.source_row_no):'—')+'</td><td>'+esc(r.source_mark||"")+'</td><td>'+esc(r.source_name||"")+'</td><td class="num">'+(r.qty_house==null?'—':fmt0(r.qty_house))+'</td><td class="num '+(x.reasons.some(function(v){return v.indexOf("Объём:")===0;})?'warning':'')+'">'+(r.unit_volume_m3==null?'—':fmt(r.unit_volume_m3))+'</td><td class="num">'+(x.piece==null?'—':money(x.piece))+'</td><td class="num">'+(x.perM3==null?'—':money(x.perM3))+'</td>'+
         '<td><span class="price-state '+supplierStatusClass(x.status)+'">'+esc(x.status)+'</span></td><td>'+esc(x.link?(x.link.link_method==="manual"?"Вручную":"Авто"):"—")+'</td><td class="supplier-check-reasons">'+esc(x.reasons.length?x.reasons.join(" · "):"Нет")+'</td>'+
         '<td><button class="table-text-action" data-supplier-row-journal="'+esc(x.project.catalogItemId)+'" type="button">История</button></td><td><button class="table-text-action" data-supplier-match="'+esc(x.project.catalogItemId)+'" type="button">'+(x.link?'Изменить':'Сопоставить')+'</button></td></tr>';
-    }).join("");
-    const supplierOnly=snapshot.filter(function(s){return !s.catalog_item_id;});
-    if(supplierOnly.length){
-      body+='<tr class="group-row"><td colspan="18" class="group-title">Только у поставщика</td></tr>';
-      supplierOnly.forEach(function(s){const r=s.raw_data||{};const ps=Array.isArray(r.prices)?r.prices:[];body+='<tr class="data-row supplier-only-row"><td></td><td></td><td></td><td></td><td></td><td></td><td class="center">'+esc(s.source_row_no)+'</td><td>'+esc(r.source_mark||"")+'</td><td>'+esc(r.source_name||"")+'</td><td class="num">'+(r.qty_house==null?'—':fmt0(r.qty_house))+'</td><td class="num">'+(r.unit_volume_m3==null?'—':fmt(r.unit_volume_m3))+'</td><td class="num">'+(ps.length?money(ps[0].unit_price_gross):'—')+'</td><td></td><td><span class="price-state supplier">Только у поставщика</span></td><td>—</td><td>Не создаёт проектную позицию</td><td></td><td></td></tr>';});
+    }
+    function supplierOnlyRowHtml(s) {
+      const r=s.raw_data||{},ps=Array.isArray(r.prices)?r.prices:[];
+      const piece=ps.find(function(p){return (p.price_basis||"piece")==="piece";});
+      const m3=ps.find(function(p){return p.price_basis==="m3";});
+      displayNo++;
+      return '<tr class="data-row supplier-only-row"><td class="center">'+displayNo+'</td><td></td><td></td><td></td><td></td><td></td><td class="center">'+esc(s.source_row_no)+'</td><td>'+esc(r.source_mark||"")+'</td><td>'+esc(r.source_name||"")+'</td><td class="num">'+(r.qty_house==null?'—':fmt0(r.qty_house))+'</td><td class="num">'+(r.unit_volume_m3==null?'—':fmt(r.unit_volume_m3))+'</td><td class="num">'+(piece?money(piece.unit_price_gross):'—')+'</td><td class="num">'+(m3?money(m3.unit_price_gross):'—')+'</td><td><span class="price-state supplier">Только у поставщика</span></td><td>—</td><td>Не создаёт проектную позицию</td><td></td><td></td></tr>';
+    }
+    let body=snapshot.map(function(s){return linkedBySupplierItem.has(s.supplier_item_id)?projectRowHtml(linkedBySupplierItem.get(s.supplier_item_id)):supplierOnlyRowHtml(s);}).join("");
+    const withoutCurrentSupplierRow=rows.filter(function(x){return !x.source;});
+    if(withoutCurrentSupplierRow.length){
+      body+='<tr class="group-row"><td colspan="18" class="group-title">Нет в новой версии / не сопоставлено</td></tr>';
+      body+=withoutCurrentSupplierRow.map(projectRowHtml).join("");
     }
     if(!body) body=tableMessage("Нет данных для проверки. Сначала импортируйте прайс поставщика.",18);
-    content.innerHTML='<div class="supplier-check-summary">Рабочая сводка: '+rows.length+' · версия прайса: '+(snapshot[0]?'№'+snapshot[0].version_no:'нет')+' · требует проверки: '+rows.filter(function(x){return x.status!=="Сопоставлено";}).length+'</div><div class="engineering-scroll"><table class="eng-table supplier-check-table" data-table-key="supplier-price-check-v1"><thead><tr><th colspan="6">СПЕЦИФИКАЦИЯ</th><th colspan="7">ПРАЙС ПОСТАВЩИКА</th><th colspan="5">СВЕРКА</th></tr><tr><th>№</th><th>Марка</th><th>Наименование</th><th>Проект, шт.</th><th>Объём за ед., м³</th><th>Объём всего, м³</th><th>Строка источника</th><th>Марка поставщика</th><th>Наименование поставщика</th><th>Количество поставщика</th><th>Объём за ед., м³</th><th>Цена за 1 шт.</th><th>Цена за 1 м³</th><th>Сопоставление</th><th>Способ</th><th>Расхождение</th><th>Журнал</th><th>Действия</th></tr></thead><tbody>'+body+'</tbody></table></div>';
+    content.innerHTML='<div class="supplier-check-summary">Рабочая сводка: '+rows.length+' · версия прайса: '+(snapshot[0]?'№'+snapshot[0].version_no:'нет')+' · требует проверки: '+rows.filter(function(x){return x.status!=="Сопоставлено";}).length+'</div><div class="engineering-scroll"><table class="eng-table supplier-check-table" data-table-key="supplier-price-check-v2"><thead><tr><th colspan="6">СПЕЦИФИКАЦИЯ</th><th colspan="7">ПРАЙС ПОСТАВЩИКА</th><th colspan="5">СВЕРКА</th></tr><tr><th>№</th><th>Марка</th><th>Наименование</th><th>Проект, шт.</th><th>Объём за ед., м³</th><th>Объём всего, м³</th><th>№ поставщика</th><th>Марка поставщика</th><th>Наименование поставщика</th><th>Количество поставщика</th><th>Объём за ед., м³</th><th>Цена за 1 шт.</th><th>Цена за 1 м³</th><th>Сопоставление</th><th>Способ</th><th>Расхождение</th><th>Журнал</th><th>Действия</th></tr></thead><tbody>'+body+'</tbody></table></div>';
     content.querySelectorAll("[data-supplier-match]").forEach(function(btn){btn.onclick=function(){openSupplierMatchEditor(btn.dataset.supplierMatch);};});
     content.querySelectorAll("[data-supplier-row-journal]").forEach(function(btn){btn.onclick=function(){ui.supplierCheckTab="journal";ui.supplierCheckCatalog=btn.dataset.supplierRowJournal;renderSupplierCheck();};});
   }
