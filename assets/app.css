@@ -2340,7 +2340,8 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 }
 
 
-/* Sticky header stacking repair */
+/* Sticky header stacking repair.
+   Keep THEAD out of the stacking context, but preserve sticky TH offsets. */
 #workArea .spec-table thead,
 #workArea .eng-table thead{
   position:static!important;
@@ -2348,5 +2349,6 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 }
 #workArea .spec-table thead th,
 #workArea .eng-table thead th{
+  position:sticky!important;
   z-index:40!important;
 }
