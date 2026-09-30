@@ -204,6 +204,27 @@
     setStatus(signupStatus, "");
   }
 
+  let xlsxLoadPromise=null;
+  function ensureXlsxLoaded() {
+    if(window.XLSX) return Promise.resolve(window.XLSX);
+    if(xlsxLoadPromise) return xlsxLoadPromise;
+    xlsxLoadPromise=new Promise(function(resolve,reject){
+      const script=document.createElement("script");
+      script.src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+      script.async=true;
+      script.onload=function(){
+        if(window.XLSX) resolve(window.XLSX);
+        else reject(new Error("Модуль Excel загрузился без XLSX."));
+      };
+      script.onerror=function(){
+        xlsxLoadPromise=null;
+        reject(new Error("Не удалось загрузить модуль Excel."));
+      };
+      document.head.appendChild(script);
+    });
+    return xlsxLoadPromise;
+  }
+
   async function fetchAllRows(table,columns,configure) {
     const pageSize=1000;
     async function page(from,withCount) {
@@ -1553,6 +1574,7 @@
   }
 
   async function prepareSpecImport(slotKey,file) {
+    await ensureXlsxLoaded();
     const modal=specImportModal();
     const state=modal.querySelector(".spec-import-state");
     const preview=modal.querySelector(".spec-import-preview");
@@ -1868,6 +1890,7 @@
   }
 
   async function prepareEstimateImport(number,file) {
+    await ensureXlsxLoaded();
     const modal=estimateImportModal();
     const state=modal.querySelector(".spec-import-state");
     const preview=modal.querySelector(".spec-import-preview");
@@ -2325,6 +2348,7 @@
   }
 
   async function prepareSupplierSpecImport(file) {
+    await ensureXlsxLoaded();
     const modal=supplierImportModal();
     const state=modal.querySelector(".spec-import-state");
     const preview=modal.querySelector(".spec-import-preview");
@@ -6514,6 +6538,7 @@
   }
 
   async function parseAvrWorkbook(file,expectedKey) {
+    await ensureXlsxLoaded();
     if(!window.XLSX) throw new Error("Модуль чтения Excel не загрузился.");
     const buffer=await file.arrayBuffer();
     const workbook=XLSX.read(buffer,{type:"array",cellDates:true,cellFormula:false});
@@ -6636,6 +6661,7 @@
   }
 
   async function parseAccountingWorkbook(file,expectedKey) {
+    await ensureXlsxLoaded();
     if(!window.XLSX) throw new Error("Модуль чтения Excel не загрузился.");
     const buffer=await file.arrayBuffer();
     const workbook=XLSX.read(buffer,{type:"array",cellDates:true,cellFormula:false});
@@ -6715,8 +6741,8 @@
     await refreshProjectDataSlices(["s29Documents","s29Rows","s29Allocations","s29Carryovers","s29CarryoverSettlements"],dataState.project);renderPage("s29",0);
   }
 
-  function exportS29Excel() {
-    if(!window.XLSX) return alert("Модуль Excel не загрузился.");
+  async function exportS29Excel() {
+    try{await ensureXlsxLoaded();}catch(err){return alert(err&&err.message?err.message:String(err));}
     const doc=selectedS29Document();if(!doc) return;
     const catalog=new Map(dataState.catalogItems.map(function(x){return [x.id,x];}));
     const rows=(dataState.s29Rows||[]).filter(function(x){return x.document_id===doc.id;});
