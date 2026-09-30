@@ -6182,7 +6182,7 @@
         const sk="work-links:section:"+sec.id;
         registerGroup(sk);
         estimateBody+='<tr class="group-row group-toggle group-level-2" data-group-key="'+esc(sk)+'"><td colspan="8"><span class="group-arrow">'+groupArrow(sk)+'</span>'+esc(sec.title)+'</td></tr>';
-        if(!ui.collapsed.has(sk)) estimateBody+=sectionBody;
+        if(!ui.collapsed.has(sk) && !ui.collapseLeaves) estimateBody+=sectionBody;
       });
 
       if(!estimateBody) return;
