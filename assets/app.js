@@ -1590,7 +1590,7 @@
       ui.pendingSpecImport=null;
       state.textContent="Импорт завершён";
       modal.querySelector(".spec-import-preview").classList.add("hidden");
-      await loadProjectData(dataState.project);
+      await refreshProjectDataSlices(["catalogItems","specSections","specRows","specQuantities","reconciliationLinks"],dataState.project);
       const tab=ui.tabs.spec||0;
       renderPage("spec",tab);
       await refreshSpecImportStatuses();
@@ -1901,7 +1901,7 @@
       const report=result.data||{};
       ui.pendingEstimateImport=null;
       ui.estimates[pending.number]=true;
-      await loadProjectData(dataState.project);
+      await refreshProjectDataSlices(["estimates","estimateSections","estimateRows","estimateCosts","reconciliationLinks","reconciliationJournal","estimateWorkLinks"],dataState.project);
       renderPage("estimates",0);
       await refreshEstimateImportStatuses();
       const rec=report.reconciliation||{};
@@ -2344,7 +2344,7 @@
       if(result.error) throw result.error;
       const report=result.data||{};
       ui.pendingSupplierImport=null;
-      await loadProjectData(dataState.project);
+      await refreshProjectDataSlices(["suppliers","supplierItems","supplierPrices","supplierPriceLinks","supplierPriceJournal","supplierSnapshotRows","supplierControlJournal","imports"],dataState.project);
       renderPage("supply",2);
       state.textContent="Импорт завершён";
       preview.innerHTML=
@@ -4578,7 +4578,7 @@
         end_month:checked[checked.length-1].key+"-01"
       }).eq("id",plan.id).eq("project_id",dataState.project.id);
       if(savePlan.error){state.textContent=savePlan.error.message;return;}
-      await loadProjectData(dataState.project);
+      await refreshProjectDataSlices(["gprPlans","gprMonths"],dataState.project);
       gprSpecState=null;
       gprAssignmentState=null;
       gprShareState=null;
@@ -4657,7 +4657,7 @@
         const ins=await client.from("gpr_floor_assignments").insert(rows);
         if(ins.error){state.textContent=ins.error.message;return;}
       }
-      await loadProjectData(dataState.project);
+      await refreshProjectDataSlices(["gprFloorAssignments"],dataState.project);
       gprSpecState=null;
       gprAssignmentState=null;
       gprShareState=null;
@@ -5677,7 +5677,7 @@
           p_specification_row_ids:[specRowId]
         });
         if(result.error) throw result.error;
-        await loadProjectData(dataState.project);
+        await refreshProjectDataSlices(["reconciliationLinks","reconciliationJournal"],dataState.project);
         modal.dataset.specRowId="";
         modal.classList.remove("open");
         renderPage("recon",0);
@@ -5712,7 +5712,7 @@
         p_specification_row_ids:ids
       });
       if(result.error) throw result.error;
-      await loadProjectData(dataState.project);
+      await refreshProjectDataSlices(["reconciliationLinks","reconciliationJournal"],dataState.project);
       modal.classList.remove("open");
       renderPage("recon",0);
     }catch(err){
@@ -6442,7 +6442,7 @@
     }
     const result=await client.rpc("set_avr_version_state",{p_project_id:dataState.project.id,p_version_id:versionId,p_action:action});
     if(result.error) throw result.error;
-    await loadProjectData(dataState.project);
+    await refreshProjectDataSlices(["avrVersions"],dataState.project);
     renderPage("avr",1);
   }
 
@@ -6603,7 +6603,7 @@
       });
       if(result.error) throw result.error;
       ui.avr.period=period;ui.avr.versionId=result.data&&result.data.version_id||"";
-      await loadProjectData(dataState.project);
+      await refreshProjectDataSlices(["avrDocuments","avrVersions","avrRows","imports"],dataState.project);
       renderPage("avr",0);
     }catch(err){alert("Импорт АВР остановлен:\n"+(err&&err.message?err.message:String(err)));if(control) control.disabled=false;}
   }
@@ -6671,7 +6671,7 @@
       const parsed=await parseAccountingWorkbook(file,period);const hash=await sha256Hex(parsed.buffer);
       const result=await client.rpc("apply_accounting_import",{p_project_id:dataState.project.id,p_period_month:periodDate(period),p_source_name:file.name,p_source_sha256:hash,p_rows:parsed.rows});
       if(result.error) throw result.error;
-      await loadProjectData(dataState.project);renderPage("s29",1);
+      await refreshProjectDataSlices(["accountingRows","accountingCodeLinks","accountingPeriodSources","imports"],dataState.project);renderPage("s29",1);
     }catch(err){alert("Импорт бухгалтерии остановлен:\n"+(err&&err.message?err.message:String(err)));if(button)button.disabled=false;}
   }
 
@@ -6680,7 +6680,7 @@
     try{
       const result=await client.rpc("recalculate_s29",{p_project_id:dataState.project.id,p_period_month:periodDate(ui.s29.period)});
       if(result.error) throw result.error;
-      await loadProjectData(dataState.project);renderPage("s29",0);
+      await refreshProjectDataSlices(["s29Documents","s29Rows","s29Allocations","s29Carryovers","s29CarryoverSettlements"],dataState.project);renderPage("s29",0);
     }catch(err){alert("Расчёт С-29 не выполнен:\n"+(err&&err.message?err.message:String(err)));if(button)button.disabled=false;}
   }
 
