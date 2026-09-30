@@ -337,40 +337,117 @@
   }
 
 
+  async function projectDataSliceRequest(key,project) {
+    switch(key) {
+      case "catalogItems": return fetchAllRows("catalog_items","id,mark,name,normalized_key",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("mark");});
+      case "specSections": return fetchAllRows("specification_sections","id,building_section,zone,name,sort_order,is_stairs",function(q){return q.eq("project_id",project.id).order("sort_order");});
+      case "specRows": return fetchAllRows("specification_rows","id,section_id,catalog_item_id,position_no,designation,project_volume_m3,sort_order",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("position_no");});
+      case "specQuantities": return fetchAllRows("specification_quantities","specification_row_id,level_code,level_order,quantity",function(q){return q.eq("project_id",project.id).order("level_order").order("specification_row_id");});
+      case "estimates": return fetchAllRows("estimates","id,number,name,status,building_section,zone,is_stairs",function(q){return q.eq("project_id",project.id).eq("status","active").order("number");});
+      case "estimateSections": return fetchAllRows("estimate_sections","id,estimate_id,title,sort_order",function(q){return q.eq("project_id",project.id).order("sort_order");});
+      case "estimateRows": return fetchAllRows("estimate_rows","id,estimate_id,section_id,row_type,position,basis,name,unit,quantity,sort_order,catalog_item_id,source_original",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("sort_order");});
+      case "estimateCosts": return fetchAllRows("estimate_row_costs","estimate_row_id,salary_unit,salary_amount,machines_unit,machines_amount,drivers_unit,drivers_amount,materials_unit,materials_amount,transport_unit,transport_amount,total_unit,total_amount",function(q){return q.eq("project_id",project.id);});
+      case "reconciliationLinks": return fetchAllRows("reconciliation_links","id,estimate_row_id,specification_row_id,link_method,origin_mode",function(q){return q.eq("project_id",project.id);});
+      case "reconciliationJournal": return fetchAllRows("reconciliation_journal","id,estimate_row_id,specification_row_id,issue_key,reasons,proposal,comment,status,snapshot,created_at,updated_at",function(q){return q.eq("project_id",project.id).order("created_at",{ascending:false});});
+      case "suppliers": return fetchAllRows("suppliers","id,name",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("name");});
+      case "supplierItems": return fetchAllRows("supplier_items","id,supplier_id,catalog_item_id,source_mark,source_name,source_section,source_key,unit_volume_m3,link_method,link_state,source_import_row_id",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("source_mark");});
+      case "supplierPrices": return fetchAllRows("supplier_prices_current","id,supplier_item_id,effective_from,price_basis,unit_price_gross,unit_volume_snapshot_m3,source_import_row_id,source_imported_at",function(q){return q.eq("project_id",project.id).order("effective_from");});
+      case "estimateWorkLinks": return fetchAllRows("estimate_work_links","id,material_row_id,work_row_id,link_method",function(q){return q.eq("project_id",project.id);});
+      case "gprPlans": return fetchAllRows("gpr_plans","id,name,status,start_month,end_month,created_at,updated_at",function(q){return q.eq("project_id",project.id).order("created_at");});
+      case "gprMonths": return fetchAllRows("gpr_months","id,plan_id,month,monthly_index,execution_index,is_in_period",function(q){return q.eq("project_id",project.id).order("month");});
+      case "gprFloorAssignments": return fetchAllRows("gpr_floor_assignments","id,plan_id,month_id,building_section,level_code",function(q){return q.eq("project_id",project.id);});
+      case "gprRowAssignments": return fetchAllRows("gpr_row_assignments","id,plan_id,month_id,estimate_row_id,quantity,source_mode,source_specification_row_id,source_level_code,parent_assignment_id",function(q){return q.eq("project_id",project.id);});
+      case "avrDocuments": return fetchAllRows("avr_documents","id,period_month,display_number,created_at,updated_at",function(q){return q.eq("project_id",project.id).order("period_month");});
+      case "avrVersions": return fetchAllRows("avr_versions","id,document_id,version_no,state,source_import_id,signed_at,created_at",function(q){return q.eq("project_id",project.id).order("created_at");});
+      case "avrRows": return fetchAllRows("avr_rows","id,version_id,estimate_row_id,quantity,quantity_m3,amount,source_import_row_id",function(q){return q.eq("project_id",project.id);});
+      case "accountingRows": return fetchAllRows("accounting_rows","id,import_id,source_import_row_id,account_code,material_code,name,unit,quantity,unit_price,amount,source_row_no",function(q){return q.eq("project_id",project.id).order("source_row_no");});
+      case "accountingCodeLinks": return fetchAllRows("accounting_code_links","id,accounting_code,catalog_item_id,link_method,note",function(q){return q.eq("project_id",project.id);});
+      case "accountingPeriodSources": return fetchAllRows("accounting_period_sources","period_month,import_id,selected_at",function(q){return q.eq("project_id",project.id).order("period_month");});
+      case "s29Documents": return fetchAllRows("s29_documents","id,period_month,avr_version_id,accounting_import_id,status,fixed_at,created_at,updated_at",function(q){return q.eq("project_id",project.id).order("period_month");});
+      case "s29Rows": return fetchAllRows("s29_rows","id,document_id,catalog_item_id,avr_quantity_pieces,volume_per_piece_snapshot_m3,avr_quantity_m3,written_off_m3,economy_m3,overrun_m3,note",function(q){return q.eq("project_id",project.id);});
+      case "s29Allocations": return fetchAllRows("s29_allocations","id,s29_row_id,accounting_row_id,allocated_m3",function(q){return q.eq("project_id",project.id);});
+      case "s29Carryovers": return fetchAllRows("s29_carryovers","id,origin_document_id,origin_row_id,catalog_item_id,kind,origin_month,created_m3,created_at",function(q){return q.eq("project_id",project.id);});
+      case "s29CarryoverSettlements": return fetchAllRows("s29_carryover_settlements","id,carryover_id,settlement_document_id,settlement_month,settled_m3,created_at",function(q){return q.eq("project_id",project.id);});
+      case "imports": return fetchAllRows("imports","id,domain,source_name,source_period,status,report,imported_at,source_slot,applied_at",function(q){return q.eq("project_id",project.id).in("domain",["avr","accounting","supplier_price"]).order("imported_at",{ascending:false});});
+      case "supplierPriceLinks": return fetchAllRows("supplier_price_links","id,supplier_id,catalog_item_id,supplier_item_id,scope_key,link_method,validation_state,last_checked_import_id,created_at,updated_at",function(q){return q.eq("project_id",project.id);});
+      case "supplierPriceJournal": return fetchAllRows("supplier_price_journal","id,import_id,catalog_item_id,supplier_item_id,event_type,before_value,after_value,link_method,actor_id,created_at",function(q){return q.eq("project_id",project.id).order("created_at",{ascending:false});});
+      case "supplierSnapshotRows": return fetchAllRows("supplier_price_snapshot_rows","import_id,source_name,imported_at,version_no,supplier_id,import_row_id,source_row_no,source_key,raw_data,normalized_data,supplier_item_id,catalog_item_id,link_method,validation_state,scope_key",function(q){return q.eq("project_id",project.id).order("imported_at",{ascending:false}).order("source_row_no");});
+      case "supplierControlJournal": return fetchAllRows("supplier_price_control_journal","id,catalog_item_id,supplier_item_id,issue_key,reasons,status,snapshot,created_at,updated_at",function(q){return q.eq("project_id",project.id).order("created_at",{ascending:false});});
+      default: throw new Error("Unknown project data slice: "+key);
+    }
+  }
+
+  let derivedDataCache={state:null,maps:null,quantityMap:null,supplierVolumeMap:null,specJoinedRows:null};
+  function invalidateDerivedDataCache() {
+    derivedDataCache={state:null,maps:null,quantityMap:null,supplierVolumeMap:null,specJoinedRows:null};
+  }
+
+  async function refreshProjectDataSlices(keys,project) {
+    project=project||dataState.project;
+    if(!project || !project.id || !keys || !keys.length) return;
+    const unique=Array.from(new Set(keys));
+    const values=await Promise.all(unique.map(function(key){return projectDataSliceRequest(key,project);}));
+    unique.forEach(function(key,index){dataState[key]=values[index]||[];});
+    dataState.loaded=true;
+    dataState.source="supabase";
+    dataState.project=project;
+    invalidateDerivedDataCache();
+  }
+
   function maps() {
-    return {
+    if(derivedDataCache.state===dataState && derivedDataCache.maps) return derivedDataCache.maps;
+    const value={
       catalog:new Map(dataState.catalogItems.map(function(x){ return [x.id,x]; })),
       sections:new Map(dataState.specSections.map(function(x){ return [x.id,x]; })),
       estimates:new Map(dataState.estimates.map(function(x){ return [x.id,x]; })),
       estimateSections:new Map(dataState.estimateSections.map(function(x){ return [x.id,x]; })),
       costs:new Map(dataState.estimateCosts.map(function(x){ return [x.estimate_row_id,x]; }))
     };
+    derivedDataCache.state=dataState;
+    derivedDataCache.maps=value;
+    return value;
   }
 
   function quantityMap() {
+    if(derivedDataCache.state===dataState && derivedDataCache.quantityMap) return derivedDataCache.quantityMap;
     const map = new Map();
     dataState.specQuantities.forEach(function(q) {
       if (!map.has(q.specification_row_id)) map.set(q.specification_row_id, new Map());
       map.get(q.specification_row_id).set(q.level_code, Number(q.quantity || 0));
     });
+    derivedDataCache.state=dataState;
+    derivedDataCache.quantityMap=map;
     return map;
   }
 
+  function supplierVolumeMap() {
+    if(derivedDataCache.state===dataState && derivedDataCache.supplierVolumeMap) return derivedDataCache.supplierVolumeMap;
+    const buckets=new Map();
+    (dataState.supplierItems||[]).forEach(function(x){
+      if(!x.catalog_item_id || x.link_state!=="matched") return;
+      const v=Number(x.unit_volume_m3||0);
+      if(!(v>0)) return;
+      if(!buckets.has(x.catalog_item_id)) buckets.set(x.catalog_item_id,new Set());
+      buckets.get(x.catalog_item_id).add(v.toFixed(6));
+    });
+    const out=new Map();
+    buckets.forEach(function(values,id){
+      if(values.size===1) out.set(id,Number(Array.from(values)[0]));
+    });
+    derivedDataCache.state=dataState;
+    derivedDataCache.supplierVolumeMap=out;
+    return out;
+  }
+
   function catalogUnitVolumeFallback(catalogItemId) {
-    const values=Array.from(new Set(
-      (dataState.supplierItems||[])
-        .filter(function(x){return x.catalog_item_id===catalogItemId&&x.link_state==="matched";})
-        .map(function(x){return Number(x.unit_volume_m3||0);})
-        .filter(function(v){return v>0;})
-        .map(function(v){return v.toFixed(6);})
-    ));
-    return values.length===1?Number(values[0]):0;
+    return Number(supplierVolumeMap().get(catalogItemId)||0);
   }
 
   function specJoinedRows() {
+    if(derivedDataCache.state===dataState && derivedDataCache.specJoinedRows) return derivedDataCache.specJoinedRows;
     const m = maps();
     const qm = quantityMap();
-    return dataState.specRows.map(function(r) {
+    const rows=dataState.specRows.map(function(r) {
       const item = m.catalog.get(r.catalog_item_id) || {mark:"",name:""};
       const section = m.sections.get(r.section_id) || {building_section:"",zone:"",name:"",sort_order:0,is_stairs:false};
       const quantities = qm.get(r.id) || new Map();
@@ -382,11 +459,12 @@
         section:section,
         quantities:quantities,
         total:total,
-        // Volume per piece is a supplier-price constant.
-        // Geometry (length/height/thickness/area) never recalculates this value.
         volumePerPiece:catalogUnitVolumeFallback(r.catalog_item_id)
       });
     });
+    derivedDataCache.state=dataState;
+    derivedDataCache.specJoinedRows=rows;
+    return rows;
   }
 
   function passesSpecFilters(row) {
