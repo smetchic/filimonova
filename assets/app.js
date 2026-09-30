@@ -2354,10 +2354,34 @@
   function renderSupplierCheck() {
     const modal=supplierCheckModal();
     if(!ui.supplierCheckTab) ui.supplierCheckTab="recon";
-    modal.querySelectorAll("[data-supplier-check-tab]").forEach(function(btn){btn.classList.toggle("active",btn.dataset.supplierCheckTab===ui.supplierCheckTab);});
+    const tabKey=ui.supplierCheckTab;
     const content=modal.querySelector(".supplier-check-content");
+    const oldScroll=content.querySelector(".engineering-scroll");
+    if(!ui.supplierCheckScroll) ui.supplierCheckScroll={};
+    if(oldScroll){
+      ui.supplierCheckScroll[tabKey]={top:oldScroll.scrollTop,left:oldScroll.scrollLeft};
+    }
+    modal.querySelectorAll("[data-supplier-check-tab]").forEach(function(btn){btn.classList.toggle("active",btn.dataset.supplierCheckTab===ui.supplierCheckTab);});
     if(ui.supplierCheckTab==="journal") renderSupplierCheckJournal(content); else renderSupplierCheckRecon(content);
     content.querySelectorAll("table").forEach(function(t){installResizeAutofit(t);});
+    const nextScroll=content.querySelector(".engineering-scroll");
+    const saved=ui.supplierCheckScroll[tabKey];
+    if(nextScroll){
+      const restore=function(){
+        if(!saved) return;
+        nextScroll.scrollTop=saved.top||0;
+        nextScroll.scrollLeft=saved.left||0;
+      };
+      restore();
+      requestAnimationFrame(function(){
+        restore();
+        requestAnimationFrame(restore);
+      });
+      setTimeout(restore,40);
+      nextScroll.addEventListener("scroll",function(){
+        ui.supplierCheckScroll[tabKey]={top:nextScroll.scrollTop,left:nextScroll.scrollLeft};
+      },{passive:true});
+    }
   }
 
   function openSupplierCheck() {
@@ -2467,8 +2491,6 @@
       if(!remove&&!chosenSupplier){state.textContent="Выберите позицию поставщика.";return;}
       supplierItemId=remove?null:chosenSupplier.dataset.supplierCandidate;
     }
-    const checkScroll=document.querySelector("#supplierCheckModal .supplier-check-content>.engineering-scroll");
-    const savedScroll=checkScroll?{top:checkScroll.scrollTop,left:checkScroll.scrollLeft}:null;
     state.textContent="Сохраняю…";
     const result=await client.rpc("set_supplier_price_link",{
       p_project_id:dataState.project.id,
@@ -2479,15 +2501,6 @@
     await loadProjectData(dataState.project);
     modal.classList.remove("open");
     renderSupplierCheck();
-    if(savedScroll){
-      requestAnimationFrame(function(){
-        const restored=document.querySelector("#supplierCheckModal .supplier-check-content>.engineering-scroll");
-        if(restored){
-          restored.scrollTop=savedScroll.top;
-          restored.scrollLeft=savedScroll.left;
-        }
-      });
-    }
     renderSupplierPrice();
   }
 
