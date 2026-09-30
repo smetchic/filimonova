@@ -2211,3 +2211,14 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   text-align:right;
   white-space:nowrap;
 }
+
+
+/* Supplier price source grid: keep the whole two-level header vertically sticky.
+   The generic price-table rule intentionally disables horizontal sticky columns,
+   but it must not turn the first two header cells into static cells while scrolling. */
+#workArea .supplier-source-price-table thead th.sticky-1,
+#workArea .supplier-source-price-table thead th.sticky-2,
+#workArea .supplier-source-price-table thead th.sticky-3,
+#workArea .supplier-source-price-table thead th.sticky-4{
+  position:sticky!important;
+}
