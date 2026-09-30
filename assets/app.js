@@ -6689,7 +6689,7 @@
     if(!ok) return;
     const result=await client.rpc("fix_s29",{p_project_id:dataState.project.id,p_document_id:documentId});
     if(result.error) throw result.error;
-    await loadProjectData(dataState.project);renderPage("s29",0);
+    await refreshProjectDataSlices(["s29Documents","s29Rows","s29Allocations","s29Carryovers","s29CarryoverSettlements"],dataState.project);renderPage("s29",0);
   }
 
   function exportS29Excel() {
