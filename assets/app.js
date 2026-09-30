@@ -1080,6 +1080,7 @@
     const supplierModel=item.id?supplierPriceModel(item.id,volumePerPiece):null;
     const supplierUnit=supplierModel && supplierModel.singlePrice!=null && supplierModel.state!=="Проверить"
       ?Number(supplierModel.singlePrice):null;
+    const cardGeometry=workLinkMaterialGeometry(linkedEstimateRows[0]||{name:item.name});
     function unitMoney(value){return value!=null && Number.isFinite(value) && value>0?money(value)+" BYN":"—";}
     const sectionLabel=st.rows.length&&st.rows[0].section?st.rows[0].section.name:"Раздел";
     const allNames=Array.from(new Set(dataState.catalogItems.map(function(x){return x.name;}).filter(Boolean))).sort(function(a,b){return a.localeCompare(b,"ru",{numeric:true});});
@@ -1108,6 +1109,11 @@
           '<div class="mv-qty"><b>Объём 1 шт.</b><strong>'+(volumePerPiece?fmt(volumePerPiece):"—")+' м³</strong><span>рабочий объём списания</span></div>'+
           '<div class="mv-qty"><b>Осталось поставить</b><strong>'+fmt0(Math.max(0,st.qty-suppliedQty))+' шт.</strong><span>'+fmt(Math.max(0,st.qty-suppliedQty)*volumePerPiece)+' м³</span></div>'+
           '<div class="mv-qty"><b>Осталось смонтировать</b><strong>'+fmt0(Math.max(0,st.qty-mountedQty))+' шт.</strong><span>'+fmt(Math.max(0,st.qty-mountedQty)*volumePerPiece)+' м³</span></div></div>');
+        const geometry=block("Характеристики",'<div class="mv-cost-grid">'+
+          '<div class="mv-cost"><b>Размеры панели</b><strong>'+(cardGeometry?esc(cardGeometry.label):"—")+'</strong><span>длина × высота × толщина</span></div>'+
+          '<div class="mv-cost"><b>Площадь панели</b><strong>'+(cardGeometry?numFmt.format(cardGeometry.area)+" м²":"—")+'</strong><span>длина × высота</span></div>'+
+          '<div class="mv-cost"><b>Объём 1 шт.</b><strong>'+(volumePerPiece?fmt(volumePerPiece)+" м³":"—")+'</strong><span>рабочий объём</span></div>'+
+          '</div>','mv-mt');
         const cost=block("Стоимость",'<div class="mv-cost-grid"><div class="mv-cost"><b>По смете</b><strong>'+(estimateAmount?money(estimateAmount)+" BYN":"—")+'</strong><span>связанные позиции материала</span></div><div class="mv-cost"><b>Запроцентовано</b><strong>'+(avrAmount?money(avrAmount)+" BYN":"—")+'</strong><span>по действующим АВР</span></div><div class="mv-cost"><b>Остаток</b><strong>'+(estimateAmount?money(Math.max(0,estimateAmount-avrAmount))+" BYN":"—")+'</strong><span>по сметной стоимости</span></div></div>','mv-mt');
         const unitCost=block('Стоимость единицы <span class="mv-badge">с НДС</span>',
           '<div class="mv-unit-grid">'+
@@ -1116,7 +1122,7 @@
           '<div class="mv-unit"><b>Цена поставщика, 1 шт.</b><strong>'+unitMoney(supplierUnit)+'</strong><span>действующий прайс поставщика</span></div>'+
           '<div class="mv-unit"><b>Монтаж, 1 шт.</b><strong>—</strong><span>стоимость единицы не рассчитана</span></div>'+
           '</div>','mv-mt');
-        b.innerHTML='<div class="mv-overview-two">'+exec+qty+'</div>'+cost+unitCost+(sourceOnly?'<div class="mv-note">Исходная строка не связана с проектной номенклатурой. Карточка открыта в source-only режиме.</div>':'');
+        b.innerHTML='<div class="mv-overview-two">'+exec+qty+'</div>'+geometry+cost+unitCost+(sourceOnly?'<div class="mv-note">Исходная строка не связана с проектной номенклатурой. Карточка открыта в source-only режиме.</div>':'');
       } else if(tab==="projectEstimate"){
         const project='<div class="mv-grid2 mv-mb">'+block("Проект",'<div class="mv-kpi2">'+kpi("Всего",fmt0(st.qty)+" шт.",fmt(projectM3)+" м³")+kpi("Объём 1 шт.",volumePerPiece?fmt(volumePerPiece)+" м³":"—","для учёта и списания")+'</div>')+
           block("Смета",'<div class="mv-kpi2">'+kpi("Количество по смете",estimateQty?fmt(estimateQty)+" шт.":"—","связанные позиции")+kpi("Контроль",estimateQty&&Math.abs(estimateQty-st.qty)<1e-9?"Совпадает":(linkedEstimateRows.length?"Проверить":"Нет связи"),linkedEstimateRows.length?"проект ↔ смета":"связь не создана",estimateQty&&Math.abs(estimateQty-st.qty)<1e-9?"good":"warn")+'</div>')+'</div>';
@@ -5795,13 +5801,27 @@
   }
 
 
-  function workLinkMaterialArea(row) {
-    const text=String(estimateDisplayName(row)||row.name||"").replace(/,/g,".");
+  function workLinkMaterialGeometry(row) {
+    const text=String((row&&estimateDisplayName(row))||(row&&row.name)||"").replace(/,/g,".");
     const matches=Array.from(text.matchAll(/(\d{1,3})\.(\d{1,2})\.(\d{1,2})/g));
     if(!matches.length) return null;
     const m=matches[matches.length-1];
-    const a=Number(m[1])/10,b=Number(m[2])/10;
-    return a>0&&b>0?a*b:null;
+    const length=Number(m[1])/10;
+    const height=Number(m[2])/10;
+    const thickness=Number(m[3])/100;
+    if(!(length>0&&height>0&&thickness>0)) return null;
+    return {
+      length:length,
+      height:height,
+      thickness:thickness,
+      area:length*height,
+      label:numFmt.format(length)+" × "+numFmt.format(height)+" × "+numFmt.format(thickness)+" м"
+    };
+  }
+
+  function workLinkMaterialArea(row) {
+    const g=workLinkMaterialGeometry(row);
+    return g?g.area:null;
   }
 
   function workLinkThreshold(row) {
@@ -6133,6 +6153,7 @@
               '<td class="center">'+esc(w.position||"")+'</td>'+
               '<td>'+esc(estimateDisplayBasis(w)||"")+'</td>'+
               '<td class="work-link-work-name">'+esc(estimateDisplayName(w)||"")+'</td>'+
+              '<td class="center"></td><td class="num"></td>'+
               '<td class="center">'+esc(w.unit||"")+'</td>'+
               '<td class="num">'+fmt(w.quantity)+'</td>'+
               '<td>'+controlHtml(w)+'</td>'+
@@ -6142,11 +6163,14 @@
             linkedMaterials.forEach(function(m){
               const link=wl.find(function(x){return x.material_row_id===m.id;});
               const method=link&&link.link_method==="manual"?"ручная":"авто";
-              sectionBody+='<tr class="data-row work-link-material-child" data-estimate-row-id="'+esc(m.id)+'">'+
+              const geometry=workLinkMaterialGeometry(m);
+              sectionBody+='<tr class="data-row work-link-material-child" data-estimate-row-id="'+esc(m.id)+'" data-material-id="'+esc(m.catalog_item_id||"")+'" data-material-mark="'+esc(estimateDisplayBasis(m)||"")+'" title="Двойной щелчок — карточка панели">'+
                 '<td class="center"><span class="type-mark">М</span></td>'+
                 '<td class="center">'+esc(m.position||"")+'</td>'+
                 '<td>'+esc(estimateDisplayBasis(m)||"")+'</td>'+
-                '<td class="work-link-material-name">'+esc(estimateDisplayName(m)||"")+'</td>'+
+                '<td class="work-link-material-name" data-material-card-open="'+esc(m.catalog_item_id||"")+'">'+esc(estimateDisplayName(m)||"")+'</td>'+
+                '<td class="center work-link-dim">'+(geometry?esc(geometry.label):"—")+'</td>'+
+                '<td class="num work-link-area">'+(geometry?numFmt.format(geometry.area):"—")+'</td>'+
                 '<td class="center">'+esc(m.unit||"")+'</td>'+
                 '<td class="num">'+fmt(m.quantity)+'</td>'+
                 '<td><span class="work-link-method '+(method==="ручная"?"manual":"auto")+'">'+method+'</span></td>'+
@@ -6160,14 +6184,17 @@
           if(unmatched.length){
             const uk="work-links:unmatched:"+sec.id;
             registerGroup(uk);
-            sectionBody+='<tr class="group-row group-toggle work-link-unmatched-group" data-group-key="'+esc(uk)+'"><td colspan="8"><span class="group-arrow">'+groupArrow(uk)+'</span>Не сопоставлено · '+unmatched.length+'</td></tr>';
+            sectionBody+='<tr class="group-row group-toggle work-link-unmatched-group" data-group-key="'+esc(uk)+'"><td colspan="10"><span class="group-arrow">'+groupArrow(uk)+'</span>Не сопоставлено · '+unmatched.length+'</td></tr>';
             if(!ui.collapsed.has(uk) && !ui.collapseLeaves){
               unmatched.forEach(function(m){
-                sectionBody+='<tr class="data-row work-link-unmatched-row" data-estimate-row-id="'+esc(m.id)+'">'+
+                const geometry=workLinkMaterialGeometry(m);
+                sectionBody+='<tr class="data-row work-link-unmatched-row" data-estimate-row-id="'+esc(m.id)+'" data-material-id="'+esc(m.catalog_item_id||"")+'" data-material-mark="'+esc(estimateDisplayBasis(m)||"")+'" title="Двойной щелчок — карточка панели">'+
                   '<td class="center"><span class="type-mark">М</span></td>'+
                   '<td class="center">'+esc(m.position||"")+'</td>'+
                   '<td>'+esc(estimateDisplayBasis(m)||"")+'</td>'+
-                  '<td class="work-link-material-name">'+esc(estimateDisplayName(m)||"")+'</td>'+
+                  '<td class="work-link-material-name" data-material-card-open="'+esc(m.catalog_item_id||"")+'">'+esc(estimateDisplayName(m)||"")+'</td>'+
+                  '<td class="center work-link-dim">'+(geometry?esc(geometry.label):"—")+'</td>'+
+                  '<td class="num work-link-area">'+(geometry?numFmt.format(geometry.area):"—")+'</td>'+
                   '<td class="center">'+esc(m.unit||"")+'</td>'+
                   '<td class="num">'+fmt(m.quantity)+'</td>'+
                   '<td><span class="work-link-status warn">Без работы</span></td>'+
@@ -6181,7 +6208,7 @@
         if(!sectionBody) return;
         const sk="work-links:section:"+sec.id;
         registerGroup(sk);
-        estimateBody+='<tr class="group-row group-toggle group-level-2" data-group-key="'+esc(sk)+'"><td colspan="8"><span class="group-arrow">'+groupArrow(sk)+'</span>'+esc(sec.title)+'</td></tr>';
+        estimateBody+='<tr class="group-row group-toggle group-level-2" data-group-key="'+esc(sk)+'"><td colspan="10"><span class="group-arrow">'+groupArrow(sk)+'</span>'+esc(sec.title)+'</td></tr>';
         if(!ui.collapsed.has(sk) && !ui.collapseLeaves) estimateBody+=sectionBody;
       });
 
@@ -6190,7 +6217,7 @@
       registerGroup(ek);
       const allMaterials=estimateRows.filter(function(r){return r.row_type==="material";});
       const linkedCount=allMaterials.filter(function(r){return (materialLinks.get(r.id)||[]).length>0;}).length;
-      body+='<tr class="group-row group-toggle work-link-estimate-group" data-group-key="'+esc(ek)+'"><td colspan="8"><span class="group-arrow">'+groupArrow(ek)+'</span>'+esc("Смета №"+e.number+" · "+(e.name||""))+' · '+linkedCount+' / '+allMaterials.length+' материалов</td></tr>';
+      body+='<tr class="group-row group-toggle work-link-estimate-group" data-group-key="'+esc(ek)+'"><td colspan="10"><span class="group-arrow">'+groupArrow(ek)+'</span>'+esc("Смета №"+e.number+" · "+(e.name||""))+' · '+linkedCount+' / '+allMaterials.length+' материалов</td></tr>';
       if(!ui.collapsed.has(ek)) body+=estimateBody;
     });
 
@@ -6204,8 +6231,15 @@
     }
 
     $("workArea").className="work-area table-work";
-    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table work-links-table" data-table-key="work-links-v2"><thead><tr><th>Тип</th><th>Поз. см.</th><th>Обоснование</th><th>Наименование</th><th>Ед. изм.</th><th>Кол-во</th><th>Связь / контроль</th><th>Действие</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table work-links-table" data-table-key="work-links-v3"><thead><tr><th>Тип</th><th>Поз. см.</th><th>Обоснование</th><th>Наименование</th><th>Размеры, м</th><th>Площадь, м²</th><th>Ед. изм.</th><th>Кол-во</th><th>Связь / контроль</th><th>Действие</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
 
+    document.querySelectorAll("[data-material-card-open]").forEach(function(cell){
+      cell.onclick=function(e){
+        e.stopPropagation();
+        const row=cell.closest("[data-material-id]");
+        if(row) openMaterialCard(row.dataset.materialId||"",row.dataset.materialMark||"");
+      };
+    });
     document.querySelectorAll("[data-work-link-edit]").forEach(function(btn){
       btn.onclick=function(e){e.stopPropagation();openWorkLinkEditor(btn.dataset.workLinkEdit);};
     });
