@@ -356,6 +356,17 @@
     return map;
   }
 
+  function catalogUnitVolumeFallback(catalogItemId) {
+    const values=Array.from(new Set(
+      (dataState.supplierItems||[])
+        .filter(function(x){return x.catalog_item_id===catalogItemId&&x.link_state==="matched";})
+        .map(function(x){return Number(x.unit_volume_m3||0);})
+        .filter(function(v){return v>0;})
+        .map(function(v){return v.toFixed(6);})
+    ));
+    return values.length===1?Number(values[0]):0;
+  }
+
   function specJoinedRows() {
     const m = maps();
     const qm = quantityMap();
@@ -365,13 +376,14 @@
       const quantities = qm.get(r.id) || new Map();
       let total = 0;
       quantities.forEach(function(v){ total += Number(v || 0); });
+      const projectVolume=Number(r.project_volume_m3||0);
       return Object.assign({}, r, {
         mark:item.mark || "",
         name:item.name || "",
         section:section,
         quantities:quantities,
         total:total,
-        volumePerPiece:Number(r.project_volume_m3 || 0)
+        volumePerPiece:projectVolume>0?projectVolume:catalogUnitVolumeFallback(r.catalog_item_id)
       });
     });
   }
