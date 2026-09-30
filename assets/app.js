@@ -6073,85 +6073,151 @@
     const links=dataState.estimateWorkLinks||[];
     const materialLinks=new Map();
     const workLinks=new Map();
+
     links.forEach(function(l){
       if(!materialLinks.has(l.material_row_id)) materialLinks.set(l.material_row_id,[]);
       materialLinks.get(l.material_row_id).push(l);
       if(!workLinks.has(l.work_row_id)) workLinks.set(l.work_row_id,[]);
       workLinks.get(l.work_row_id).push(l);
     });
-    let materials=(dataState.estimateRows||[]).filter(function(r){
-      if(r.row_type!=="material"||!selectedEstimateIds.has(r.estimate_id)) return false;
-      const linked=(materialLinks.get(r.id)||[]).map(function(l){return rowMap.get(l.work_row_id);}).filter(Boolean);
-      const matches=passesSearch([r.position,estimateDisplayBasis(r),estimateDisplayName(r)].concat(linked.flatMap(function(w){return [w.position,estimateDisplayBasis(w),estimateDisplayName(w)];})));
-      if(!matches) return false;
-      if(ui.workLinkFilter==="unlinked") return !linked.length;
-      if(ui.workLinkFilter==="linked") return linked.length>0;
-      return ui.workLinkFilter!=="work-unlinked";
-    });
 
-    const orphanWorks=(dataState.estimateRows||[]).filter(function(r){
-      return r.row_type==="work"&&selectedEstimateIds.has(r.estimate_id)&&!(workLinks.get(r.id)||[]).length&&
-        passesSearch([r.position,estimateDisplayBasis(r),estimateDisplayName(r)]);
-    });
+    const search=norm(currentSearch());
+    function rowSearchText(row){
+      return norm([row.position,estimateDisplayBasis(row),estimateDisplayName(row),row.unit].join(" "));
+    }
+    function workMatchesSearch(work,linkedMaterials){
+      if(!search) return true;
+      if(rowSearchText(work).includes(search)) return true;
+      return linkedMaterials.some(function(m){return rowSearchText(m).includes(search);});
+    }
+    function materialMatchesSearch(material){
+      return !search || rowSearchText(material).includes(search);
+    }
+    function controlHtml(work){
+      const p=workLinkProgress(work.id);
+      const delta=Math.round((p.delta||0)*1000)/1000;
+      let cls="ok",tail=" · совпадает";
+      if(delta>0){cls="over";tail=" · +"+fmt0(delta);}
+      else if(delta<0){cls="under";tail=" · −"+fmt0(Math.abs(delta));}
+      return '<span class="work-link-control '+cls+'">'+fmt0(p.pieces)+' / '+fmt0(p.expected)+' шт.'+tail+'</span>';
+    }
 
     ui.currentGroupKeys=[];
     let body="";
-    if(ui.workLinkFilter==="work-unlinked"){
-      const byEstimate=new Map();
-      orphanWorks.forEach(function(w){
-        if(!byEstimate.has(w.estimate_id)) byEstimate.set(w.estimate_id,[]);
-        byEstimate.get(w.estimate_id).push(w);
-      });
-      byEstimate.forEach(function(list,estimateId){
-        const e=(dataState.estimates||[]).find(function(x){return x.id===estimateId;});
-        const ek="work-links:orphan:"+estimateId;registerGroup(ek);
-        body+='<tr class="group-row group-toggle" data-group-key="'+esc(ek)+'"><td colspan="9"><span class="group-arrow">'+groupArrow(ek)+'</span>'+esc("Смета №"+(e?e.number:""))+' · работ без материала: '+list.length+'</td></tr>';
-        if(ui.collapsed.has(ek)) return;
-        list.sort(function(a,b){return Number(a.sort_order||0)-Number(b.sort_order||0);}).forEach(function(w){
-          const sec=(dataState.estimateSections||[]).find(function(x){return x.id===w.section_id;});
-          body+='<tr class="data-row work-link-orphan-row"><td class="center"><span class="type-mark">Р</span></td><td>'+esc(e?e.number:"")+'</td><td class="center">'+esc(w.position||"")+'</td><td>'+esc(estimateDisplayBasis(w)||"")+'</td><td>'+esc(estimateDisplayName(w)||"")+'</td><td class="center">'+esc(w.unit||"")+'</td><td class="num">'+fmt(w.quantity)+'</td><td>'+esc(sec?sec.title:"")+'</td><td><span class="work-link-status warn">Нет материала</span></td></tr>';
-        });
-      });
-      if(!body) body=tableMessage("Все работы выбранных смет уже имеют связь с материалом.",9);
-    }else{
-      (dataState.estimates||[]).filter(function(e){return selectedEstimateIds.has(e.id);}).forEach(function(e){
-        const estimateMaterials=materials.filter(function(r){return r.estimate_id===e.id;});
-        if(!estimateMaterials.length) return;
-        const ek="work-links:estimate:"+e.id;registerGroup(ek);
-        const linkedCount=estimateMaterials.filter(function(r){return (materialLinks.get(r.id)||[]).length>0;}).length;
-        body+='<tr class="group-row group-toggle" data-group-key="'+esc(ek)+'"><td colspan="9"><span class="group-arrow">'+groupArrow(ek)+'</span>'+esc("Смета №"+e.number+" · "+(e.name||""))+' · '+linkedCount+' из '+estimateMaterials.length+' материалов сопоставлено</td></tr>';
-        if(ui.collapsed.has(ek)) return;
-        const sections=(dataState.estimateSections||[]).filter(function(sec){return sec.estimate_id===e.id;});
-        sections.forEach(function(sec){
-          const sectionMaterials=estimateMaterials.filter(function(r){return r.section_id===sec.id;});
-          if(!sectionMaterials.length) return;
-          const sk=ek+":section:"+sec.id;registerGroup(sk);
-          body+='<tr class="group-row group-toggle group-level-2" data-group-key="'+esc(sk)+'"><td colspan="9"><span class="group-arrow">'+groupArrow(sk)+'</span>'+esc(sec.title)+'</td></tr>';
-          if(ui.collapsed.has(sk)||ui.collapseLeaves) return;
-          sectionMaterials.sort(function(a,b){return Number(a.sort_order||0)-Number(b.sort_order||0);}).forEach(function(m){
-            const ml=materialLinks.get(m.id)||[];
-            body+='<tr class="data-row work-link-material-row" data-estimate-row-id="'+esc(m.id)+'"><td class="center"><span class="type-mark">М</span></td><td>'+esc(e.number)+'</td><td class="center">'+esc(m.position||"")+'</td><td>'+esc(estimateDisplayBasis(m)||"")+'</td><td>'+esc(estimateDisplayName(m)||"")+'</td><td class="center">'+esc(m.unit||"")+'</td><td class="num">'+fmt(m.quantity)+'</td><td>'+(ml.length?'<span class="work-link-status ok">'+ml.length+' '+(ml.length===1?'работа':'работы')+'</span>':'<span class="work-link-status warn">Не сопоставлено</span>')+'</td><td><button class="inline-action" type="button" data-work-link-edit="'+esc(m.id)+'">'+(ml.length?'Изменить':'Сопоставить')+'</button></td></tr>';
-            ml.forEach(function(l){
-              const w=rowMap.get(l.work_row_id);
-              if(!w) return;
-              const p=workLinkProgress(w.id);
-              body+='<tr class="data-row work-link-child-row"><td class="center"><span class="type-mark work">Р</span></td><td></td><td class="center">'+esc(w.position||"")+'</td><td>'+esc(estimateDisplayBasis(w)||"")+'</td><td class="work-link-child-name">'+esc(estimateDisplayName(w)||"")+'</td><td class="center">'+esc(w.unit||"")+'</td><td class="num">'+fmt(w.quantity)+'</td><td><span class="work-link-control '+(p.ok?'ok':'warn')+'">'+fmt0(p.pieces)+' / '+fmt0(p.expected)+' шт.'+(p.ok?' · совпадает':'')+'</span></td><td><button class="inline-action" type="button" data-work-link-remove="'+esc(l.id)+'">убрать</button></td></tr>';
+
+    (dataState.estimates||[]).filter(function(e){return selectedEstimateIds.has(e.id);}).forEach(function(e){
+      const estimateRows=(dataState.estimateRows||[]).filter(function(r){return r.estimate_id===e.id;});
+      const sections=(dataState.estimateSections||[]).filter(function(sec){return sec.estimate_id===e.id;});
+      let estimateBody="";
+
+      sections.forEach(function(sec){
+        const works=estimateRows.filter(function(r){return r.section_id===sec.id&&r.row_type==="work";})
+          .sort(function(a,b){return Number(a.sort_order||0)-Number(b.sort_order||0);});
+        const materials=estimateRows.filter(function(r){return r.section_id===sec.id&&r.row_type==="material";})
+          .sort(function(a,b){return Number(a.sort_order||0)-Number(b.sort_order||0);});
+        const unmatched=materials.filter(function(m){return !(materialLinks.get(m.id)||[]).length && materialMatchesSearch(m);});
+
+        let sectionBody="";
+        if(ui.workLinkFilter!=="unlinked"){
+          works.forEach(function(w){
+            const wl=workLinks.get(w.id)||[];
+            const linkedMaterials=wl.map(function(l){return rowMap.get(l.material_row_id);}).filter(Boolean)
+              .sort(function(a,b){return Number(a.sort_order||0)-Number(b.sort_order||0);});
+            const hasLinks=linkedMaterials.length>0;
+            if(ui.workLinkFilter==="linked" && !hasLinks) return;
+            if(ui.workLinkFilter==="work-unlinked" && hasLinks) return;
+            if(!workMatchesSearch(w,linkedMaterials)) return;
+
+            sectionBody+='<tr class="data-row work-link-work-row" data-estimate-row-id="'+esc(w.id)+'">'+
+              '<td class="center"><span class="type-mark work">Р</span></td>'+
+              '<td class="center">'+esc(w.position||"")+'</td>'+
+              '<td>'+esc(estimateDisplayBasis(w)||"")+'</td>'+
+              '<td class="work-link-work-name">'+esc(estimateDisplayName(w)||"")+'</td>'+
+              '<td class="center">'+esc(w.unit||"")+'</td>'+
+              '<td class="num">'+fmt(w.quantity)+'</td>'+
+              '<td>'+controlHtml(w)+'</td>'+
+              '<td>'+(hasLinks?'':'<span class="work-link-status warn">Нет материала</span>')+'</td>'+
+            '</tr>';
+
+            linkedMaterials.forEach(function(m){
+              const link=wl.find(function(x){return x.material_row_id===m.id;});
+              const method=link&&link.link_method==="manual"?"ручная":"авто";
+              sectionBody+='<tr class="data-row work-link-material-child" data-estimate-row-id="'+esc(m.id)+'">'+
+                '<td class="center"><span class="type-mark">М</span></td>'+
+                '<td class="center">'+esc(m.position||"")+'</td>'+
+                '<td>'+esc(estimateDisplayBasis(m)||"")+'</td>'+
+                '<td class="work-link-material-name">'+esc(estimateDisplayName(m)||"")+'</td>'+
+                '<td class="center">'+esc(m.unit||"")+'</td>'+
+                '<td class="num">'+fmt(m.quantity)+'</td>'+
+                '<td><span class="work-link-method '+(method==="ручная"?"manual":"auto")+'">'+method+'</span></td>'+
+                '<td><button class="inline-action" type="button" data-work-link-edit="'+esc(m.id)+'">изменить</button>'+(link?' <span class="action-sep">·</span> <button class="inline-action" type="button" data-work-link-remove="'+esc(link.id)+'">убрать</button>':'')+'</td>'+
+              '</tr>';
             });
           });
-        });
+        }
+
+        if(ui.workLinkFilter==="all" || ui.workLinkFilter==="unlinked"){
+          if(unmatched.length){
+            const uk="work-links:unmatched:"+sec.id;
+            registerGroup(uk);
+            sectionBody+='<tr class="group-row group-toggle work-link-unmatched-group" data-group-key="'+esc(uk)+'"><td colspan="8"><span class="group-arrow">'+groupArrow(uk)+'</span>Не сопоставлено · '+unmatched.length+'</td></tr>';
+            if(!ui.collapsed.has(uk) && !ui.collapseLeaves){
+              unmatched.forEach(function(m){
+                sectionBody+='<tr class="data-row work-link-unmatched-row" data-estimate-row-id="'+esc(m.id)+'">'+
+                  '<td class="center"><span class="type-mark">М</span></td>'+
+                  '<td class="center">'+esc(m.position||"")+'</td>'+
+                  '<td>'+esc(estimateDisplayBasis(m)||"")+'</td>'+
+                  '<td class="work-link-material-name">'+esc(estimateDisplayName(m)||"")+'</td>'+
+                  '<td class="center">'+esc(m.unit||"")+'</td>'+
+                  '<td class="num">'+fmt(m.quantity)+'</td>'+
+                  '<td><span class="work-link-status warn">Без работы</span></td>'+
+                  '<td><button class="inline-action" type="button" data-work-link-edit="'+esc(m.id)+'">сопоставить</button></td>'+
+                '</tr>';
+              });
+            }
+          }
+        }
+
+        if(!sectionBody) return;
+        const sk="work-links:section:"+sec.id;
+        registerGroup(sk);
+        estimateBody+='<tr class="group-row group-toggle group-level-2" data-group-key="'+esc(sk)+'"><td colspan="8"><span class="group-arrow">'+groupArrow(sk)+'</span>'+esc(sec.title)+'</td></tr>';
+        if(!ui.collapsed.has(sk)) estimateBody+=sectionBody;
       });
-      if(!body) body=tableMessage("Нет материалов по текущему фильтру.",9);
+
+      if(!estimateBody) return;
+      const ek="work-links:estimate:"+e.id;
+      registerGroup(ek);
+      const allMaterials=estimateRows.filter(function(r){return r.row_type==="material";});
+      const linkedCount=allMaterials.filter(function(r){return (materialLinks.get(r.id)||[]).length>0;}).length;
+      body+='<tr class="group-row group-toggle work-link-estimate-group" data-group-key="'+esc(ek)+'"><td colspan="8"><span class="group-arrow">'+groupArrow(ek)+'</span>'+esc("Смета №"+e.number+" · "+(e.name||""))+' · '+linkedCount+' / '+allMaterials.length+' материалов</td></tr>';
+      if(!ui.collapsed.has(ek)) body+=estimateBody;
+    });
+
+    if(!body){
+      const emptyText=ui.workLinkFilter==="unlinked"
+        ?"Материалов без работы по текущему фильтру нет."
+        :ui.workLinkFilter==="work-unlinked"
+          ?"Работ без материала по текущему фильтру нет."
+          :"Нет строк по текущему фильтру.";
+      body=tableMessage(emptyText,8);
     }
 
     $("workArea").className="work-area table-work";
-    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table work-links-table" data-table-key="work-links-v1"><thead><tr><th>Тип</th><th>№ сметы</th><th>Поз. см.</th><th>Обоснование</th><th>Наименование</th><th>Ед. изм.</th><th>Кол-во</th><th>Связь / контроль</th><th>Действие</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table work-links-table" data-table-key="work-links-v2"><thead><tr><th>Тип</th><th>Поз. см.</th><th>Обоснование</th><th>Наименование</th><th>Ед. изм.</th><th>Кол-во</th><th>Связь / контроль</th><th>Действие</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+
     document.querySelectorAll("[data-work-link-edit]").forEach(function(btn){
       btn.onclick=function(e){e.stopPropagation();openWorkLinkEditor(btn.dataset.workLinkEdit);};
     });
     document.querySelectorAll("[data-work-link-remove]").forEach(function(btn){
       btn.onclick=function(e){
-        e.stopPropagation();btn.disabled=true;
-        removeWorkLink(btn.dataset.workLinkRemove).catch(function(err){console.error(err);alert("Не удалось убрать связь: "+(err.message||err));btn.disabled=false;});
+        e.stopPropagation();
+        btn.disabled=true;
+        removeWorkLink(btn.dataset.workLinkRemove).catch(function(err){
+          console.error(err);
+          alert("Не удалось убрать связь: "+(err.message||err));
+          btn.disabled=false;
+        });
       };
     });
   }
@@ -6686,9 +6752,9 @@
         '<button class="service-action" data-work-link-auto type="button">Автосопоставить</button>'+
         '<span class="context-muted">Показать:</span>'+
         '<select class="service-select" data-work-link-filter aria-label="Фильтр связей работ">'+
-          '<option value="all"'+(ui.workLinkFilter==="all"?' selected':'')+'>Все материалы</option>'+
-          '<option value="unlinked"'+(ui.workLinkFilter==="unlinked"?' selected':'')+'>Без работ</option>'+
-          '<option value="linked"'+(ui.workLinkFilter==="linked"?' selected':'')+'>Сопоставлено</option>'+
+          '<option value="all"'+(ui.workLinkFilter==="all"?' selected':'')+'>Все</option>'+
+          '<option value="unlinked"'+(ui.workLinkFilter==="unlinked"?' selected':'')+'>Материалы без работы</option>'+
+          '<option value="linked"'+(ui.workLinkFilter==="linked"?' selected':'')+'>Работы с материалом</option>'+
           '<option value="work-unlinked"'+(ui.workLinkFilter==="work-unlinked"?' selected':'')+'>Работы без материала</option>'+
         '</select>'+
         '<button class="service-action" data-service="collapse" type="button">Свернуть всё</button>'+
