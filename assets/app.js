@@ -2615,30 +2615,68 @@
     }
     const previousCatalogLink=(dataState.supplierPriceLinks||[]).find(function(x){return x.catalog_item_id===catalogId;})||null;
     const previousSupplierLink=supplierItemId?(dataState.supplierPriceLinks||[]).find(function(x){return x.supplier_item_id===supplierItemId;})||null:null;
-    state.textContent="Сохраняю…";
-    const result=await client.rpc("set_supplier_price_link",{
-      p_project_id:dataState.project.id,
-      p_catalog_item_id:catalogId,
-      p_supplier_item_id:supplierItemId||null
+
+    // Optimistic UI: apply the mapping immediately. The network/database write
+    // continues after the editor closes, so the user's workflow is not blocked
+    // by the Supabase round trip.
+    const oldLinks=(dataState.supplierPriceLinks||[]).slice();
+    const affectedIds=new Set();
+    if(previousCatalogLink&&previousCatalogLink.supplier_item_id) affectedIds.add(previousCatalogLink.supplier_item_id);
+    if(previousSupplierLink&&previousSupplierLink.supplier_item_id) affectedIds.add(previousSupplierLink.supplier_item_id);
+    if(supplierItemId) affectedIds.add(supplierItemId);
+
+    const itemBackup=[];
+    (dataState.supplierItems||[]).forEach(function(si){
+      if(affectedIds.has(si.id)){
+        itemBackup.push({row:si,catalog_item_id:si.catalog_item_id,link_method:si.link_method,link_state:si.link_state});
+      }
     });
-    if(result.error){state.textContent=result.error.message;return;}
+    const snapshotBackup=[];
+    (dataState.supplierSnapshotRows||[]).forEach(function(row){
+      if(affectedIds.has(row.supplier_item_id)){
+        snapshotBackup.push({row:row,catalog_item_id:row.catalog_item_id,link_method:row.link_method,validation_state:row.validation_state});
+      }
+    });
 
     const local=applySupplierLinkLocally(catalogId,supplierItemId,remove);
     modal.classList.remove("open");
 
-    // Do not rebuild the 600+ row reconciliation grid: patch only rows touched by this link.
     const affected=new Set(local.detached||[]);
-    if(previousCatalogLink&&previousCatalogLink.supplier_item_id) affected.add(previousCatalogLink.supplier_item_id);
-    if(previousSupplierLink&&previousSupplierLink.supplier_item_id) affected.add(previousSupplierLink.supplier_item_id);
-    if(supplierItemId) affected.add(supplierItemId);
+    affectedIds.forEach(function(id){affected.add(id);});
     affected.forEach(function(id){patchSupplierCheckSupplierRow(id);});
     refreshSupplierCheckSummaryOnly();
     ui.supplierPriceDirty=true;
 
-    // Unlink is uncommon and needs a project-only row to reappear, so rebuild only for that case.
     if(remove){
       renderSupplierCheck();
     }
+
+    // Persist after the UI has already advanced. If the database rejects the
+    // change, restore the exact previous client state and show the error.
+    client.rpc("set_supplier_price_link",{
+      p_project_id:dataState.project.id,
+      p_catalog_item_id:catalogId,
+      p_supplier_item_id:supplierItemId||null
+    }).then(function(result){
+      if(!result.error) return;
+      dataState.supplierPriceLinks=oldLinks;
+      itemBackup.forEach(function(x){
+        x.row.catalog_item_id=x.catalog_item_id;
+        x.row.link_method=x.link_method;
+        x.row.link_state=x.link_state;
+      });
+      snapshotBackup.forEach(function(x){
+        x.row.catalog_item_id=x.catalog_item_id;
+        x.row.link_method=x.link_method;
+        x.row.validation_state=x.validation_state;
+      });
+      renderSupplierCheck();
+      ui.supplierPriceDirty=true;
+      const summary=document.querySelector("#supplierCheckModal .supplier-check-summary");
+      if(summary){
+        summary.innerHTML='<span class="supplier-save-error">Не сохранено: '+esc(result.error.message||"ошибка записи")+'</span>';
+      }
+    });
   }
 
   function renderUtilityActions(pageKey) {
