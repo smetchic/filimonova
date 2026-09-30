@@ -2222,3 +2222,13 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 #workArea .supplier-source-price-table thead th.sticky-4{
   position:sticky!important;
 }
+
+
+/* Table bottom breathing room:
+   leave one-and-a-half rows of scrollable space below the last record so the
+   final rows never merge visually with the viewport/page boundary. */
+#workArea .engineering-scroll{
+  padding-bottom:44px;
+  box-sizing:border-box;
+  scroll-padding-bottom:44px;
+}
