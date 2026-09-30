@@ -2919,7 +2919,7 @@
   }
 
   function currentPriceModel() {
-    if(!ui.currentPrice) ui.currentPrice={forecast:1.0552,competition:1,vat:0};
+    if(!ui.currentPrice) ui.currentPrice={forecast:1.0647,competition:1,vat:0};
     const P=ui.currentPrice,m=maps();
     const selectedIds=new Set(dataState.estimates.filter(function(e){return ui.estimates[e.number]!==false;}).map(function(e){return e.id;}));
     const base={salary:0,machines:0,drivers:0,transport:0,materials:0};
@@ -2966,14 +2966,14 @@
 
   function currentRefValue(row,mode) {
     if(row.v==null || ["competitionK","afterCompetition","forecastK","afterForecast","vat","grand"].includes(row.id)) return "";
-    const P=ui.currentPrice||{forecast:1.0552,competition:1};
+    const P=ui.currentPrice||{forecast:1.0647,competition:1};
     if(mode==="forecast") return money(row.v*P.forecast);
     if(mode==="competition") return money(row.v*P.competition);
     return money(row.v*P.competition*P.forecast);
   }
 
   function currentFormulaParts(r) {
-    const P=ui.currentPrice||{forecast:1.0552,competition:1,vat:0};
+    const P=ui.currentPrice||{forecast:1.0647,competition:1,vat:0};
     const parts={
       direct:["=",{r:"salary",t:"Заработная плата"}," + ",{r:"machines",t:"Эксплуатация машин и механизмов"}," + ",{r:"transport",t:"Транспортные расходы подрядчика"}," + ",{r:"materials",t:"Материалы подрядчика"}],
       ohr:["=(",{r:"salary",t:"Заработная плата"}," + ",{r:"drivers",t:"Заработная плата машинистов"},") × ",{r:"ohr:pct",t:"109,31%"}],
@@ -2988,7 +2988,7 @@
       returnTemp:["=−",{r:"temporary",t:"Временные здания и сооружения"}," × ",{r:"returnTemp:pct",t:"15%"}],
       contractor:["=",{r:"totalWorks",t:"Всего строительных и иных специальных монтажных работ"}," + ",{r:"returnTemp",t:"Возврат от временных зданий и сооружений"}],
       afterCompetition:["=",{r:"contractor",t:"Итого подрядных работ"}," × ",{r:"competitionK:k",t:Number(P.competition||1).toFixed(4).replace(".",",")}],
-      afterForecast:["=",{r:"afterCompetition",t:"Итого с учётом конкурсного коэффициента"}," × ",{r:"forecastK:k",t:Number(P.forecast||1.0552).toFixed(4).replace(".",",")}],
+      afterForecast:["=",{r:"afterCompetition",t:"Итого с учётом конкурсного коэффициента"}," × ",{r:"forecastK:k",t:Number(P.forecast||1.0647).toFixed(4).replace(".",",")}],
       vat:["=",{r:"afterForecast",t:"Итого с учётом прогнозного индекса"}," × ",{r:"vat:pct",t:String(P.vat||0).replace(".",",")+"%"}],
       grand:["=",{r:"afterForecast",t:"Итого с учётом прогнозного индекса"}," + ",{r:"vat",t:"НДС"}]
     };
@@ -3016,7 +3016,7 @@
       const cls=r.kind==="subtotal"?"subtotal":r.kind==="final"?"final":"";
       const pct=r.pct==null?"":String(r.id==="winter"?"2,5740":r.pct).replace(".",",");
       let k="";
-      if(r.id==="forecastK") k='<input class="forecast-input" value="'+Number((ui.currentPrice||{}).forecast||1.0552).toFixed(4).replace(".",",")+'" aria-label="Прогнозный индекс">';
+      if(r.id==="forecastK") k='<input class="forecast-input" value="'+Number((ui.currentPrice||{}).forecast||1.0647).toFixed(4).replace(".",",")+'" aria-label="Прогнозный индекс">';
       else if(r.k!=null) k=Number(r.k).toFixed(4).replace(".",",");
       return '<tr class="'+cls+' data-row" data-formula-row="'+r.id+'" data-current-row-no="'+no+'"><td class="center">'+no+'</td>'+filterCell("name",r.name,esc(r.name),"")+'<td class="num" data-formula-cell="'+r.id+':pct">'+pct+'</td><td class="num rate-cell" data-formula-cell="'+r.id+':k">'+k+'</td><td class="num formula-amount" data-formula-cell="'+r.id+'">'+money(r.v)+'</td><td class="num muted">'+currentRefValue(r,"forecast")+'</td><td class="num muted">'+currentRefValue(r,"competition")+'</td><td class="num muted">'+currentRefValue(r,"both")+'</td></tr>';
     }).join("");
@@ -3243,7 +3243,7 @@
 
   function gprRowCurrentPrice(row,m) {
     const c=rowCost(row,m);
-    const P=ui.currentPrice||{forecast:1.0552,competition:1,vat:0};
+    const P=ui.currentPrice||{forecast:1.0647,competition:1,vat:0};
     const qty=Number(row.quantity||0);
 
     const salary=Number(c.salary_amount||0);
