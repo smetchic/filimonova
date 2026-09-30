@@ -2777,7 +2777,9 @@
     if(!source)return false;
     const raw=source.raw_data||{};
     const link=(dataState.supplierPriceLinks||[]).find(function(x){return x.supplier_item_id===supplierItemId;});
-    const project=link?supplierCheckProjectRows().find(function(x){return x.catalogItemId===link.catalog_item_id;}):null;
+    const project=link?supplierCheckProjectRows().find(function(x){
+      return x.catalogItemId===link.catalog_item_id && x.scopeKey===supplierLinkScopeKey(link,snapshot);
+    }):null;
     const cells=row.cells;
     if(cells.length<18)return false;
 
@@ -2793,13 +2795,13 @@
       cells[14].textContent=link.link_method==="manual"?"Вручную":"Авто";
       cells[15].textContent=model.reasons.length?model.reasons.join(" · "):"Нет";
       cells[16].innerHTML=supplierControlJournalCheckboxHtml(project.catalogItemId,supplierItemId);
-      cells[17].innerHTML='<button class="table-text-action" data-supplier-match="'+esc(project.catalogItemId)+'" type="button">Изменить</button>';
-      const duplicate=check.querySelector('[data-supplier-check-key="'+CSS.escape("catalog:"+project.catalogItemId)+'"]');
+      cells[17].innerHTML='<button class="table-text-action" data-supplier-match="'+esc(project.catalogItemId)+'" data-supplier-scope="'+esc(project.scopeKey)+'" type="button">Изменить</button>';
+      const duplicate=check.querySelector('[data-supplier-check-key="'+CSS.escape("project:"+project.projectKey)+'"]');
       if(duplicate && duplicate!==row) duplicate.remove();
       const journal=cells[16].querySelector("[data-supplier-control-journal]");
       if(journal) journal.onchange=function(){setSupplierControlJournal(project.catalogItemId,supplierItemId,journal.checked,journal);};
       const change=cells[17].querySelector("[data-supplier-match]");
-      if(change) change.onclick=function(){openSupplierMatchEditor(project.catalogItemId);};
+      if(change) change.onclick=function(){openSupplierMatchEditor(project.catalogItemId,project.scopeKey);};
     }else{
       row.classList.add("supplier-only-row");
       for(let i=1;i<=5;i++) cells[i].textContent="";
