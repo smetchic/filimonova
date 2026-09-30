@@ -5753,23 +5753,19 @@
   }
 
   function detectWorkbookPeriod(rows,expectedKey) {
-    const months={"январ":"01","феврал":"02","март":"03","апрел":"04","мая":"05","май":"05","июн":"06","июл":"07","август":"08","сентябр":"09","октябр":"10","ноябр":"11","декабр":"12"};
-    const found=new Set();
-    rows.forEach(function(entry){
-      entry.values.forEach(function(value){
-        const text=String(value==null?"":value).toLowerCase();
-        Object.keys(months).forEach(function(stem){
-          const match=text.match(new RegExp(stem+"[^0-9]{0,12}(20[0-9]{2})"));
-          if(match) found.add(match[1]+"-"+months[stem]);
-        });
-        const iso=text.match(/(20[0-9]{2})[-./](0?[1-9]|1[0-2])(?:[-./][0-3]?[0-9])?/);
-        if(iso) found.add(iso[1]+"-"+String(Number(iso[2])).padStart(2,"0"));
-        const ru=text.match(/(?:^|\D)(?:[0-3]?\d)[./-](0?[1-9]|1[0-2])[./-](20[0-9]{2})(?:\D|$)/);
-        if(ru) found.add(ru[2]+"-"+String(Number(ru[1])).padStart(2,"0"));
-      });
+    const months={
+      "январь":"01","февраль":"02","март":"03","апрель":"04","май":"05","июнь":"06",
+      "июль":"07","август":"08","сентябрь":"09","октябрь":"10","ноябрь":"11","декабрь":"12"
+    };
+    let detected="";
+    rows.some(function(entry){
+      const text=entry.values.map(function(value){return String(value==null?"":value);}).join(" ").replace(/\s+/g," ").trim().toLowerCase();
+      const match=text.match(/за\s+(январь|февраль|март|апрель|май|июнь|июль|август|сентябрь|октябрь|ноябрь|декабрь)\s+месяц\s+(20[0-9]{2})\s+год(?:а)?/i);
+      if(!match) return false;
+      detected=match[2]+"-"+months[match[1].toLowerCase()];
+      return true;
     });
-    if(found.has(expectedKey)) return expectedKey;
-    return found.size===1?Array.from(found)[0]:"";
+    return detected;
   }
 
   function headerScore(rows,rowIndex,columnIndex) {
