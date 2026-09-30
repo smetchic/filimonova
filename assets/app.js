@@ -1570,6 +1570,12 @@
     });
   }
 
+  function normalizeEstimateUnit(unit,rowType) {
+    const value=String(unit==null?"":unit).replace(/\s+/g," ").trim();
+    if(rowType==="work" && /^100\s*ШТ\.?\s*(?:СБОРНЫХ\s+КОНСТРУКЦИЙ\s*)?\.?$/i.test(value)) return "100 ШТ";
+    return value;
+  }
+
   function parseEstimateWorkbook(buffer,estimateNumberValue) {
     if(!window.XLSX) throw new Error("Модуль чтения Excel не загрузился.");
     const wb=XLSX.read(buffer,{type:"array",cellDates:false,cellFormula:false});
@@ -1639,7 +1645,7 @@
 
       const uq=String(raw[3]).trim().split(/\r?\n/);
       const quantity=estimateNumber(uq.pop(),"Строка "+(i+1)+", количество");
-      const unit=uq.join(" ").trim();
+      const unit=normalizeEstimateUnit(uq.join(" ").trim(),rowType);
       if(!unit || quantity==null) throw new Error("Строка "+(i+1)+": не удалось разделить единицу измерения и количество.");
 
       const costs={};
