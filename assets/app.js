@@ -556,13 +556,15 @@
 
   function openColumnFilter(trigger) {
     const field = trigger.dataset.columnFilter;
+    const viewKey=currentViewKey();
     const pop = ensureFilterPopup();
     const cells = Array.from(document.querySelectorAll('#workArea [data-filter-field="' + CSS.escape(field) + '"]'));
     let values = Array.from(new Set(cells.map(function(c){ return c.dataset.filterValue || ""; })));
     values.sort(function(a,b){ return a.localeCompare(b,"ru",{numeric:true,sensitivity:"base"}); });
-    const existing = filterBucket()[field];
+    const viewFilters=(ui.columnFilters&&ui.columnFilters[viewKey])||{};
+    const existing = viewFilters[field];
     let chosen = new Set(existing ? Array.from(existing) : values);
-    const currentSort = sortBucket();
+    const currentSort=(ui.columnSort&&ui.columnSort[viewKey])||null;
 
     function valueRows(query) {
       const q = norm(query || "");
@@ -617,25 +619,30 @@
     pop.querySelectorAll("[data-sort-dir]").forEach(function(b){
       b.onclick=function(){
         if(!ui.columnSort) ui.columnSort={};
-        ui.columnSort[currentViewKey()]={field:field,dir:b.dataset.sortDir};
+        ui.columnSort[viewKey]={field:field,dir:b.dataset.sortDir};
         pop.classList.remove("open");
         rerenderContent();
       };
     });
     pop.querySelector("[data-sort-clear]").onclick=function(){
-      clearColumnSort();
+      if(ui.columnSort) delete ui.columnSort[viewKey];
       pop.classList.remove("open");
-      rerenderContent();
+      renderPage(ui.page,ui.tabs[ui.page]||0);
     };
     pop.querySelector("[data-filter-cancel]").onclick=function(){pop.classList.remove("open");};
     pop.querySelector(".filter-clear").onclick=function(){
-      clearColumnFilter(field);
+      if(ui.columnFilters&&ui.columnFilters[viewKey]){
+        const next=Object.assign({},ui.columnFilters[viewKey]);
+        delete next[field];
+        if(Object.keys(next).length) ui.columnFilters[viewKey]=next;
+        else delete ui.columnFilters[viewKey];
+      }
       if(ui.page==="spec"){
         ui.collapseLeaves=false;
         ui.collapsed.clear();
       }
       pop.classList.remove("open");
-      rerenderContent();
+      renderPage(ui.page,ui.tabs[ui.page]||0);
     };
     pop.querySelector("[data-filter-ok]").onclick=function(){
       // If a search is entered, the visible checked search results become the
@@ -647,9 +654,16 @@
       }
       const allValues = values;
       if (!search.value.trim() && chosen.size === allValues.length && allValues.every(function(v){return chosen.has(v);})) {
-        delete filterBucket()[field];
+        if(ui.columnFilters&&ui.columnFilters[viewKey]){
+          const next=Object.assign({},ui.columnFilters[viewKey]);
+          delete next[field];
+          if(Object.keys(next).length) ui.columnFilters[viewKey]=next;
+          else delete ui.columnFilters[viewKey];
+        }
       } else {
-        filterBucket()[field]=new Set(Array.from(chosen));
+        if(!ui.columnFilters) ui.columnFilters={};
+        if(!ui.columnFilters[viewKey]) ui.columnFilters[viewKey]={};
+        ui.columnFilters[viewKey][field]=new Set(Array.from(chosen));
       }
       if(ui.page==="spec"){
         ui.collapseLeaves=false;
