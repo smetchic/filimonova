@@ -2378,7 +2378,7 @@
     if(changed) reasons.push("Изменена цена");
     let status="Сопоставлено";
     const manualConfirmed=!!(link&&source&&link.link_method==="manual"&&link.validation_state==="confirmed");
-    if(absenceAllowed) status="Не требуется в прайсе";
+    if(absenceAllowed) status="Не является ошибкой";
     else if(!link || (link&&link.validation_state==="review") || (!source&&link&&link.validation_state!=="confirmed")) status="Требует проверки";
     else if(!source) status="Нет в новой версии";
     else if(!prices.length) status="Без цены";
@@ -2392,7 +2392,7 @@
 
   function supplierStatusClass(status) {
     if(status==="Сопоставлено"||status==="Сопоставлено вручную") return "ok";
-    if(status==="Не требуется в прайсе") return "none";
+    if(status==="Не является ошибкой") return "none";
     if(status==="Изменена цена"||status.indexOf("Расхождение")===0||status==="Требует проверки"||status==="Сопоставлено с замечанием") return "review";
     return "none";
   }
@@ -2610,7 +2610,7 @@
       "Только у поставщика",
       "Нет в новой версии",
       "Сопоставлено вручную",
-      "Не требуется в прайсе"
+      "Не является ошибкой"
     ];
     const statusOptions=statusOrder.filter(function(s){return availableStatuses.has(s);});
     Array.from(availableStatuses).forEach(function(s){if(!statusOptions.includes(s)) statusOptions.push(s);});
@@ -2647,7 +2647,7 @@
     if(!body) body=tableMessage(ui.supplierCheckStatus==="all"?"Нет данных для проверки. Сначала импортируйте прайс поставщика.":"Нет строк с выбранным статусом.",18);
 
     const attentionCount=rows.filter(function(x){
-      return x.status!=="Сопоставлено"&&x.status!=="Сопоставлено вручную"&&x.status!=="Не требуется в прайсе";
+      return x.status!=="Сопоставлено"&&x.status!=="Сопоставлено вручную"&&x.status!=="Не является ошибкой";
     }).length + snapshot.filter(function(s){return !linkedBySupplierItem.has(s.supplier_item_id);}).length;
 
     const statusSelect='<label class="supplier-check-status-filter"><span>Статус</span><select data-supplier-check-status>'+
