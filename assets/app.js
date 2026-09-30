@@ -5934,7 +5934,7 @@
       dataState.estimateWorkLinks=(dataState.estimateWorkLinks||[]).filter(function(x){return !removeIds.has(x.id);}).concat(inserted);
       state.textContent="Сохранено";
       modal.classList.remove("open");
-      rerenderContent();
+      renderPage("links",0);
     }catch(err){
       console.error(err);
       state.textContent="Ошибка: "+(err&&err.message?err.message:String(err));
@@ -5949,7 +5949,7 @@
     const result=await client.from("estimate_work_links").delete().eq("id",link.id);
     if(result.error) throw result.error;
     dataState.estimateWorkLinks=(dataState.estimateWorkLinks||[]).filter(function(x){return x.id!==link.id;});
-    rerenderContent();
+    renderPage("links",0);
   }
 
   function renderWorkLinks() {
