@@ -2707,9 +2707,12 @@
     modal.classList.add("open");
   }
 
-  function applySupplierLinkLocally(catalogId,supplierItemId,remove) {
+  function applySupplierLinkLocally(catalogId,supplierItemId,remove,scopeKey) {
     const links=dataState.supplierPriceLinks||[];
-    const oldByCatalog=links.find(function(x){return x.catalog_item_id===catalogId;})||null;
+    const snapshot=latestSupplierSnapshotRows();
+    const oldByCatalog=links.find(function(x){
+      return x.catalog_item_id===catalogId && supplierLinkScopeKey(x,snapshot)===scopeKey;
+    })||null;
     const oldBySupplier=supplierItemId?links.find(function(x){return x.supplier_item_id===supplierItemId;})||null:null;
     const detached=new Set();
 
@@ -2718,7 +2721,7 @@
       next=next.filter(function(x){return x!==oldByCatalog;});
       if(oldByCatalog.supplier_item_id) detached.add(oldByCatalog.supplier_item_id);
     }
-    if(oldBySupplier && oldBySupplier.catalog_item_id!==catalogId){
+    if(oldBySupplier && !(oldBySupplier.catalog_item_id===catalogId && supplierLinkScopeKey(oldBySupplier,snapshot)===scopeKey)){
       next=next.filter(function(x){return x!==oldBySupplier;});
       if(oldBySupplier.supplier_item_id) detached.add(oldBySupplier.supplier_item_id);
     }
@@ -2728,7 +2731,9 @@
       const si=(dataState.supplierItems||[]).find(function(x){return x.id===id;});
       if(si){si.catalog_item_id=null;si.link_method=null;si.link_state="unmatched";}
       (dataState.supplierSnapshotRows||[]).forEach(function(x){
-        if(x.supplier_item_id===id){x.catalog_item_id=null;x.link_method=null;x.validation_state=null;}
+        if(x.supplier_item_id===id){
+          x.catalog_item_id=null;x.link_method=null;x.validation_state=null;x.scope_key="";
+        }
       });
     }
     detached.forEach(clearSupplier);
@@ -2737,10 +2742,11 @@
       const si=(dataState.supplierItems||[]).find(function(x){return x.id===supplierItemId;});
       const latest=latestSupplierSnapshotRows()[0]||null;
       const link={
-        id:oldByCatalog&&oldByCatalog.id||("local-"+catalogId+"-"+supplierItemId),
+        id:oldByCatalog&&oldByCatalog.id||("local-"+catalogId+"-"+scopeKey+"-"+supplierItemId),
         supplier_id:si&&si.supplier_id||null,
         catalog_item_id:catalogId,
         supplier_item_id:supplierItemId,
+        scope_key:scopeKey,
         link_method:"manual",
         validation_state:"confirmed",
         last_checked_import_id:latest&&latest.import_id||null,
@@ -2750,7 +2756,7 @@
       if(si){si.catalog_item_id=catalogId;si.link_method="manual";si.link_state="matched";}
       (dataState.supplierSnapshotRows||[]).forEach(function(x){
         if(x.supplier_item_id===supplierItemId){
-          x.catalog_item_id=catalogId;x.link_method="manual";x.validation_state="confirmed";
+          x.catalog_item_id=catalogId;x.link_method="manual";x.validation_state="confirmed";x.scope_key=scopeKey;
         }
       });
       detached.delete(supplierItemId);
