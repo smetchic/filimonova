@@ -1633,7 +1633,18 @@
         '<div class="spec-import-foot"><span class="spec-import-state"></span><span class="spacer"></span><button class="context-link estimate-import-close" type="button">Закрыть</button><button class="context-link estimate-import-apply" type="button" disabled>Импортировать</button></div>'+
       '</div>';
     document.body.appendChild(modal);
-    const close=function(){modal.classList.remove("open");};
+    const close=function(){
+      modal.classList.remove("open");
+      if(ui.supplierPriceDirty){
+        ui.supplierPriceDirty=false;
+        setTimeout(function(){
+          if(ui.page==="supply" && (ui.tabs.supply||0)===2){
+            renderSupplierPrice();
+            installTableTools();
+          }
+        },0);
+      }
+    };
     modal.querySelector(".spec-import-close").onclick=close;
     modal.querySelector(".estimate-import-close").onclick=close;
     modal.onclick=function(e){if(e.target===modal) close();};
@@ -2476,18 +2487,114 @@
     modal.classList.add("open");
   }
 
-  async function refreshSupplierReconciliationData() {
-    const project=dataState.project;
-    const results=await Promise.all([
-      fetchAllRows("supplier_items","id,supplier_id,catalog_item_id,source_mark,source_name,source_section,source_key,unit_volume_m3,link_method,link_state,source_import_row_id",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("source_mark");}),
-      fetchAllRows("supplier_price_links","id,supplier_id,catalog_item_id,supplier_item_id,link_method,validation_state,last_checked_import_id,created_at,updated_at",function(q){return q.eq("project_id",project.id);}),
-      fetchAllRows("supplier_price_journal","id,import_id,catalog_item_id,supplier_item_id,event_type,before_value,after_value,link_method,actor_id,created_at",function(q){return q.eq("project_id",project.id).order("created_at",{ascending:false});}),
-      fetchAllRows("supplier_price_snapshot_rows","import_id,source_name,imported_at,version_no,supplier_id,import_row_id,source_row_no,source_key,raw_data,normalized_data,supplier_item_id,catalog_item_id,link_method,validation_state",function(q){return q.eq("project_id",project.id).order("imported_at",{ascending:false}).order("source_row_no");})
-    ]);
-    dataState.supplierItems=results[0]||[];
-    dataState.supplierPriceLinks=results[1]||[];
-    dataState.supplierPriceJournal=results[2]||[];
-    dataState.supplierSnapshotRows=results[3]||[];
+  function applySupplierLinkLocally(catalogId,supplierItemId,remove) {
+    const links=dataState.supplierPriceLinks||[];
+    const oldByCatalog=links.find(function(x){return x.catalog_item_id===catalogId;})||null;
+    const oldBySupplier=supplierItemId?links.find(function(x){return x.supplier_item_id===supplierItemId;})||null:null;
+    const detached=new Set();
+
+    let next=links.slice();
+    if(oldByCatalog){
+      next=next.filter(function(x){return x!==oldByCatalog;});
+      if(oldByCatalog.supplier_item_id) detached.add(oldByCatalog.supplier_item_id);
+    }
+    if(oldBySupplier && oldBySupplier.catalog_item_id!==catalogId){
+      next=next.filter(function(x){return x!==oldBySupplier;});
+      if(oldBySupplier.supplier_item_id) detached.add(oldBySupplier.supplier_item_id);
+    }
+
+    function clearSupplier(id){
+      if(!id)return;
+      const si=(dataState.supplierItems||[]).find(function(x){return x.id===id;});
+      if(si){si.catalog_item_id=null;si.link_method=null;si.link_state="unmatched";}
+      (dataState.supplierSnapshotRows||[]).forEach(function(x){
+        if(x.supplier_item_id===id){x.catalog_item_id=null;x.link_method=null;x.validation_state=null;}
+      });
+    }
+    detached.forEach(clearSupplier);
+
+    if(!remove && supplierItemId){
+      const si=(dataState.supplierItems||[]).find(function(x){return x.id===supplierItemId;});
+      const latest=latestSupplierSnapshotRows()[0]||null;
+      const link={
+        id:oldByCatalog&&oldByCatalog.id||("local-"+catalogId+"-"+supplierItemId),
+        supplier_id:si&&si.supplier_id||null,
+        catalog_item_id:catalogId,
+        supplier_item_id:supplierItemId,
+        link_method:"manual",
+        validation_state:"confirmed",
+        last_checked_import_id:latest&&latest.import_id||null,
+        updated_at:new Date().toISOString()
+      };
+      next.push(link);
+      if(si){si.catalog_item_id=catalogId;si.link_method="manual";si.link_state="matched";}
+      (dataState.supplierSnapshotRows||[]).forEach(function(x){
+        if(x.supplier_item_id===supplierItemId){
+          x.catalog_item_id=catalogId;x.link_method="manual";x.validation_state="confirmed";
+        }
+      });
+      detached.delete(supplierItemId);
+    }
+
+    dataState.supplierPriceLinks=next;
+    return {oldByCatalog:oldByCatalog,oldBySupplier:oldBySupplier,detached:Array.from(detached)};
+  }
+
+  function patchSupplierCheckSupplierRow(supplierItemId) {
+    if(!supplierItemId)return false;
+    const check=document.getElementById("supplierCheckModal");
+    if(!check)return false;
+    const row=check.querySelector('[data-supplier-check-key="'+CSS.escape("supplier:"+supplierItemId)+'"]');
+    if(!row)return false;
+    const snapshot=latestSupplierSnapshotRows();
+    const source=snapshot.find(function(x){return x.supplier_item_id===supplierItemId;});
+    if(!source)return false;
+    const raw=source.raw_data||{};
+    const link=(dataState.supplierPriceLinks||[]).find(function(x){return x.supplier_item_id===supplierItemId;});
+    const project=link?supplierCheckProjectRows().find(function(x){return x.catalogItemId===link.catalog_item_id;}):null;
+    const cells=row.cells;
+    if(cells.length<18)return false;
+
+    if(project){
+      const model=supplierCheckRow(project,snapshot);
+      row.classList.remove("supplier-only-row");
+      cells[1].textContent=project.mark||"";
+      cells[2].textContent=project.name||"";
+      cells[3].textContent=fmt0(project.qty);
+      cells[4].textContent=project.volume==null?"—":fmt(project.volume);
+      cells[5].textContent=project.volume==null?"—":fmt(project.qty*project.volume);
+      cells[13].innerHTML='<span class="price-state '+supplierStatusClass(model.status)+'">'+esc(model.status)+'</span>';
+      cells[14].textContent=link.link_method==="manual"?"Вручную":"Авто";
+      cells[15].textContent=model.reasons.length?model.reasons.join(" · "):"Нет";
+      cells[16].innerHTML='<button class="table-text-action" data-supplier-row-journal="'+esc(project.catalogItemId)+'" type="button">История</button>';
+      cells[17].innerHTML='<button class="table-text-action" data-supplier-match="'+esc(project.catalogItemId)+'" type="button">Изменить</button>';
+      const duplicate=check.querySelector('[data-supplier-check-key="'+CSS.escape("catalog:"+project.catalogItemId)+'"]');
+      if(duplicate && duplicate!==row) duplicate.remove();
+      const journal=cells[16].querySelector("[data-supplier-row-journal]");
+      if(journal) journal.onclick=function(){ui.supplierCheckTab="journal";ui.supplierCheckCatalog=project.catalogItemId;renderSupplierCheck();};
+      const change=cells[17].querySelector("[data-supplier-match]");
+      if(change) change.onclick=function(){openSupplierMatchEditor(project.catalogItemId);};
+    }else{
+      row.classList.add("supplier-only-row");
+      for(let i=1;i<=5;i++) cells[i].textContent="";
+      cells[13].innerHTML='<span class="price-state supplier">Только у поставщика</span>';
+      cells[14].textContent="—";
+      cells[15].textContent="Не создаёт проектную позицию";
+      cells[16].textContent="";
+      cells[17].innerHTML='<button class="table-text-action" data-supplier-source-match="'+esc(supplierItemId)+'" type="button">Сопоставить</button>';
+      const match=cells[17].querySelector("[data-supplier-source-match]");
+      if(match) match.onclick=function(){openSupplierSourceMatchEditor(supplierItemId);};
+    }
+    return true;
+  }
+
+  function refreshSupplierCheckSummaryOnly() {
+    const summary=document.querySelector("#supplierCheckModal .supplier-check-summary");
+    if(!summary)return;
+    const snapshot=latestSupplierSnapshotRows();
+    const rows=supplierCheckProjectRows().map(function(p){return supplierCheckRow(p,snapshot);});
+    summary.textContent="Рабочая сводка: "+rows.length+" · версия прайса: "+(snapshot[0]?"№"+snapshot[0].version_no:"нет")+" · требует проверки: "+
+      rows.filter(function(x){return x.status!=="Сопоставлено"&&x.status!=="Сопоставлено вручную";}).length;
   }
 
   async function saveSupplierMatch(remove) {
@@ -2506,14 +2613,8 @@
       if(!remove&&!chosenSupplier){state.textContent="Выберите позицию поставщика.";return;}
       supplierItemId=remove?null:chosenSupplier.dataset.supplierCandidate;
     }
-    const checkScroll=document.querySelector("#supplierCheckModal .supplier-check-content>.engineering-scroll");
-    const fallbackScroll=checkScroll?{top:checkScroll.scrollTop,left:checkScroll.scrollLeft}:null;
-    const restoreKey=supplierItemId?"supplier:"+supplierItemId:"catalog:"+catalogId;
-    const oldAnchor=checkScroll?checkScroll.querySelector('[data-supplier-check-key="'+CSS.escape(restoreKey)+'"]'):null;
-    const anchorOffset=oldAnchor&&checkScroll
-      ? oldAnchor.getBoundingClientRect().top-checkScroll.getBoundingClientRect().top
-      : null;
-
+    const previousCatalogLink=(dataState.supplierPriceLinks||[]).find(function(x){return x.catalog_item_id===catalogId;})||null;
+    const previousSupplierLink=supplierItemId?(dataState.supplierPriceLinks||[]).find(function(x){return x.supplier_item_id===supplierItemId;})||null:null;
     state.textContent="Сохраняю…";
     const result=await client.rpc("set_supplier_price_link",{
       p_project_id:dataState.project.id,
@@ -2522,35 +2623,22 @@
     });
     if(result.error){state.textContent=result.error.message;return;}
 
-    await refreshSupplierReconciliationData();
+    const local=applySupplierLinkLocally(catalogId,supplierItemId,remove);
     modal.classList.remove("open");
-    if(!ui.supplierCheckScroll) ui.supplierCheckScroll={};
-    if(fallbackScroll) ui.supplierCheckScroll.recon={top:fallbackScroll.top,left:fallbackScroll.left};
-    renderSupplierCheck();
-    renderSupplierPrice();
 
-    const restorePosition=function(){
-      const scroller=document.querySelector("#supplierCheckModal .supplier-check-content>.engineering-scroll");
-      if(!scroller)return;
-      scroller.scrollLeft=fallbackScroll?fallbackScroll.left:scroller.scrollLeft;
-      const anchor=scroller.querySelector('[data-supplier-check-key="'+CSS.escape(restoreKey)+'"]');
-      if(anchor){
-        if(anchorOffset!=null){
-          const delta=anchor.getBoundingClientRect().top-scroller.getBoundingClientRect().top-anchorOffset;
-          scroller.scrollTop+=delta;
-        }else{
-          scroller.scrollTop=Math.max(0,anchor.offsetTop-Math.round(scroller.clientHeight*0.42));
-        }
-      }else if(fallbackScroll){
-        scroller.scrollTop=fallbackScroll.top;
-      }
-      ui.supplierCheckScroll.recon={top:scroller.scrollTop,left:scroller.scrollLeft};
-    };
-    requestAnimationFrame(function(){
-      restorePosition();
-      requestAnimationFrame(restorePosition);
-    });
-    setTimeout(restorePosition,60);
+    // Do not rebuild the 600+ row reconciliation grid: patch only rows touched by this link.
+    const affected=new Set(local.detached||[]);
+    if(previousCatalogLink&&previousCatalogLink.supplier_item_id) affected.add(previousCatalogLink.supplier_item_id);
+    if(previousSupplierLink&&previousSupplierLink.supplier_item_id) affected.add(previousSupplierLink.supplier_item_id);
+    if(supplierItemId) affected.add(supplierItemId);
+    affected.forEach(function(id){patchSupplierCheckSupplierRow(id);});
+    refreshSupplierCheckSummaryOnly();
+    ui.supplierPriceDirty=true;
+
+    // Unlink is uncommon and needs a project-only row to reappear, so rebuild only for that case.
+    if(remove){
+      renderSupplierCheck();
+    }
   }
 
   function renderUtilityActions(pageKey) {
