@@ -1792,6 +1792,16 @@
       .replace(/\(\s*у\s*\)/g,"у");
   }
 
+  // Supplier OCR comparison only: Cyrillic О, Latin O/o and digit 0 are
+  // treated as the same symbol. Original values and stable source_key stay unchanged.
+  function supplierCompareMark(value) {
+    return supplierMatchMark(value).replace(/[оo0]/g,"0");
+  }
+
+  function supplierCompareName(value) {
+    return supplierMatchName(value).replace(/[оo0]/g,"0");
+  }
+
   function supplierColumnLabel(table,header,col) {
     const parts=[];
     for(let r=Math.max(0,header-2);r<=Math.min(table.length-1,header+2);r++){
@@ -1985,11 +1995,11 @@
         catalogId=old.catalog_item_id;state="matched";
       }else{
         const both=catalog.filter(function(ci){
-          return supplierMatchMark(ci.mark)===supplierMatchMark(row.source_mark) &&
-            supplierMatchName(ci.name)===supplierMatchName(row.source_name);
+          return supplierCompareMark(ci.mark)===supplierCompareMark(row.source_mark) &&
+            supplierCompareName(ci.name)===supplierCompareName(row.source_name);
         });
-        const byMark=catalog.filter(function(ci){return supplierMatchMark(ci.mark)===supplierMatchMark(row.source_mark);});
-        const byName=catalog.filter(function(ci){return supplierMatchName(ci.name)===supplierMatchName(row.source_name);});
+        const byMark=catalog.filter(function(ci){return supplierCompareMark(ci.mark)===supplierCompareMark(row.source_mark);});
+        const byName=catalog.filter(function(ci){return supplierCompareName(ci.name)===supplierCompareName(row.source_name);});
         if(both.length===1){catalogId=both[0].id;state="matched";}
         else if(both.length>1){state="review";}
         else if(byMark.length || byName.length){state="review";}
@@ -2255,8 +2265,8 @@
   function supplierCandidateScore(project,row) {
     const raw=row.raw_data||{};
     let score=0;
-    const pm=supplierMatchMark(project.mark),sm=supplierMatchMark(raw.source_mark);
-    const pn=supplierMatchName(project.name),sn=supplierMatchName(raw.source_name);
+    const pm=supplierCompareMark(project.mark),sm=supplierCompareMark(raw.source_mark);
+    const pn=supplierCompareName(project.name),sn=supplierCompareName(raw.source_name);
     const sourceScope=supplierSourceScopeKey(row);
     if(sourceScope&&project.scopeKey===sourceScope) score+=5000;
     else if(sourceScope) score-=1200;
@@ -2290,8 +2300,8 @@
     if(!link && candidates.length>1) reasons.push("Несколько кандидатов");
     if(!link && candidates.length<=1) reasons.push("Нет подтверждённой связи");
     if(source){
-      if(supplierMatchMark(project.mark)!==supplierMatchMark(raw.source_mark)) reasons.push("Марка");
-      if(supplierMatchName(project.name)!==supplierMatchName(raw.source_name)) reasons.push("Наименование");
+      if(supplierCompareMark(project.mark)!==supplierCompareMark(raw.source_mark)) reasons.push("Марка");
+      if(supplierCompareName(project.name)!==supplierCompareName(raw.source_name)) reasons.push("Наименование");
       if(!prices.length) reasons.push("Без цены");
       if(new Set(prices.map(function(p){return String(p.effective_from)+"|"+String(p.unit_price_gross);})).size!==prices.length) reasons.push("Несколько цен");
       if(raw.qty_house!=null&&Math.abs(Number(raw.qty_house)-project.qty)>1e-6) reasons.push("Количество: "+fmt0(raw.qty_house)+" ≠ "+fmt0(project.qty));
