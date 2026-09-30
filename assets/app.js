@@ -260,7 +260,8 @@
       fetchAllRows("imports","id,domain,source_name,source_period,status,report,imported_at,source_slot,applied_at",function(q){return q.eq("project_id",project.id).in("domain",["avr","accounting","supplier_price"]).order("imported_at",{ascending:false});}),
       fetchAllRows("supplier_price_links","id,supplier_id,catalog_item_id,supplier_item_id,link_method,validation_state,last_checked_import_id,created_at,updated_at",function(q){return q.eq("project_id",project.id);}),
       fetchAllRows("supplier_price_journal","id,import_id,catalog_item_id,supplier_item_id,event_type,before_value,after_value,link_method,actor_id,created_at",function(q){return q.eq("project_id",project.id).order("created_at",{ascending:false});}),
-      fetchAllRows("supplier_price_snapshot_rows","import_id,source_name,imported_at,version_no,supplier_id,import_row_id,source_row_no,source_key,raw_data,normalized_data,supplier_item_id,catalog_item_id,link_method,validation_state",function(q){return q.eq("project_id",project.id).order("imported_at",{ascending:false}).order("source_row_no");})
+      fetchAllRows("supplier_price_snapshot_rows","import_id,source_name,imported_at,version_no,supplier_id,import_row_id,source_row_no,source_key,raw_data,normalized_data,supplier_item_id,catalog_item_id,link_method,validation_state",function(q){return q.eq("project_id",project.id).order("imported_at",{ascending:false}).order("source_row_no");}),
+      fetchAllRows("supplier_price_control_journal","id,catalog_item_id,supplier_item_id,issue_key,reasons,status,snapshot,created_at,updated_at",function(q){return q.eq("project_id",project.id).order("created_at",{ascending:false});})
     ];
     const results = await Promise.all(requests);
     dataState = {
@@ -306,7 +307,8 @@
       imports:results[36] || [],
       supplierPriceLinks:results[37] || [],
       supplierPriceJournal:results[38] || [],
-      supplierSnapshotRows:results[39] || []
+      supplierSnapshotRows:results[39] || [],
+      supplierControlJournal:results[40] || []
     };
   }
 
@@ -2293,20 +2295,156 @@
     return Object.keys(value).length?JSON.stringify(value):"—";
   }
 
+  function supplierControlJournalEntry(catalogId,supplierItemId) {
+    return (dataState.supplierControlJournal||[]).find(function(j){
+      if(j.status!=="open") return false;
+      if(catalogId && j.catalog_item_id===catalogId) return true;
+      if(supplierItemId && j.supplier_item_id===supplierItemId) return true;
+      return false;
+    })||null;
+  }
+
+  function supplierControlJournalCheckboxHtml(catalogId,supplierItemId) {
+    const checked=!!supplierControlJournalEntry(catalogId,supplierItemId);
+    return '<input class="table-checkbox" type="checkbox" data-supplier-control-journal data-catalog-id="'+esc(catalogId||"")+'" data-supplier-item-id="'+esc(supplierItemId||"")+'" '+(checked?'checked ':'')+'aria-label="Запись в журнале">';
+  }
+
+  async function setSupplierControlJournal(catalogId,supplierItemId,enabled,input) {
+    if(!dataState.project) return;
+    input.disabled=true;
+    const existing=(dataState.supplierControlJournal||[]).filter(function(j){
+      if(j.status!=="open") return false;
+      return (catalogId&&j.catalog_item_id===catalogId)||(supplierItemId&&j.supplier_item_id===supplierItemId);
+    });
+    try{
+      if(enabled){
+        if(!existing.length){
+          const snapshotRows=latestSupplierSnapshotRows();
+          const project=catalogId?supplierCheckProjectRows().find(function(x){return x.catalogItemId===catalogId;}):null;
+          const link=catalogId?(dataState.supplierPriceLinks||[]).find(function(x){return x.catalog_item_id===catalogId;}):null;
+          const actualSupplierItemId=supplierItemId||(link&&link.supplier_item_id)||"";
+          const source=actualSupplierItemId?snapshotRows.find(function(x){return x.supplier_item_id===actualSupplierItemId;}):null;
+          const raw=source&&source.raw_data||{};
+          const model=project?supplierCheckRow(project,snapshotRows):null;
+          const reasons=model&&model.reasons.length?model.reasons.slice():(source?["Только у поставщика"]:["Добавлено пользователем"]);
+          const payload={
+            project_id:dataState.project.id,
+            catalog_item_id:catalogId||null,
+            supplier_item_id:actualSupplierItemId||null,
+            issue_key:catalogId?("catalog:"+catalogId):("supplier:"+actualSupplierItemId),
+            reasons:reasons,
+            status:"open",
+            snapshot:{
+              project_mark:project&&project.mark||null,
+              project_name:project&&project.name||null,
+              project_quantity:project?project.qty:null,
+              project_volume_m3:project?project.volume:null,
+              supplier_row_no:source&&source.source_row_no||null,
+              supplier_mark:raw.source_mark||null,
+              supplier_name:raw.source_name||null,
+              supplier_quantity:raw.qty_house==null?null:Number(raw.qty_house),
+              supplier_volume_m3:raw.unit_volume_m3==null?null:Number(raw.unit_volume_m3),
+              supplier_piece_price:model&&model.piece!=null?model.piece:null,
+              supplier_m3_price:model&&model.perM3!=null?model.perM3:null,
+              discrepancy:model&&model.reasons.length?model.reasons.join(" · "):(source?"Только у поставщика":"Добавлено пользователем")
+            }
+          };
+          const result=await client.from("supplier_price_control_journal").insert(payload)
+            .select("id,catalog_item_id,supplier_item_id,issue_key,reasons,status,snapshot,created_at,updated_at").single();
+          if(result.error) throw result.error;
+          if(!dataState.supplierControlJournal) dataState.supplierControlJournal=[];
+          dataState.supplierControlJournal.unshift(result.data);
+        }
+      }else if(existing.length){
+        const ids=existing.map(function(x){return x.id;});
+        const result=await client.from("supplier_price_control_journal").delete().in("id",ids);
+        if(result.error) throw result.error;
+        dataState.supplierControlJournal=(dataState.supplierControlJournal||[]).filter(function(j){return !ids.includes(j.id);});
+      }
+    }catch(err){
+      console.error(err);
+      input.checked=!enabled;
+      alert("Не удалось изменить Журнал: "+(err.message||err));
+    }finally{
+      input.disabled=false;
+    }
+  }
+
   function renderSupplierCheckJournal(content) {
-    let rows=(dataState.supplierPriceJournal||[]).filter(function(j){return !ui.supplierCheckCatalog||j.catalog_item_id===ui.supplierCheckCatalog;});
-    const imports=new Map((dataState.imports||[]).map(function(x){return [x.id,x];}));
-    const catalog=new Map(dataState.catalogItems.map(function(x){return [x.id,x];}));
-    const items=new Map(dataState.supplierItems.map(function(x){return [x.id,x];}));
+    const snapshotRows=latestSupplierSnapshotRows();
+    const projects=supplierCheckProjectRows();
+    const rows=(dataState.supplierControlJournal||[]).filter(function(j){return j.status==="open";});
     let body=rows.map(function(j){
-      const i=imports.get(j.import_id),c=catalog.get(j.catalog_item_id),s=items.get(j.supplier_item_id);
-      const version=(dataState.supplierSnapshotRows||[]).find(function(x){return x.import_id===j.import_id;});
-      return '<tr><td>'+esc(new Date(j.created_at).toLocaleString("ru-RU"))+'</td><td>'+esc(version?'Прайс №'+version.version_no:(i&&i.source_name||"—"))+'</td><td>'+esc(c?c.id.slice(0,8):"—")+'</td><td>'+esc(c&&c.mark||"—")+'</td><td>'+esc(s&&s.source_key||"—")+'</td><td>'+esc(s&&s.source_mark||"—")+'</td><td>'+esc(supplierEventLabel(j.event_type))+'</td><td>'+esc(supplierValueText(j.before_value))+'</td><td>'+esc(supplierValueText(j.after_value))+'</td><td>'+esc(j.link_method==="manual"?"Вручную":j.link_method==="auto"?"Авто":"—")+'</td><td>Пользователь</td></tr>';
+      const snap=j.snapshot||{};
+      const link=(dataState.supplierPriceLinks||[]).find(function(x){
+        return (j.catalog_item_id&&x.catalog_item_id===j.catalog_item_id)||(j.supplier_item_id&&x.supplier_item_id===j.supplier_item_id);
+      });
+      const catalogId=j.catalog_item_id||(link&&link.catalog_item_id)||"";
+      const supplierItemId=j.supplier_item_id||(link&&link.supplier_item_id)||"";
+      const project=catalogId?projects.find(function(x){return x.catalogItemId===catalogId;}):null;
+      const source=supplierItemId?snapshotRows.find(function(x){return x.supplier_item_id===supplierItemId;}):null;
+      const raw=source&&source.raw_data||{};
+      const model=project?supplierCheckRow(project,snapshotRows):null;
+
+      const projectMark=project?project.mark:(snap.project_mark||"");
+      const projectName=project?project.name:(snap.project_name||"");
+      const projectQty=project?Number(project.qty):snap.project_quantity;
+      const projectVol=project?project.volume:snap.project_volume_m3;
+      const supplierRow=source?source.source_row_no:snap.supplier_row_no;
+      const supplierMark=source?(raw.source_mark||""):(snap.supplier_mark||"");
+      const supplierName=source?(raw.source_name||""):(snap.supplier_name||"");
+      const supplierQty=source?(raw.qty_house==null?null:Number(raw.qty_house)):snap.supplier_quantity;
+      const supplierVol=source?(raw.unit_volume_m3==null?null:Number(raw.unit_volume_m3)):snap.supplier_volume_m3;
+      const piece=model&&model.piece!=null?model.piece:snap.supplier_piece_price;
+      const perM3=model&&model.perM3!=null?model.perM3:snap.supplier_m3_price;
+      const diff=projectQty==null||supplierQty==null?null:Number(projectQty)-Number(supplierQty);
+      const discrepancy=model
+        ? (model.reasons.length?model.reasons.join(" · "):"Нет")
+        : (snap.discrepancy||((j.reasons||[]).join(" · "))||"Только у поставщика");
+
+      return '<tr class="data-row">'+
+        '<td>'+journalNameDiffHtml(projectMark,supplierMark)+'</td>'+
+        '<td class="journal-name-cell">'+journalNameDiffHtml(projectName,supplierName)+'</td>'+
+        '<td class="num '+(diff!=null&&Math.abs(diff)>1e-9?"journal-diff-number":"")+'">'+(projectQty==null?"—":fmt0(projectQty))+'</td>'+
+        '<td class="num">'+(projectVol==null?"—":fmt(projectVol))+'</td>'+
+        '<td class="center">'+esc(supplierRow==null?"—":supplierRow)+'</td>'+
+        '<td>'+journalNameDiffHtml(supplierMark,projectMark)+'</td>'+
+        '<td class="journal-name-cell">'+journalNameDiffHtml(supplierName,projectName)+'</td>'+
+        '<td class="num '+(diff!=null&&Math.abs(diff)>1e-9?"journal-diff-number":"")+'">'+(supplierQty==null?"—":fmt0(supplierQty))+'</td>'+
+        '<td class="num">'+(supplierVol==null?"—":fmt(supplierVol))+'</td>'+
+        '<td class="num">'+(piece==null?"—":money(piece))+'</td>'+
+        '<td class="num">'+(perM3==null?"—":money(perM3))+'</td>'+
+        '<td class="num '+(diff!=null&&Math.abs(diff)>1e-9?"journal-diff-number":"")+'">'+(diff==null?"—":fmt0(diff))+'</td>'+
+        '<td>'+esc(discrepancy)+'</td>'+
+        '<td><button class="table-text-action" type="button" data-supplier-journal-remove="'+esc(j.id)+'">Убрать</button></td>'+
+      '</tr>';
     }).join("");
-    if(!body) body=tableMessage(ui.supplierCheckCatalog?"По позиции ещё нет событий.":"Журнал проверки прайса пока пуст.",11);
-    content.innerHTML=(ui.supplierCheckCatalog?'<div class="supplier-check-journal-filter"><button class="table-text-action" data-supplier-journal-all type="button">← Общий журнал</button></div>':'')+
-      '<div class="engineering-scroll"><table class="eng-table supplier-check-journal" data-table-key="supplier-price-journal-v1"><thead><tr><th>Дата/время</th><th>Версия прайса</th><th>Позиция спецификации</th><th>Марка проекта</th><th>Позиция поставщика</th><th>Марка поставщика</th><th>Событие</th><th>Было</th><th>Стало</th><th>Способ</th><th>Пользователь</th></tr></thead><tbody>'+body+'</tbody></table></div>';
-    const all=content.querySelector("[data-supplier-journal-all]");if(all)all.onclick=function(){ui.supplierCheckCatalog="";renderSupplierCheck();};
+
+    if(!body) body=tableMessage("В журнал ещё не добавлены контрольные записи.",14);
+    content.innerHTML=
+      '<div class="engineering-scroll"><table class="eng-table journal-table supplier-control-journal" data-table-key="supplier-control-journal-v1">'+
+      '<thead><tr><th colspan="4">Спецификация</th><th colspan="7">Прайс поставщика</th><th colspan="3">Контроль</th></tr>'+
+      '<tr><th>Марка</th><th>Наименование по спецификации</th><th>Проект, шт.</th><th>Объём за ед., м³</th>'+
+      '<th>№ поставщика</th><th>Марка поставщика</th><th>Наименование поставщика</th><th>Поставщик, шт.</th><th>Объём за ед., м³</th><th>Цена за 1 шт.</th><th>Цена за 1 м³</th>'+
+      '<th>Разница, шт.</th><th>Расхождение</th><th>Действия</th></tr></thead><tbody>'+body+'</tbody></table></div>';
+
+    content.querySelectorAll("[data-supplier-journal-remove]").forEach(function(btn){
+      btn.onclick=async function(){
+        const j=(dataState.supplierControlJournal||[]).find(function(x){return x.id===btn.dataset.supplierJournalRemove;});
+        if(!j) return;
+        btn.disabled=true;
+        try{
+          const result=await client.from("supplier_price_control_journal").delete().eq("id",j.id);
+          if(result.error) throw result.error;
+          dataState.supplierControlJournal=(dataState.supplierControlJournal||[]).filter(function(x){return x.id!==j.id;});
+          renderSupplierCheck();
+        }catch(err){
+          console.error(err);
+          alert("Не удалось убрать запись из Журнала: "+(err.message||err));
+          btn.disabled=false;
+        }
+      };
+    });
   }
 
   function renderSupplierCheckRecon(content) {
