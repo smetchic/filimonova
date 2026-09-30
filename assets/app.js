@@ -1843,11 +1843,16 @@
         let field="source_section_total";
         if(/^всего\s+на\s+отметку/i.test(name)) field="source_group_total";
         else if(/^всего\s+на\s+дом/i.test(name)) field="source_grand_total";
-        rows.forEach(function(row){
-          if(field==="source_section_total"&&(row.source_group!==group||row.source_section!==section)) return;
-          if(field==="source_group_total"&&row.source_group!==group) return;
-          row[field]=total;
-        });
+        if(field==="source_grand_total"){
+          rows.forEach(function(row){row[field]=total;});
+        }else{
+          for(let j=rows.length-1;j>=0;j--){
+            const row=rows[j];
+            if(field==="source_section_total" && (row.source_group!==group || row.source_section!==section)) break;
+            if(field==="source_group_total" && row.source_group!==group) break;
+            row[field]=total;
+          }
+        }
         continue;
       }
       if(!mark || !name) continue;
@@ -4029,8 +4034,6 @@
       });
     }
     function totals(list,sourceField){
-      const sourceTotal=list.map(function(x){return x.raw&&x.raw[sourceField];}).find(function(x){return x&&x.qty!=null;});
-      if(sourceTotal) return {qty:Number(sourceTotal.qty||0),volume:Number(sourceTotal.volume||0),amount:Number(sourceTotal.amount||0)};
       return list.reduce(function(acc,x){
         const r=x.raw||{},q=Number(r.qty_house||0),v=Number(r.unit_volume_m3||0);
         const first=(Array.isArray(r.prices)?r.prices:[]).slice().sort(function(a,b){return String(a.effective_from||"").localeCompare(String(b.effective_from||""));})[0];
