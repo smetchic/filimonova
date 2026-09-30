@@ -2832,18 +2832,23 @@
     const modal=supplierMatchEditorModal(),state=modal.querySelector(".recon-edit-state");
     const mode=modal.dataset.matchMode||"project";
     let catalogId=modal.dataset.catalogId||"";
+    let scopeKey=modal.dataset.scopeKey||"";
     let supplierItemId=modal.dataset.supplierItemId||"";
     if(mode==="source"){
       const chosenProject=modal.querySelector("[data-project-candidate]:checked");
       if(!chosenProject){state.textContent="Выберите позицию Рабочей сводки.";return;}
       catalogId=chosenProject.dataset.projectCandidate;
+      scopeKey=chosenProject.dataset.projectScope||"";
       remove=false;
     }else{
       const chosenSupplier=remove?null:modal.querySelector("[data-supplier-candidate]:checked");
       if(!remove&&!chosenSupplier){state.textContent="Выберите позицию поставщика.";return;}
       supplierItemId=remove?null:chosenSupplier.dataset.supplierCandidate;
     }
-    const previousCatalogLink=(dataState.supplierPriceLinks||[]).find(function(x){return x.catalog_item_id===catalogId;})||null;
+    const snapshotForScope=latestSupplierSnapshotRows();
+    const previousCatalogLink=(dataState.supplierPriceLinks||[]).find(function(x){
+      return x.catalog_item_id===catalogId && supplierLinkScopeKey(x,snapshotForScope)===scopeKey;
+    })||null;
     const previousSupplierLink=supplierItemId?(dataState.supplierPriceLinks||[]).find(function(x){return x.supplier_item_id===supplierItemId;})||null:null;
 
     // Optimistic UI: apply the mapping immediately. The network/database write
@@ -2868,7 +2873,7 @@
       }
     });
 
-    const local=applySupplierLinkLocally(catalogId,supplierItemId,remove);
+    const local=applySupplierLinkLocally(catalogId,supplierItemId,remove,scopeKey);
     modal.classList.remove("open");
 
     const affected=new Set(local.detached||[]);
@@ -2883,10 +2888,11 @@
 
     // Persist after the UI has already advanced. If the database rejects the
     // change, restore the exact previous client state and show the error.
-    client.rpc("set_supplier_price_link",{
+    client.rpc("set_supplier_price_link_scoped",{
       p_project_id:dataState.project.id,
       p_catalog_item_id:catalogId,
-      p_supplier_item_id:supplierItemId||null
+      p_supplier_item_id:supplierItemId||null,
+      p_scope_key:scopeKey
     }).then(function(result){
       if(!result.error) return;
       dataState.supplierPriceLinks=oldLinks;
