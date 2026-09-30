@@ -2311,7 +2311,8 @@
     function projectRowHtml(x) {
       const r=x.raw||{};
       displayNo++;
-      return '<tr class="data-row"><td class="center">'+displayNo+'</td><td>'+esc(x.project.mark)+'</td><td>'+esc(x.project.name)+'</td><td class="num">'+fmt0(x.project.qty)+'</td><td class="num">'+(x.project.volume==null?'—':fmt(x.project.volume))+'</td><td class="num">'+(x.project.volume==null?'—':fmt(x.project.qty*x.project.volume))+'</td>'+
+      const rowKey=x.source&&x.source.supplier_item_id?"supplier:"+x.source.supplier_item_id:"catalog:"+x.project.catalogItemId;
+      return '<tr class="data-row" data-supplier-check-key="'+esc(rowKey)+'"><td class="center">'+displayNo+'</td><td>'+esc(x.project.mark)+'</td><td>'+esc(x.project.name)+'</td><td class="num">'+fmt0(x.project.qty)+'</td><td class="num">'+(x.project.volume==null?'—':fmt(x.project.volume))+'</td><td class="num">'+(x.project.volume==null?'—':fmt(x.project.qty*x.project.volume))+'</td>'+
         '<td class="center">'+(x.source?esc(x.source.source_row_no):'—')+'</td><td>'+esc(r.source_mark||"")+'</td><td>'+esc(r.source_name||"")+'</td><td class="num">'+(r.qty_house==null?'—':fmt0(r.qty_house))+'</td><td class="num '+(x.reasons.some(function(v){return v.indexOf("Объём:")===0;})?'warning':'')+'">'+(r.unit_volume_m3==null?'—':fmt(r.unit_volume_m3))+'</td><td class="num">'+(x.piece==null?'—':money(x.piece))+'</td><td class="num">'+(x.perM3==null?'—':money(x.perM3))+'</td>'+
         '<td><span class="price-state '+supplierStatusClass(x.status)+'">'+esc(x.status)+'</span></td><td>'+esc(x.link?(x.link.link_method==="manual"?"Вручную":"Авто"):"—")+'</td><td class="supplier-check-reasons">'+esc(x.reasons.length?x.reasons.join(" · "):"Нет")+'</td>'+
         '<td><button class="table-text-action" data-supplier-row-journal="'+esc(x.project.catalogItemId)+'" type="button">История</button></td><td><button class="table-text-action" data-supplier-match="'+esc(x.project.catalogItemId)+'" type="button">'+(x.link?'Изменить':'Сопоставить')+'</button></td></tr>';
@@ -2321,7 +2322,7 @@
       const piece=ps.find(function(p){return (p.price_basis||"piece")==="piece";});
       const m3=ps.find(function(p){return p.price_basis==="m3";});
       displayNo++;
-      return '<tr class="data-row supplier-only-row"><td class="center">'+displayNo+'</td><td></td><td></td><td></td><td></td><td></td><td class="center">'+esc(s.source_row_no)+'</td><td>'+esc(r.source_mark||"")+'</td><td>'+esc(r.source_name||"")+'</td><td class="num">'+(r.qty_house==null?'—':fmt0(r.qty_house))+'</td><td class="num">'+(r.unit_volume_m3==null?'—':fmt(r.unit_volume_m3))+'</td><td class="num">'+(piece?money(piece.unit_price_gross):'—')+'</td><td class="num">'+(m3?money(m3.unit_price_gross):'—')+'</td><td><span class="price-state supplier">Только у поставщика</span></td><td>—</td><td>Не создаёт проектную позицию</td><td></td><td><button class="table-text-action" data-supplier-source-match="'+esc(s.supplier_item_id||"")+'" type="button">Сопоставить</button></td></tr>';
+      return '<tr class="data-row supplier-only-row" data-supplier-check-key="'+esc("supplier:"+(s.supplier_item_id||""))+'"><td class="center">'+displayNo+'</td><td></td><td></td><td></td><td></td><td></td><td class="center">'+esc(s.source_row_no)+'</td><td>'+esc(r.source_mark||"")+'</td><td>'+esc(r.source_name||"")+'</td><td class="num">'+(r.qty_house==null?'—':fmt0(r.qty_house))+'</td><td class="num">'+(r.unit_volume_m3==null?'—':fmt(r.unit_volume_m3))+'</td><td class="num">'+(piece?money(piece.unit_price_gross):'—')+'</td><td class="num">'+(m3?money(m3.unit_price_gross):'—')+'</td><td><span class="price-state supplier">Только у поставщика</span></td><td>—</td><td>Не создаёт проектную позицию</td><td></td><td><button class="table-text-action" data-supplier-source-match="'+esc(s.supplier_item_id||"")+'" type="button">Сопоставить</button></td></tr>';
     }
     let body="",lastSourceGroup="",lastSourceSection="";
     snapshot.forEach(function(s){
@@ -2475,6 +2476,20 @@
     modal.classList.add("open");
   }
 
+  async function refreshSupplierReconciliationData() {
+    const project=dataState.project;
+    const results=await Promise.all([
+      fetchAllRows("supplier_items","id,supplier_id,catalog_item_id,source_mark,source_name,source_section,source_key,unit_volume_m3,link_method,link_state,source_import_row_id",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("source_mark");}),
+      fetchAllRows("supplier_price_links","id,supplier_id,catalog_item_id,supplier_item_id,link_method,validation_state,last_checked_import_id,created_at,updated_at",function(q){return q.eq("project_id",project.id);}),
+      fetchAllRows("supplier_price_journal","id,import_id,catalog_item_id,supplier_item_id,event_type,before_value,after_value,link_method,actor_id,created_at",function(q){return q.eq("project_id",project.id).order("created_at",{ascending:false});}),
+      fetchAllRows("supplier_price_snapshot_rows","import_id,source_name,imported_at,version_no,supplier_id,import_row_id,source_row_no,source_key,raw_data,normalized_data,supplier_item_id,catalog_item_id,link_method,validation_state",function(q){return q.eq("project_id",project.id).order("imported_at",{ascending:false}).order("source_row_no");})
+    ]);
+    dataState.supplierItems=results[0]||[];
+    dataState.supplierPriceLinks=results[1]||[];
+    dataState.supplierPriceJournal=results[2]||[];
+    dataState.supplierSnapshotRows=results[3]||[];
+  }
+
   async function saveSupplierMatch(remove) {
     remove=remove===true;
     const modal=supplierMatchEditorModal(),state=modal.querySelector(".recon-edit-state");
@@ -2491,6 +2506,14 @@
       if(!remove&&!chosenSupplier){state.textContent="Выберите позицию поставщика.";return;}
       supplierItemId=remove?null:chosenSupplier.dataset.supplierCandidate;
     }
+    const checkScroll=document.querySelector("#supplierCheckModal .supplier-check-content>.engineering-scroll");
+    const fallbackScroll=checkScroll?{top:checkScroll.scrollTop,left:checkScroll.scrollLeft}:null;
+    const restoreKey=supplierItemId?"supplier:"+supplierItemId:"catalog:"+catalogId;
+    const oldAnchor=checkScroll?checkScroll.querySelector('[data-supplier-check-key="'+CSS.escape(restoreKey)+'"]'):null;
+    const anchorOffset=oldAnchor&&checkScroll
+      ? oldAnchor.getBoundingClientRect().top-checkScroll.getBoundingClientRect().top
+      : null;
+
     state.textContent="Сохраняю…";
     const result=await client.rpc("set_supplier_price_link",{
       p_project_id:dataState.project.id,
@@ -2498,10 +2521,36 @@
       p_supplier_item_id:supplierItemId||null
     });
     if(result.error){state.textContent=result.error.message;return;}
-    await loadProjectData(dataState.project);
+
+    await refreshSupplierReconciliationData();
     modal.classList.remove("open");
+    if(!ui.supplierCheckScroll) ui.supplierCheckScroll={};
+    if(fallbackScroll) ui.supplierCheckScroll.recon={top:fallbackScroll.top,left:fallbackScroll.left};
     renderSupplierCheck();
     renderSupplierPrice();
+
+    const restorePosition=function(){
+      const scroller=document.querySelector("#supplierCheckModal .supplier-check-content>.engineering-scroll");
+      if(!scroller)return;
+      scroller.scrollLeft=fallbackScroll?fallbackScroll.left:scroller.scrollLeft;
+      const anchor=scroller.querySelector('[data-supplier-check-key="'+CSS.escape(restoreKey)+'"]');
+      if(anchor){
+        if(anchorOffset!=null){
+          const delta=anchor.getBoundingClientRect().top-scroller.getBoundingClientRect().top-anchorOffset;
+          scroller.scrollTop+=delta;
+        }else{
+          scroller.scrollTop=Math.max(0,anchor.offsetTop-Math.round(scroller.clientHeight*0.42));
+        }
+      }else if(fallbackScroll){
+        scroller.scrollTop=fallbackScroll.top;
+      }
+      ui.supplierCheckScroll.recon={top:scroller.scrollTop,left:scroller.scrollLeft};
+    };
+    requestAnimationFrame(function(){
+      restorePosition();
+      requestAnimationFrame(restorePosition);
+    });
+    setTimeout(restorePosition,60);
   }
 
   function renderUtilityActions(pageKey) {
