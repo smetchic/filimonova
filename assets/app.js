@@ -616,9 +616,19 @@
       rerenderContent();
     };
     pop.querySelector("[data-filter-ok]").onclick=function(){
-      const shownValues = values;
-      if (chosen.size === shownValues.length && shownValues.every(function(v){return chosen.has(v);})) delete filterBucket()[field];
-      else filterBucket()[field]=new Set(Array.from(chosen));
+      // If a search is entered, the visible checked search results become the
+      // filter. Previously hidden values stayed selected in the background,
+      // so the filter icon became active while almost all rows remained visible.
+      if(search.value.trim()){
+        chosen=new Set(Array.from(list.querySelectorAll("[data-filter-value-choice]:checked"))
+          .map(function(x){return x.dataset.filterValueChoice;}));
+      }
+      const allValues = values;
+      if (!search.value.trim() && chosen.size === allValues.length && allValues.every(function(v){return chosen.has(v);})) {
+        delete filterBucket()[field];
+      } else {
+        filterBucket()[field]=new Set(Array.from(chosen));
+      }
       if(ui.page==="spec"){
         ui.collapseLeaves=false;
         ui.collapsed.clear();
