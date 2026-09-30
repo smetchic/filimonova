@@ -170,6 +170,7 @@
   }
 
   const numFmt = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 });
+  const num0Fmt = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 });
   const moneyFmt = new Intl.NumberFormat("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   function fmt(value) {
@@ -179,7 +180,7 @@
 
   function fmt0(value) {
     const n = Number(value || 0);
-    return n ? new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(n) : "";
+    return n ? num0Fmt.format(n) : "";
   }
 
   function money(value) {
