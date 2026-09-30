@@ -3716,7 +3716,7 @@
 
   function estimateProjectItem(row) {
     return row && row.catalog_item_id
-      ? dataState.catalogItems.find(function(x){return x.id===row.catalog_item_id;}) || null
+      ? maps().catalog.get(row.catalog_item_id) || null
       : null;
   }
 
