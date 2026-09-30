@@ -3178,6 +3178,9 @@
       if (tab === 0) return buildSpecContext(0);
       return '<span class="context-caption">Журнал</span><span class="context-muted">Только записи, добавленные вручную из Сверки</span>';
     }
+    if (pageKey === "links") {
+      return buildEstimateContext(0);
+    }
     if (pageKey === "montage") {
       return '<span class="context-caption">Показывать:</span>' +
         checkHtml("all","Все",true,"montage") +
@@ -3239,6 +3242,18 @@
       const materials=rows.filter(function(r){return r.row_type==="material";}).length;
       return '<span class="context-muted">'+selected.length+' смет · '+works+' работ · '+materials+' материалов</span>';
     }
+    if (pageKey === "links") {
+      const ids=new Set(dataState.estimates.filter(function(e){return ui.estimates[e.number]!==false;}).map(function(e){return e.id;}));
+      const materials=(dataState.estimateRows||[]).filter(function(r){return ids.has(r.estimate_id)&&r.row_type==="material";});
+      const works=(dataState.estimateRows||[]).filter(function(r){return ids.has(r.estimate_id)&&r.row_type==="work";});
+      const links=(dataState.estimateWorkLinks||[]).filter(function(l){
+        const m=(dataState.estimateRows||[]).find(function(r){return r.id===l.material_row_id;});
+        return m&&ids.has(m.estimate_id);
+      });
+      const linkedMaterials=new Set(links.map(function(l){return l.material_row_id;})).size;
+      const linkedWorks=new Set(links.map(function(l){return l.work_row_id;})).size;
+      return '<span class="context-muted">'+linkedMaterials+' / '+materials.length+' материалов · '+linkedWorks+' / '+works.length+' работ имеют связь</span>';
+    }
     if (pageKey === "montage") return '<span class="context-muted">ЛКМ +1 · ПКМ −1</span>';
     return "";
   }
@@ -3248,6 +3263,7 @@
     if (pageKey === "estimates") return tab === 0;
     if (pageKey === "supply") return tab === 0 || tab === 2;
     if (pageKey === "avr") return tab === 0 || tab === 2;
+    if (pageKey === "links") return true;
     return false;
   }
 
@@ -5777,6 +5793,255 @@
       '<div class="review-note">Спецификация загружена из реальных Excel. Сметы и связи отображаются после импорта соответствующих файлов.</div></div>';
   }
 
+
+  function workLinkMaterialArea(row) {
+    const text=String(estimateDisplayName(row)||row.name||"").replace(/,/g,".");
+    const matches=Array.from(text.matchAll(/(\d{1,3})\.(\d{1,2})\.(\d{1,2})/g));
+    if(!matches.length) return null;
+    const m=matches[matches.length-1];
+    const a=Number(m[1])/10,b=Number(m[2])/10;
+    return a>0&&b>0?a*b:null;
+  }
+
+  function workLinkThreshold(row) {
+    const text=String(estimateDisplayName(row)||row.name||"").replace(/,/g,".");
+    const m=text.match(/(?:до|не\s+более)\s*(\d+(?:\.\d+)?)\s*м(?:2|²)/i);
+    return m?Number(m[1]):null;
+  }
+
+  function workLinkCandidateScore(material,work) {
+    let score=0;
+    if(work.estimate_id===material.estimate_id) score+=10000;
+    if(work.section_id===material.section_id) score+=6000;
+    const area=workLinkMaterialArea(material);
+    const limit=workLinkThreshold(work);
+    if(area!=null&&limit!=null){
+      if(area<=limit+0.03) score+=3000-limit*10;
+      else score-=3000+(area-limit)*100;
+    }
+    score-=Math.abs(Number(work.sort_order||0)-Number(material.sort_order||0));
+    return score;
+  }
+
+  function workLinkProgress(workRowId) {
+    const work=(dataState.estimateRows||[]).find(function(r){return r.id===workRowId;});
+    const links=(dataState.estimateWorkLinks||[]).filter(function(l){return l.work_row_id===workRowId;});
+    const ids=new Set(links.map(function(l){return l.material_row_id;}));
+    const pieces=(dataState.estimateRows||[]).filter(function(r){return ids.has(r.id);})
+      .reduce(function(sum,r){return sum+Number(r.quantity||0);},0);
+    const expected=work?Number(work.quantity||0)*100:0;
+    const delta=pieces-expected;
+    return {pieces:pieces,expected:expected,delta:delta,ok:Math.abs(delta)<0.001};
+  }
+
+  function workLinkModal() {
+    let modal=document.getElementById("workLinkModal");
+    if(modal) return modal;
+    modal=document.createElement("div");
+    modal.id="workLinkModal";
+    modal.className="spec-import-backdrop";
+    modal.innerHTML=
+      '<div class="spec-import-modal work-link-modal">'+
+        '<div class="spec-import-head"><div><strong>Сопоставление работ с материалом</strong><span class="work-link-modal-caption">Выберите одну или несколько работ</span></div><button class="spec-import-close" type="button">×</button></div>'+
+        '<div class="work-link-source"></div>'+
+        '<div class="work-link-candidates"></div>'+
+        '<div class="spec-import-foot"><span class="work-link-save-state"></span><span class="spacer"></span><button class="context-link work-link-cancel" type="button">Отмена</button><button class="context-link work-link-save" type="button">Сохранить</button></div>'+
+      '</div>';
+    document.body.appendChild(modal);
+    const close=function(){modal.classList.remove("open");};
+    modal.querySelector(".spec-import-close").onclick=close;
+    modal.querySelector(".work-link-cancel").onclick=close;
+    modal.onclick=function(e){if(e.target===modal) close();};
+    modal.querySelector(".work-link-save").onclick=saveWorkLinks;
+    return modal;
+  }
+
+  function openWorkLinkEditor(materialRowId) {
+    const material=(dataState.estimateRows||[]).find(function(r){return r.id===materialRowId&&r.row_type==="material";});
+    if(!material) return;
+    const estimate=(dataState.estimates||[]).find(function(e){return e.id===material.estimate_id;});
+    const section=(dataState.estimateSections||[]).find(function(x){return x.id===material.section_id;});
+    const current=new Set((dataState.estimateWorkLinks||[]).filter(function(l){return l.material_row_id===material.id;}).map(function(l){return l.work_row_id;}));
+    const works=(dataState.estimateRows||[]).filter(function(r){return r.row_type==="work"&&r.estimate_id===material.estimate_id;});
+    const ranked=works.map(function(work){
+      return {work:work,score:workLinkCandidateScore(material,work)};
+    }).sort(function(a,b){
+      const ac=current.has(a.work.id),bc=current.has(b.work.id);
+      if(ac!==bc) return ac?-1:1;
+      return b.score-a.score || Number(a.work.sort_order||0)-Number(b.work.sort_order||0);
+    });
+    const suggested=ranked.length?ranked.slice().sort(function(a,b){return b.score-a.score;})[0].work.id:"";
+    const modal=workLinkModal();
+    modal.dataset.materialRowId=material.id;
+    modal.querySelector(".work-link-save-state").textContent="";
+    modal.querySelector(".work-link-modal-caption").textContent="Смета №"+(estimate?estimate.number:"")+" · "+(section?section.title:"");
+    modal.querySelector(".work-link-source").innerHTML=
+      '<div class="work-link-source-type">М</div>'+
+      '<div><span>Поз. см.</span><strong>'+esc(material.position||"—")+'</strong></div>'+
+      '<div><span>Обоснование</span><strong>'+esc(estimateDisplayBasis(material)||"—")+'</strong></div>'+
+      '<div class="work-link-source-name"><span>Материал</span><strong>'+esc(estimateDisplayName(material)||"—")+'</strong></div>'+
+      '<div><span>Количество</span><strong>'+fmt(material.quantity)+' '+esc(material.unit||"")+'</strong></div>';
+    const rows=ranked.map(function(item,index){
+      const w=item.work;
+      const sec=(dataState.estimateSections||[]).find(function(x){return x.id===w.section_id;});
+      const checked=current.has(w.id);
+      const progress=workLinkProgress(w.id);
+      const label=checked?"Текущая связь":(w.id===suggested?"Предлагаем":"");
+      return '<tr class="work-link-candidate'+(w.id===suggested?' suggested':'')+'">'+
+        '<td class="center"><input type="checkbox" data-work-link-choice="'+esc(w.id)+'" '+(checked?'checked':'')+'></td>'+
+        '<td class="center">'+esc(w.position||"")+'</td>'+
+        '<td>'+esc(estimateDisplayBasis(w)||"")+'</td>'+
+        '<td>'+esc(estimateDisplayName(w)||"")+(label?'<small class="work-link-note">'+esc(label)+'</small>':'')+'</td>'+
+        '<td class="center">'+esc(w.unit||"")+'</td>'+
+        '<td class="num">'+fmt(w.quantity)+'</td>'+
+        '<td>'+esc(sec?sec.title:"")+'</td>'+
+        '<td class="work-link-control '+(progress.ok?'ok':'')+'">'+fmt0(progress.pieces)+' / '+fmt0(progress.expected)+' шт.</td>'+
+      '</tr>';
+    }).join("");
+    modal.querySelector(".work-link-candidates").innerHTML=
+      '<div class="work-link-candidate-head"><strong>Работы этой сметы</strong><span>Можно выбрать несколько. Вверху — текущие связи и наиболее вероятная работа.</span></div>'+
+      '<div class="work-link-candidate-scroll"><table class="eng-table work-link-candidate-table"><thead><tr><th></th><th>Поз. см.</th><th>Обоснование</th><th>Наименование работы</th><th>Ед. изм.</th><th>Кол-во</th><th>Раздел</th><th>Связано / по смете</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+    modal.classList.add("open");
+  }
+
+  async function saveWorkLinks() {
+    const modal=workLinkModal();
+    const materialId=modal.dataset.materialRowId;
+    const selected=new Set(Array.from(modal.querySelectorAll("[data-work-link-choice]:checked")).map(function(x){return x.dataset.workLinkChoice;}));
+    const current=(dataState.estimateWorkLinks||[]).filter(function(l){return l.material_row_id===materialId;});
+    const currentIds=new Set(current.map(function(l){return l.work_row_id;}));
+    const add=Array.from(selected).filter(function(id){return !currentIds.has(id);});
+    const remove=current.filter(function(l){return !selected.has(l.work_row_id);});
+    const save=modal.querySelector(".work-link-save");
+    const state=modal.querySelector(".work-link-save-state");
+    save.disabled=true;state.textContent="Сохраняю…";
+    try{
+      let inserted=[];
+      if(add.length){
+        const payload=add.map(function(workId){
+          return {project_id:dataState.project.id,material_row_id:materialId,work_row_id:workId,link_method:"manual"};
+        });
+        const result=await client.from("estimate_work_links").insert(payload).select("id,material_row_id,work_row_id,link_method");
+        if(result.error) throw result.error;
+        inserted=result.data||[];
+      }
+      if(remove.length){
+        const ids=remove.map(function(x){return x.id;});
+        const result=await client.from("estimate_work_links").delete().in("id",ids);
+        if(result.error) throw result.error;
+      }
+      const removeIds=new Set(remove.map(function(x){return x.id;}));
+      dataState.estimateWorkLinks=(dataState.estimateWorkLinks||[]).filter(function(x){return !removeIds.has(x.id);}).concat(inserted);
+      state.textContent="Сохранено";
+      modal.classList.remove("open");
+      rerenderContent();
+    }catch(err){
+      console.error(err);
+      state.textContent="Ошибка: "+(err&&err.message?err.message:String(err));
+    }finally{
+      save.disabled=false;
+    }
+  }
+
+  async function removeWorkLink(linkId) {
+    const link=(dataState.estimateWorkLinks||[]).find(function(x){return x.id===linkId;});
+    if(!link) return;
+    const result=await client.from("estimate_work_links").delete().eq("id",link.id);
+    if(result.error) throw result.error;
+    dataState.estimateWorkLinks=(dataState.estimateWorkLinks||[]).filter(function(x){return x.id!==link.id;});
+    rerenderContent();
+  }
+
+  function renderWorkLinks() {
+    if(!ui.workLinkFilter) ui.workLinkFilter="all";
+    const selectedEstimateIds=new Set((dataState.estimates||[]).filter(function(e){return ui.estimates[e.number]!==false;}).map(function(e){return e.id;}));
+    const rowMap=new Map((dataState.estimateRows||[]).map(function(r){return [r.id,r];}));
+    const links=dataState.estimateWorkLinks||[];
+    const materialLinks=new Map();
+    const workLinks=new Map();
+    links.forEach(function(l){
+      if(!materialLinks.has(l.material_row_id)) materialLinks.set(l.material_row_id,[]);
+      materialLinks.get(l.material_row_id).push(l);
+      if(!workLinks.has(l.work_row_id)) workLinks.set(l.work_row_id,[]);
+      workLinks.get(l.work_row_id).push(l);
+    });
+    let materials=(dataState.estimateRows||[]).filter(function(r){
+      if(r.row_type!=="material"||!selectedEstimateIds.has(r.estimate_id)) return false;
+      const linked=(materialLinks.get(r.id)||[]).map(function(l){return rowMap.get(l.work_row_id);}).filter(Boolean);
+      const matches=passesSearch([r.position,estimateDisplayBasis(r),estimateDisplayName(r)].concat(linked.flatMap(function(w){return [w.position,estimateDisplayBasis(w),estimateDisplayName(w)];})));
+      if(!matches) return false;
+      if(ui.workLinkFilter==="unlinked") return !linked.length;
+      if(ui.workLinkFilter==="linked") return linked.length>0;
+      return ui.workLinkFilter!=="work-unlinked";
+    });
+
+    const orphanWorks=(dataState.estimateRows||[]).filter(function(r){
+      return r.row_type==="work"&&selectedEstimateIds.has(r.estimate_id)&&!(workLinks.get(r.id)||[]).length&&
+        passesSearch([r.position,estimateDisplayBasis(r),estimateDisplayName(r)]);
+    });
+
+    ui.currentGroupKeys=[];
+    let body="";
+    if(ui.workLinkFilter==="work-unlinked"){
+      const byEstimate=new Map();
+      orphanWorks.forEach(function(w){
+        if(!byEstimate.has(w.estimate_id)) byEstimate.set(w.estimate_id,[]);
+        byEstimate.get(w.estimate_id).push(w);
+      });
+      byEstimate.forEach(function(list,estimateId){
+        const e=(dataState.estimates||[]).find(function(x){return x.id===estimateId;});
+        const ek="work-links:orphan:"+estimateId;registerGroup(ek);
+        body+='<tr class="group-row group-toggle" data-group-key="'+esc(ek)+'"><td colspan="9"><span class="group-arrow">'+groupArrow(ek)+'</span>'+esc("Смета №"+(e?e.number:""))+' · работ без материала: '+list.length+'</td></tr>';
+        if(ui.collapsed.has(ek)) return;
+        list.sort(function(a,b){return Number(a.sort_order||0)-Number(b.sort_order||0);}).forEach(function(w){
+          const sec=(dataState.estimateSections||[]).find(function(x){return x.id===w.section_id;});
+          body+='<tr class="data-row work-link-orphan-row"><td class="center"><span class="type-mark">Р</span></td><td>'+esc(e?e.number:"")+'</td><td class="center">'+esc(w.position||"")+'</td><td>'+esc(estimateDisplayBasis(w)||"")+'</td><td>'+esc(estimateDisplayName(w)||"")+'</td><td class="center">'+esc(w.unit||"")+'</td><td class="num">'+fmt(w.quantity)+'</td><td>'+esc(sec?sec.title:"")+'</td><td><span class="work-link-status warn">Нет материала</span></td></tr>';
+        });
+      });
+      if(!body) body=tableMessage("Все работы выбранных смет уже имеют связь с материалом.",9);
+    }else{
+      (dataState.estimates||[]).filter(function(e){return selectedEstimateIds.has(e.id);}).forEach(function(e){
+        const estimateMaterials=materials.filter(function(r){return r.estimate_id===e.id;});
+        if(!estimateMaterials.length) return;
+        const ek="work-links:estimate:"+e.id;registerGroup(ek);
+        const linkedCount=estimateMaterials.filter(function(r){return (materialLinks.get(r.id)||[]).length>0;}).length;
+        body+='<tr class="group-row group-toggle" data-group-key="'+esc(ek)+'"><td colspan="9"><span class="group-arrow">'+groupArrow(ek)+'</span>'+esc("Смета №"+e.number+" · "+(e.name||""))+' · '+linkedCount+' из '+estimateMaterials.length+' материалов сопоставлено</td></tr>';
+        if(ui.collapsed.has(ek)) return;
+        const sections=(dataState.estimateSections||[]).filter(function(sec){return sec.estimate_id===e.id;});
+        sections.forEach(function(sec){
+          const sectionMaterials=estimateMaterials.filter(function(r){return r.section_id===sec.id;});
+          if(!sectionMaterials.length) return;
+          const sk=ek+":section:"+sec.id;registerGroup(sk);
+          body+='<tr class="group-row group-toggle group-level-2" data-group-key="'+esc(sk)+'"><td colspan="9"><span class="group-arrow">'+groupArrow(sk)+'</span>'+esc(sec.title)+'</td></tr>';
+          if(ui.collapsed.has(sk)||ui.collapseLeaves) return;
+          sectionMaterials.sort(function(a,b){return Number(a.sort_order||0)-Number(b.sort_order||0);}).forEach(function(m){
+            const ml=materialLinks.get(m.id)||[];
+            body+='<tr class="data-row work-link-material-row" data-estimate-row-id="'+esc(m.id)+'"><td class="center"><span class="type-mark">М</span></td><td>'+esc(e.number)+'</td><td class="center">'+esc(m.position||"")+'</td><td>'+esc(estimateDisplayBasis(m)||"")+'</td><td>'+esc(estimateDisplayName(m)||"")+'</td><td class="center">'+esc(m.unit||"")+'</td><td class="num">'+fmt(m.quantity)+'</td><td>'+(ml.length?'<span class="work-link-status ok">'+ml.length+' '+(ml.length===1?'работа':'работы')+'</span>':'<span class="work-link-status warn">Не сопоставлено</span>')+'</td><td><button class="inline-action" type="button" data-work-link-edit="'+esc(m.id)+'">'+(ml.length?'Изменить':'Сопоставить')+'</button></td></tr>';
+            ml.forEach(function(l){
+              const w=rowMap.get(l.work_row_id);
+              if(!w) return;
+              const p=workLinkProgress(w.id);
+              body+='<tr class="data-row work-link-child-row"><td class="center"><span class="type-mark work">Р</span></td><td></td><td class="center">'+esc(w.position||"")+'</td><td>'+esc(estimateDisplayBasis(w)||"")+'</td><td class="work-link-child-name">'+esc(estimateDisplayName(w)||"")+'</td><td class="center">'+esc(w.unit||"")+'</td><td class="num">'+fmt(w.quantity)+'</td><td><span class="work-link-control '+(p.ok?'ok':'warn')+'">'+fmt0(p.pieces)+' / '+fmt0(p.expected)+' шт.'+(p.ok?' · совпадает':'')+'</span></td><td><button class="inline-action" type="button" data-work-link-remove="'+esc(l.id)+'">убрать</button></td></tr>';
+            });
+          });
+        });
+      });
+      if(!body) body=tableMessage("Нет материалов по текущему фильтру.",9);
+    }
+
+    $("workArea").className="work-area table-work";
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table work-links-table" data-table-key="work-links-v1"><thead><tr><th>Тип</th><th>№ сметы</th><th>Поз. см.</th><th>Обоснование</th><th>Наименование</th><th>Ед. изм.</th><th>Кол-во</th><th>Связь / контроль</th><th>Действие</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    document.querySelectorAll("[data-work-link-edit]").forEach(function(btn){
+      btn.onclick=function(e){e.stopPropagation();openWorkLinkEditor(btn.dataset.workLinkEdit);};
+    });
+    document.querySelectorAll("[data-work-link-remove]").forEach(function(btn){
+      btn.onclick=function(e){
+        e.stopPropagation();btn.disabled=true;
+        removeWorkLink(btn.dataset.workLinkRemove).catch(function(err){console.error(err);alert("Не удалось убрать связь: "+(err.message||err));btn.disabled=false;});
+      };
+    });
+  }
+
   function renderSimple(text) {
     $("workArea").className = "work-area content-work";
     $("workArea").innerHTML = '<div class="review-panel"><div class="review-panel-title">'+esc(text)+'</div><div class="review-note">Каркас раздела подключён. Детализируем его после основных рабочих экранов.</div></div>';
@@ -5800,7 +6065,7 @@
     if (pageKey === "s29") return renderS29(tab);
     if (pageKey === "recon") return tab === 0 ? renderRecon() : renderEstimateJournal();
     if (pageKey === "diffs") return renderSimple("Расхождения");
-    if (pageKey === "links") return renderSimple("Связи работ");
+    if (pageKey === "links") return renderWorkLinks();
     if (pageKey === "import") return renderSimple("Импорт");
     if (pageKey === "docs") return renderSimple("Документы");
     if (pageKey === "settings") return renderSimple("Настройки");
@@ -6204,6 +6469,13 @@
   function wireServiceControls() {
     const collapse = document.querySelector('[data-service="collapse"]');
     const expand = document.querySelector('[data-service="expand"]');
+    const workLinkFilter=document.querySelector("[data-work-link-filter]");
+    if(workLinkFilter) workLinkFilter.addEventListener("change",function(){
+      ui.workLinkFilter=workLinkFilter.value;
+      ui.collapsed.clear();
+      ui.collapseLeaves=false;
+      rerenderContent();
+    });
     if (collapse) collapse.addEventListener("click",function() {
       ui.collapsed.clear();
       ui.collapseLeaves = true;
@@ -6290,6 +6562,18 @@
           '<option value="unlinked"'+(ui.reconLinkFilter==="unlinked"?' selected':'')+'>Без связи</option>' +
           '<option value="linked"'+(ui.reconLinkFilter==="linked"?' selected':'')+'>Связано</option>' +
         '</select>';
+    } else if(pageKey==="links"){
+      if(!ui.workLinkFilter) ui.workLinkFilter="all";
+      $("serviceRight").innerHTML =
+        '<span class="context-muted">Показать:</span>'+
+        '<select class="service-select" data-work-link-filter aria-label="Фильтр связей работ">'+
+          '<option value="all"'+(ui.workLinkFilter==="all"?' selected':'')+'>Все материалы</option>'+
+          '<option value="unlinked"'+(ui.workLinkFilter==="unlinked"?' selected':'')+'>Без работ</option>'+
+          '<option value="linked"'+(ui.workLinkFilter==="linked"?' selected':'')+'>Сопоставлено</option>'+
+          '<option value="work-unlinked"'+(ui.workLinkFilter==="work-unlinked"?' selected':'')+'>Работы без материала</option>'+
+        '</select>'+
+        '<button class="service-action" data-service="collapse" type="button">Свернуть всё</button>'+
+        '<button class="service-action" data-service="expand" type="button">Развернуть всё</button>';
     } else {
       $("serviceRight").innerHTML = isHierarchical(pageKey,tab)
         ? '<button class="service-action" data-service="collapse" type="button">Свернуть всё</button><button class="service-action" data-service="expand" type="button">Развернуть всё</button>'
