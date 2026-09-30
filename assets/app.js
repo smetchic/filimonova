@@ -2549,6 +2549,7 @@
   }
 
   function renderSupplierCheckRecon(content) {
+    if(!ui.supplierCheckStatus) ui.supplierCheckStatus="all";
     const snapshot=latestSupplierSnapshotRows().slice().sort(function(a,b){
       const an=Number(a.source_row_no),bn=Number(b.source_row_no);
       if(Number.isFinite(an)&&Number.isFinite(bn)&&an!==bn) return an-bn;
@@ -2574,8 +2575,39 @@
       displayNo++;
       return '<tr class="data-row supplier-only-row" data-supplier-check-key="'+esc("supplier:"+(s.supplier_item_id||""))+'"><td class="center">'+displayNo+'</td><td></td><td></td><td></td><td></td><td></td><td class="center">'+esc(s.source_row_no)+'</td><td>'+esc(r.source_mark||"")+'</td><td>'+esc(r.source_name||"")+'</td><td class="num">'+(r.qty_house==null?'—':fmt0(r.qty_house))+'</td><td class="num">'+(r.unit_volume_m3==null?'—':fmt(r.unit_volume_m3))+'</td><td class="num">'+(piece?money(piece.unit_price_gross):'—')+'</td><td class="num">'+(m3?money(m3.unit_price_gross):'—')+'</td><td><span class="price-state supplier">Только у поставщика</span></td><td>—</td><td>Не создаёт проектную позицию</td><td class="center">'+supplierControlJournalCheckboxHtml("",s.supplier_item_id||"")+'</td><td><button class="table-text-action" data-supplier-source-match="'+esc(s.supplier_item_id||"")+'" type="button">Сопоставить</button></td></tr>';
     }
+    const supplierOnlyStatus="Только у поставщика";
+    const availableStatuses=new Set(rows.map(function(x){return x.status;}));
+    snapshot.forEach(function(s){
+      if(!linkedBySupplierItem.has(s.supplier_item_id)) availableStatuses.add(supplierOnlyStatus);
+    });
+    const withoutCurrentSupplierRow=rows.filter(function(x){return !x.source;});
+    withoutCurrentSupplierRow.forEach(function(x){availableStatuses.add(x.status);});
+
+    const statusOrder=[
+      "Сопоставлено",
+      "Сопоставлено с замечанием",
+      "Расхождение количества",
+      "Расхождение объёма",
+      "Изменена цена",
+      "Без цены",
+      "Требует проверки",
+      "Только у поставщика",
+      "Нет в новой версии",
+      "Сопоставлено вручную"
+    ];
+    const statusOptions=statusOrder.filter(function(s){return availableStatuses.has(s);});
+    Array.from(availableStatuses).forEach(function(s){if(!statusOptions.includes(s)) statusOptions.push(s);});
+    if(ui.supplierCheckStatus!=="all"&&!availableStatuses.has(ui.supplierCheckStatus)) ui.supplierCheckStatus="all";
+
+    const statusMatches=function(status){
+      return ui.supplierCheckStatus==="all"||status===ui.supplierCheckStatus;
+    };
+
     let body="",lastSourceGroup="",lastSourceSection="";
     snapshot.forEach(function(s){
+      const linked=linkedBySupplierItem.get(s.supplier_item_id);
+      const status=linked?linked.status:supplierOnlyStatus;
+      if(!statusMatches(status)) return;
       const raw=s.raw_data||{};
       const sourceGroup=importText(raw.source_group);
       const sourceSection=importText(raw.source_section);
@@ -2588,15 +2620,34 @@
         body+='<tr class="supplier-check-structure-row supplier-check-structure-section"><td colspan="18">'+esc(sourceSection)+'</td></tr>';
         lastSourceSection=sourceSection;
       }
-      body+=linkedBySupplierItem.has(s.supplier_item_id)?projectRowHtml(linkedBySupplierItem.get(s.supplier_item_id)):supplierOnlyRowHtml(s);
+      body+=linked?projectRowHtml(linked):supplierOnlyRowHtml(s);
     });
-    const withoutCurrentSupplierRow=rows.filter(function(x){return !x.source;});
-    if(withoutCurrentSupplierRow.length){
+    const visibleWithoutCurrent=withoutCurrentSupplierRow.filter(function(x){return statusMatches(x.status);});
+    if(visibleWithoutCurrent.length){
       body+='<tr class="group-row"><td colspan="18" class="group-title">Нет в новой версии / не сопоставлено</td></tr>';
-      body+=withoutCurrentSupplierRow.map(projectRowHtml).join("");
+      body+=visibleWithoutCurrent.map(projectRowHtml).join("");
     }
-    if(!body) body=tableMessage("Нет данных для проверки. Сначала импортируйте прайс поставщика.",18);
-    content.innerHTML='<div class="supplier-check-summary">Рабочая сводка: '+rows.length+' · версия прайса: '+(snapshot[0]?'№'+snapshot[0].version_no:'нет')+' · требует проверки: '+rows.filter(function(x){return x.status!=="Сопоставлено"&&x.status!=="Сопоставлено вручную";}).length+'</div><div class="engineering-scroll"><table class="eng-table supplier-check-table" data-table-key="supplier-price-check-v2"><thead><tr><th colspan="6">СПЕЦИФИКАЦИЯ</th><th colspan="7">ПРАЙС ПОСТАВЩИКА</th><th colspan="5">СВЕРКА</th></tr><tr><th>№</th><th>Марка</th><th>Наименование</th><th>Проект, шт.</th><th>Объём за ед., м³</th><th>Объём всего, м³</th><th>№ поставщика</th><th>Марка поставщика</th><th>Наименование поставщика</th><th>Количество поставщика</th><th>Объём за ед., м³</th><th>Цена за 1 шт.</th><th>Цена за 1 м³</th><th>Сопоставление</th><th>Способ</th><th>Расхождение</th><th>Журнал</th><th>Действия</th></tr></thead><tbody>'+body+'</tbody></table></div>';
+    if(!body) body=tableMessage(ui.supplierCheckStatus==="all"?"Нет данных для проверки. Сначала импортируйте прайс поставщика.":"Нет строк с выбранным статусом.",18);
+
+    const attentionCount=rows.filter(function(x){
+      return x.status!=="Сопоставлено"&&x.status!=="Сопоставлено вручную";
+    }).length + snapshot.filter(function(s){return !linkedBySupplierItem.has(s.supplier_item_id);}).length;
+
+    const statusSelect='<label class="supplier-check-status-filter"><span>Статус</span><select data-supplier-check-status>'+
+      '<option value="all">Все статусы</option>'+
+      statusOptions.map(function(status){
+        return '<option value="'+esc(status)+'" '+(ui.supplierCheckStatus===status?'selected':'')+'>'+esc(status)+'</option>';
+      }).join("")+
+      '</select></label>';
+
+    content.innerHTML='<div class="supplier-check-summary"><span>Рабочая сводка: '+rows.length+' · версия прайса: '+(snapshot[0]?'№'+snapshot[0].version_no:'нет')+' · требует проверки: '+attentionCount+'</span><span class="spacer"></span>'+statusSelect+'</div><div class="engineering-scroll"><table class="eng-table supplier-check-table" data-table-key="supplier-price-check-v2"><thead><tr><th colspan="6">СПЕЦИФИКАЦИЯ</th><th colspan="7">ПРАЙС ПОСТАВЩИКА</th><th colspan="5">СВЕРКА</th></tr><tr><th>№</th><th>Марка</th><th>Наименование</th><th>Проект, шт.</th><th>Объём за ед., м³</th><th>Объём всего, м³</th><th>№ поставщика</th><th>Марка поставщика</th><th>Наименование поставщика</th><th>Количество поставщика</th><th>Объём за ед., м³</th><th>Цена за 1 шт.</th><th>Цена за 1 м³</th><th>Сопоставление</th><th>Способ</th><th>Расхождение</th><th>Журнал</th><th>Действия</th></tr></thead><tbody>'+body+'</tbody></table></div>';
+    const statusFilter=content.querySelector("[data-supplier-check-status]");
+    if(statusFilter){
+      statusFilter.onchange=function(){
+        ui.supplierCheckStatus=statusFilter.value||"all";
+        renderSupplierCheck();
+      };
+    }
     content.querySelectorAll("[data-supplier-match]").forEach(function(btn){btn.onclick=function(){openSupplierMatchEditor(btn.dataset.supplierMatch,btn.dataset.supplierScope||"");};});
     content.querySelectorAll("[data-supplier-source-match]").forEach(function(btn){btn.onclick=function(){openSupplierSourceMatchEditor(btn.dataset.supplierSourceMatch);};});
     content.querySelectorAll("[data-supplier-control-journal]").forEach(function(input){
