@@ -407,6 +407,18 @@ svg{display:block}
 .supply-table th,.supply-table td{min-width:72px}
 .supply-table .sticky-3,.price-table .sticky-3{width:260px;min-width:260px;max-width:260px}
 .price-table th,.price-table td{min-width:82px}
+.supplier-source-price-table .sticky-1{width:54px;min-width:54px;max-width:54px}
+.supplier-source-price-table .sticky-2{width:72px;min-width:72px;max-width:72px}
+.supplier-source-price-table .sticky-3{width:150px;min-width:150px;max-width:150px}
+.supplier-source-price-table .sticky-4{width:280px;min-width:280px;max-width:280px}
+.supplier-source-price-table .supplier-source-row td:nth-child(3),
+.supplier-source-price-table .supplier-source-row td:nth-child(4){white-space:nowrap}
+.supplier-price-source-banner{
+  display:flex;align-items:center;gap:12px;min-height:38px;padding:7px 12px;
+  border:1px solid var(--line);border-bottom:0;background:#f7f8f9;color:var(--muted);font-size:12px
+}
+.supplier-price-source-banner strong{color:var(--text);font-size:13px}
+.supplier-source-group td{background:#f3f4f5}
 
 /* Montage */
 .montage-table .sticky-3{width:250px;min-width:250px;max-width:250px}
