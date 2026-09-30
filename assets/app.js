@@ -376,14 +376,15 @@
       const quantities = qm.get(r.id) || new Map();
       let total = 0;
       quantities.forEach(function(v){ total += Number(v || 0); });
-      const projectVolume=Number(r.project_volume_m3||0);
       return Object.assign({}, r, {
         mark:item.mark || "",
         name:item.name || "",
         section:section,
         quantities:quantities,
         total:total,
-        volumePerPiece:projectVolume>0?projectVolume:catalogUnitVolumeFallback(r.catalog_item_id)
+        // Volume per piece is a supplier-price constant.
+        // Geometry (length/height/thickness/area) never recalculates this value.
+        volumePerPiece:catalogUnitVolumeFallback(r.catalog_item_id)
       });
     });
   }
@@ -1026,14 +1027,8 @@
         })
       );
     });
-    // Working volume priority for the material card:
-    // 1) project/specification volume when it is explicitly present and unambiguous;
-    // 2) linked supplier-price volume when the project source has no m³.
-    const projectVolumes=Array.from(new Set(st.rows
-      .map(function(r){return Number(r.volumePerPiece||0);})
-      .filter(function(v){return v>0;})
-      .map(function(v){return v.toFixed(6);})
-    )).map(Number);
+    // Volume per piece is a supplier-price constant.
+    // It is never derived from panel dimensions or project geometry.
     const linkedSupplierItemIds=new Set((dataState.supplierPriceLinks||[])
       .filter(function(l){return item.id && l.catalog_item_id===item.id;})
       .map(function(l){return l.supplier_item_id;}));
@@ -1043,9 +1038,7 @@
       .filter(function(v){return v>0;})
       .map(function(v){return v.toFixed(6);})
     )).map(Number);
-    const volumePerPiece=projectVolumes.length===1
-      ? projectVolumes[0]
-      : (!projectVolumes.length && supplierVolumes.length===1 ? supplierVolumes[0] : 0);
+    const volumePerPiece=supplierVolumes.length===1?supplierVolumes[0]:0;
     const projectM3=st.qty*volumePerPiece;
     const suppliedLines=(dataState.supplyDocumentLines||[]).filter(function(x){return item.id && x.catalog_item_id===item.id;});
     const suppliedQty=suppliedLines.reduce(function(a,x){return a+Number(x.qty_pieces||0);},0);
@@ -1106,13 +1099,13 @@
         '</div>');
         const qty=block("Количество и объём",'<div class="mv-overview-qty">'+
           '<div class="mv-qty"><b>Всего по проекту</b><strong>'+fmt0(st.qty)+' шт.</strong><span>'+fmt(projectM3)+' м³</span></div>'+
-          '<div class="mv-qty"><b>Объём 1 шт.</b><strong>'+(volumePerPiece?fmt(volumePerPiece):"—")+' м³</strong><span>рабочий объём списания</span></div>'+
+          '<div class="mv-qty"><b>Объём 1 шт.</b><strong>'+(volumePerPiece?fmt(volumePerPiece):"—")+' м³</strong><span>из прайса поставщика · константа</span></div>'+
           '<div class="mv-qty"><b>Осталось поставить</b><strong>'+fmt0(Math.max(0,st.qty-suppliedQty))+' шт.</strong><span>'+fmt(Math.max(0,st.qty-suppliedQty)*volumePerPiece)+' м³</span></div>'+
           '<div class="mv-qty"><b>Осталось смонтировать</b><strong>'+fmt0(Math.max(0,st.qty-mountedQty))+' шт.</strong><span>'+fmt(Math.max(0,st.qty-mountedQty)*volumePerPiece)+' м³</span></div></div>');
         const geometry=block("Характеристики",'<div class="mv-cost-grid">'+
           '<div class="mv-cost"><b>Размеры панели</b><strong>'+(cardGeometry?esc(cardGeometry.label):"—")+'</strong><span>длина × высота × толщина</span></div>'+
           '<div class="mv-cost"><b>Площадь панели</b><strong>'+(cardGeometry?numFmt.format(cardGeometry.area)+" м²":"—")+'</strong><span>длина × высота</span></div>'+
-          '<div class="mv-cost"><b>Объём 1 шт.</b><strong>'+(volumePerPiece?fmt(volumePerPiece)+" м³":"—")+'</strong><span>рабочий объём</span></div>'+
+          '<div class="mv-cost"><b>Объём 1 шт.</b><strong>'+(volumePerPiece?fmt(volumePerPiece)+" м³":"—")+'</strong><span>из прайса поставщика · константа</span></div>'+
           '</div>','mv-mt');
         const cost=block("Стоимость",'<div class="mv-cost-grid"><div class="mv-cost"><b>По смете</b><strong>'+(estimateAmount?money(estimateAmount)+" BYN":"—")+'</strong><span>связанные позиции материала</span></div><div class="mv-cost"><b>Запроцентовано</b><strong>'+(avrAmount?money(avrAmount)+" BYN":"—")+'</strong><span>по действующим АВР</span></div><div class="mv-cost"><b>Остаток</b><strong>'+(estimateAmount?money(Math.max(0,estimateAmount-avrAmount))+" BYN":"—")+'</strong><span>по сметной стоимости</span></div></div>','mv-mt');
         const unitCost=block('Стоимость единицы <span class="mv-badge">с НДС</span>',
@@ -1124,7 +1117,7 @@
           '</div>','mv-mt');
         b.innerHTML='<div class="mv-overview-two">'+exec+qty+'</div>'+geometry+cost+unitCost+(sourceOnly?'<div class="mv-note">Исходная строка не связана с проектной номенклатурой. Карточка открыта в source-only режиме.</div>':'');
       } else if(tab==="projectEstimate"){
-        const project='<div class="mv-grid2 mv-mb">'+block("Проект",'<div class="mv-kpi2">'+kpi("Всего",fmt0(st.qty)+" шт.",fmt(projectM3)+" м³")+kpi("Объём 1 шт.",volumePerPiece?fmt(volumePerPiece)+" м³":"—","для учёта и списания")+'</div>')+
+        const project='<div class="mv-grid2 mv-mb">'+block("Проект",'<div class="mv-kpi2">'+kpi("Всего",fmt0(st.qty)+" шт.",fmt(projectM3)+" м³")+kpi("Объём 1 шт.",volumePerPiece?fmt(volumePerPiece)+" м³":"—","из прайса поставщика · константа")+'</div>')+
           block("Смета",'<div class="mv-kpi2">'+kpi("Количество по смете",estimateQty?fmt(estimateQty)+" шт.":"—","связанные позиции")+kpi("Контроль",estimateQty&&Math.abs(estimateQty-st.qty)<1e-9?"Совпадает":(linkedEstimateRows.length?"Проверить":"Нет связи"),linkedEstimateRows.length?"проект ↔ смета":"связь не создана",estimateQty&&Math.abs(estimateQty-st.qty)<1e-9?"good":"warn")+'</div>')+'</div>';
         const floors='<div class="mv-floor-wrap"><div class="mv-floor-grid"><div class="head">Секция</div>'+levels.map(function(x){return '<div class="head">'+esc(x)+'</div>';}).join("")+'<div class="head">Всего</div>'+
           ["Секция 1","Секция 2"].map(function(bs){
