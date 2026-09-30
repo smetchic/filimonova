@@ -3252,7 +3252,8 @@
       });
       const linkedMaterials=new Set(links.map(function(l){return l.material_row_id;})).size;
       const linkedWorks=new Set(links.map(function(l){return l.work_row_id;})).size;
-      return '<span class="context-muted">'+linkedMaterials+' / '+materials.length+' материалов · '+linkedWorks+' / '+works.length+' работ имеют связь</span>';
+      const last=ui.workLinkLastAuto;
+      return '<span class="context-muted">'+linkedMaterials+' / '+materials.length+' материалов · '+linkedWorks+' / '+works.length+' работ имеют связь'+(last?' · авто: '+last.matched+' · не определено: '+last.unresolved:'')+'</span>';
     }
     if (pageKey === "montage") return '<span class="context-muted">ЛКМ +1 · ПКМ −1</span>';
     return "";
@@ -5809,6 +5810,58 @@
     return m?Number(m[1]):null;
   }
 
+
+  function workLinkKind(value) {
+    const text=norm(value);
+    if(/площадк/.test(text)) return "platform";
+    if(/лестничн.*марш|\bмарш/.test(text)) return "march";
+    if(/балк/.test(text)) return "beam";
+    if(/вентиляц|вентблок|вентиляционн.*блок/.test(text)) return "vent";
+    if(/вкладыш/.test(text)) return "insert";
+    if(/экран|козыр/.test(text)) return "canopy";
+    if(/лоджи/.test(text)) return "loggia";
+    if(/стенк/.test(text)) return "wall";
+    if(/панел/.test(text)) return "panel";
+    return "";
+  }
+
+  function workLinkAutoCandidate(material) {
+    let works=(dataState.estimateRows||[]).filter(function(w){
+      return w.row_type==="work" &&
+        w.estimate_id===material.estimate_id &&
+        w.section_id===material.section_id;
+    });
+    if(!works.length) return null;
+
+    const materialKind=workLinkKind(estimateDisplayName(material)||material.name||"");
+    if(materialKind){
+      const sameKind=works.filter(function(w){return workLinkKind(estimateDisplayName(w)||w.name||"")===materialKind;});
+      if(sameKind.length) works=sameKind;
+    }
+
+    if(works.length===1) return {work:works[0],reason:materialKind?"тип изделия":"единственная работа раздела"};
+
+    const area=workLinkMaterialArea(material);
+    const withLimits=works.map(function(w){return {work:w,limit:workLinkThreshold(w)};}).filter(function(x){return x.limit!=null;});
+    if(area!=null&&withLimits.length){
+      const eligible=withLimits.filter(function(x){return area<=x.limit+0.03;});
+      const pool=(eligible.length?eligible:withLimits).slice().sort(function(a,b){
+        if(eligible.length && a.limit!==b.limit) return a.limit-b.limit;
+        if(!eligible.length && a.limit!==b.limit) return b.limit-a.limit;
+        return Math.abs(Number(a.work.sort_order||0)-Number(material.sort_order||0))-
+          Math.abs(Number(b.work.sort_order||0)-Number(material.sort_order||0));
+      });
+      if(pool.length) return {work:pool[0].work,reason:"площадь "+area.toFixed(2)+" м²"};
+    }
+
+    if(materialKind){
+      const sameKind=works.filter(function(w){return workLinkKind(estimateDisplayName(w)||w.name||"")===materialKind;});
+      if(sameKind.length===1) return {work:sameKind[0],reason:"тип изделия"};
+    }
+
+    return null;
+  }
+
   function workLinkCandidateScore(material,work) {
     let score=0;
     if(work.estimate_id===material.estimate_id) score+=10000;
@@ -5940,6 +5993,67 @@
       state.textContent="Ошибка: "+(err&&err.message?err.message:String(err));
     }finally{
       save.disabled=false;
+    }
+  }
+
+
+  async function autoMatchWorkLinks() {
+    const selectedEstimateIds=new Set((dataState.estimates||[]).filter(function(e){return ui.estimates[e.number]!==false;}).map(function(e){return e.id;}));
+    const rowMap=new Map((dataState.estimateRows||[]).map(function(r){return [r.id,r];}));
+    const existing=dataState.estimateWorkLinks||[];
+    const manualMaterials=new Set(existing.filter(function(l){return l.link_method==="manual";}).map(function(l){return l.material_row_id;}));
+    const autoToRemove=existing.filter(function(l){
+      if(l.link_method!=="auto") return false;
+      const m=rowMap.get(l.material_row_id);
+      return m&&selectedEstimateIds.has(m.estimate_id);
+    });
+
+    const candidates=[];
+    let skippedManual=0,unresolved=0;
+    (dataState.estimateRows||[]).forEach(function(material){
+      if(material.row_type!=="material"||!selectedEstimateIds.has(material.estimate_id)) return;
+      if(manualMaterials.has(material.id)){skippedManual++;return;}
+      const match=workLinkAutoCandidate(material);
+      if(!match||!match.work){unresolved++;return;}
+      candidates.push({
+        project_id:dataState.project.id,
+        material_row_id:material.id,
+        work_row_id:match.work.id,
+        link_method:"auto"
+      });
+    });
+
+    const selectedEstimates=(dataState.estimates||[]).filter(function(e){return selectedEstimateIds.has(e.id);});
+    const ok=await executionConfirm(
+      "Автосопоставление работ",
+      "Будут пересчитаны только автоматические связи по "+selectedEstimates.length+" выбранным сметам. Ручные связи сохранятся. Найдено "+candidates.length+" материалов для автосвязи; без уверенного соответствия: "+unresolved+".",
+      "Автосопоставить"
+    );
+    if(!ok) return;
+
+    const trigger=document.querySelector("[data-work-link-auto]");
+    if(trigger) trigger.disabled=true;
+    try{
+      if(autoToRemove.length){
+        const result=await client.from("estimate_work_links").delete().in("id",autoToRemove.map(function(x){return x.id;}));
+        if(result.error) throw result.error;
+      }
+      let inserted=[];
+      if(candidates.length){
+        for(let i=0;i<candidates.length;i+=500){
+          const result=await client.from("estimate_work_links").insert(candidates.slice(i,i+500)).select("id,material_row_id,work_row_id,link_method");
+          if(result.error) throw result.error;
+          inserted=inserted.concat(result.data||[]);
+        }
+      }
+      const removedIds=new Set(autoToRemove.map(function(x){return x.id;}));
+      dataState.estimateWorkLinks=existing.filter(function(x){return !removedIds.has(x.id);}).concat(inserted);
+      ui.workLinkLastAuto={matched:inserted.length,unresolved:unresolved,manual:skippedManual};
+      renderPage("links",0);
+    }catch(err){
+      console.error(err);
+      alert("Автосопоставление не выполнено: "+(err&&err.message?err.message:String(err)));
+      if(trigger) trigger.disabled=false;
     }
   }
 
@@ -6469,6 +6583,10 @@
   function wireServiceControls() {
     const collapse = document.querySelector('[data-service="collapse"]');
     const expand = document.querySelector('[data-service="expand"]');
+    const workLinkAuto=document.querySelector("[data-work-link-auto]");
+    if(workLinkAuto) workLinkAuto.addEventListener("click",function(){
+      autoMatchWorkLinks();
+    });
     const workLinkFilter=document.querySelector("[data-work-link-filter]");
     if(workLinkFilter) workLinkFilter.addEventListener("change",function(){
       ui.workLinkFilter=workLinkFilter.value;
@@ -6565,6 +6683,7 @@
     } else if(pageKey==="links"){
       if(!ui.workLinkFilter) ui.workLinkFilter="all";
       $("serviceRight").innerHTML =
+        '<button class="service-action" data-work-link-auto type="button">Автосопоставить</button>'+
         '<span class="context-muted">Показать:</span>'+
         '<select class="service-select" data-work-link-filter aria-label="Фильтр связей работ">'+
           '<option value="all"'+(ui.workLinkFilter==="all"?' selected':'')+'>Все материалы</option>'+
