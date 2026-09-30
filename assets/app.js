@@ -1284,15 +1284,6 @@
     modal.querySelector(".material-close").onclick=function(){modal.classList.remove("open");};
     modal.onclick=function(e){if(e.target===modal) modal.classList.remove("open");};
     modal.querySelectorAll("[data-mtab]").forEach(function(btn){btn.onclick=function(){modal.querySelectorAll("[data-mtab]").forEach(function(x){x.classList.toggle("active",x===btn);});body(btn.dataset.mtab);};});
-    const card=modal.querySelector(".material-card"),head=modal.querySelector(".material-card-head");
-    head.onmousedown=function(e){
-      if(e.target.closest("button,input,select"))return;
-      const r=card.getBoundingClientRect(),dx=e.clientX-r.left,dy=e.clientY-r.top;
-      card.style.position="fixed";card.style.left=r.left+"px";card.style.top=r.top+"px";card.style.margin="0";
-      function move(ev){card.style.left=Math.max(8,Math.min(window.innerWidth-card.offsetWidth-8,ev.clientX-dx))+"px";card.style.top=Math.max(8,Math.min(window.innerHeight-card.offsetHeight-8,ev.clientY-dy))+"px";}
-      function up(){document.removeEventListener("mousemove",move);document.removeEventListener("mouseup",up);}
-      document.addEventListener("mousemove",move);document.addEventListener("mouseup",up);
-    };
   }
 
   function checkHtml(id,label,checked,group) {
@@ -5490,22 +5481,6 @@
     modal.querySelector(".recon-edit-cancel").onclick=close;
     modal.onclick=function(e){if(e.target===modal) close();};
     modal.querySelector(".recon-edit-save").onclick=saveManualReconciliation;
-    const card=modal.querySelector(".recon-edit-modal");
-    const handle=modal.querySelector(".spec-import-head");
-    handle.addEventListener("mousedown",function(ev){
-      if(ev.target.closest("button")) return;
-      const rect=card.getBoundingClientRect();
-      const dx=ev.clientX-rect.left,dy=ev.clientY-rect.top;
-      card.style.position="fixed";card.style.left=rect.left+"px";card.style.top=rect.top+"px";card.style.margin="0";
-      handle.classList.add("dragging");
-      function move(e){
-        const left=Math.max(8,Math.min(window.innerWidth-card.offsetWidth-8,e.clientX-dx));
-        const top=Math.max(8,Math.min(window.innerHeight-card.offsetHeight-8,e.clientY-dy));
-        card.style.left=left+"px";card.style.top=top+"px";
-      }
-      function up(){document.removeEventListener("mousemove",move);document.removeEventListener("mouseup",up);handle.classList.remove("dragging");}
-      document.addEventListener("mousemove",move);document.addEventListener("mouseup",up);
-    });
     return modal;
   }
 
