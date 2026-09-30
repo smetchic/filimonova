@@ -205,17 +205,39 @@
 
   async function fetchAllRows(table,columns,configure) {
     const pageSize=1000;
-    let from=0;
-    const all=[];
-    while(true) {
-      let query=client.from(table).select(columns);
+    async function page(from,withCount) {
+      let query=client.from(table).select(columns,withCount?{count:"exact"}:undefined);
       if(configure) query=configure(query);
       const result=await query.range(from,from+pageSize-1);
       if(result.error) throw result.error;
-      const rows=result.data||[];
-      all.push.apply(all,rows);
-      if(rows.length<pageSize) break;
-      from+=pageSize;
+      return {rows:result.data||[],count:result.count};
+    }
+
+    const first=await page(0,false);
+    if(first.rows.length<pageSize) return first.rows;
+
+    const second=await page(pageSize,true);
+    const all=first.rows.concat(second.rows);
+    if(second.rows.length<pageSize) return all;
+
+    const total=Number(second.count);
+    if(!Number.isFinite(total) || total<=pageSize*2) {
+      let from=pageSize*2;
+      while(true){
+        const next=await page(from,false);
+        all.push.apply(all,next.rows);
+        if(next.rows.length<pageSize) break;
+        from+=pageSize;
+      }
+      return all;
+    }
+
+    const offsets=[];
+    for(let from=pageSize*2;from<total;from+=pageSize) offsets.push(from);
+    const concurrency=4;
+    for(let i=0;i<offsets.length;i+=concurrency){
+      const batch=await Promise.all(offsets.slice(i,i+concurrency).map(function(from){return page(from,false);}));
+      batch.forEach(function(result){all.push.apply(all,result.rows);});
     }
     return all;
   }
