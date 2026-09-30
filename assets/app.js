@@ -635,23 +635,17 @@
     });
     pop.querySelector("[data-sort-clear]").onclick=function(){
       if(ui.columnSort) delete ui.columnSort[viewKey];
-      pop.classList.remove("open");
-      renderPage(ui.page,ui.tabs[ui.page]||0);
+      pop.querySelectorAll("[data-sort-dir]").forEach(function(b){
+        b.textContent=b.dataset.sortDir==="asc" ? "Сортировать по возрастанию" : "Сортировать по убыванию";
+      });
+      rerenderContent();
     };
     pop.querySelector("[data-filter-cancel]").onclick=function(){pop.classList.remove("open");};
     pop.querySelector(".filter-clear").onclick=function(){
-      if(ui.columnFilters&&ui.columnFilters[viewKey]){
-        const next=Object.assign({},ui.columnFilters[viewKey]);
-        delete next[field];
-        if(Object.keys(next).length) ui.columnFilters[viewKey]=next;
-        else delete ui.columnFilters[viewKey];
-      }
-      if(ui.page==="spec"){
-        ui.collapseLeaves=false;
-        ui.collapsed.clear();
-      }
-      pop.classList.remove("open");
-      renderPage(ui.page,ui.tabs[ui.page]||0);
+      chosen=new Set(values);
+      search.value="";
+      list.innerHTML=valueRows("");
+      bindValues();
     };
     pop.querySelector("[data-filter-ok]").onclick=function(){
       // If a search is entered, the visible checked search results become the
@@ -662,8 +656,7 @@
           .map(function(x){return x.dataset.filterValueChoice;}));
       }
       const allValues = values;
-      const hadExisting=!!existing;
-      if (!hadExisting && !search.value.trim() && chosen.size === allValues.length && allValues.every(function(v){return chosen.has(v);})) {
+      if (!search.value.trim() && chosen.size === allValues.length && allValues.every(function(v){return chosen.has(v);})) {
         if(ui.columnFilters&&ui.columnFilters[viewKey]){
           const next=Object.assign({},ui.columnFilters[viewKey]);
           delete next[field];
