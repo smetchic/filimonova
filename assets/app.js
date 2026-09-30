@@ -3653,7 +3653,21 @@
         if(cell) cell.textContent=(n==null?"—":cumulative.toFixed(4).replace(".",","));
       });
     }
-    modal.querySelectorAll(".gpr-index-input").forEach(function(input){input.oninput=recalc;});
+    const gprIndexInputs=Array.from(modal.querySelectorAll(".gpr-index-input"));
+    gprIndexInputs.forEach(function(input,index){
+      input.oninput=recalc;
+      input.onkeydown=function(e){
+        if(e.key!=="Enter") return;
+        e.preventDefault();
+        const next=gprIndexInputs[index+1];
+        if(next){
+          next.focus();
+          next.select();
+        }else{
+          input.select();
+        }
+      };
+    });
     recalc();
     modal.querySelector(".gpr-modal-close").onclick=close;
     modal.querySelector(".gpr-cancel").onclick=close;
