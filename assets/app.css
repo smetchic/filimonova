@@ -2354,19 +2354,15 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 }
 
 
-/* Work links: material -> one or many estimate work rows */
-.work-links-table .work-link-material-row td{background:#fff}
-.work-links-table .work-link-child-row td{background:#FAFAFB;color:#555861}
-.work-links-table .work-link-child-row:hover td{background:#F4F5F7}
-.work-links-table .work-link-child-name{padding-left:18px!important}
-.work-links-table .work-link-child-name::before{content:"↳";display:inline-block;width:16px;margin-left:-14px;color:#8A8D94}
+/* Work links — canonical */
 .work-link-status{display:inline-flex;align-items:center;min-height:20px;padding:0 6px;border-radius:4px;font-size:11px;white-space:nowrap}
 .work-link-status.ok{background:#EEF7F0;color:#356244}
 .work-link-status.warn{background:#FFF5E8;color:#8A5A1F}
 .work-link-control{font-size:11px;white-space:nowrap;color:#7A5B2B}
 .work-link-control.ok{color:#356244}
 .work-link-control.warn{color:#8A5A1F}
-.work-link-orphan-row td{background:#FFFDF8}
+.work-link-control.over{color:#A14A34;font-weight:600}
+.work-link-control.under{color:#9A6B1F;font-weight:600}
 
 .work-link-modal{width:min(1120px,calc(100vw - 36px));max-height:min(760px,calc(100vh - 36px))}
 .work-link-source{
@@ -2387,9 +2383,7 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   border:1px solid #D7D7DB;border-radius:4px;background:#fff;font-size:11px;font-weight:600
 }
 .work-link-candidates{min-height:0;display:flex;flex-direction:column;flex:1}
-.work-link-candidate-head{
-  min-height:40px;display:flex;align-items:center;gap:10px;padding:7px 14px;border-bottom:1px solid #E4E4E7
-}
+.work-link-candidate-head{min-height:40px;display:flex;align-items:center;gap:10px;padding:7px 14px;border-bottom:1px solid #E4E4E7}
 .work-link-candidate-head strong{font-size:12px;font-weight:600}
 .work-link-candidate-head span{font-size:11px;color:#76777D}
 .work-link-candidate-scroll{min-height:0;overflow:auto;flex:1}
@@ -2407,54 +2401,6 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 .work-link-save-state{font-size:11px;color:#6B6D73;max-width:520px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .work-link-modal .spec-import-foot{border-top:1px solid #E4E4E7}
 
-
-/* Work links v2 — work first, materials nested below */
-.work-links-table th:nth-child(1),.work-links-table td:nth-child(1){width:42px}
-.work-links-table th:nth-child(2),.work-links-table td:nth-child(2){width:72px}
-.work-links-table th:nth-child(3),.work-links-table td:nth-child(3){width:150px}
-.work-links-table th:nth-child(4),.work-links-table td:nth-child(4){min-width:360px}
-.work-links-table th:nth-child(5),.work-links-table td:nth-child(5){width:118px}
-.work-links-table th:nth-child(6),.work-links-table td:nth-child(6){width:78px}
-.work-links-table th:nth-child(7),.work-links-table td:nth-child(7){width:160px}
-.work-links-table th:nth-child(8),.work-links-table td:nth-child(8){width:150px}
-
-.work-links-table .work-link-work-row td{
-  background:#F7F8FA;
-  border-top:1px solid #DADDE2;
-}
-.work-links-table .work-link-work-name{font-weight:600;color:#3F4248}
-.work-links-table .work-link-material-child td{background:#fff;color:#4F5258}
-.work-links-table .work-link-material-child:hover td{background:#FAFAFB}
-.work-links-table .work-link-material-name{padding-left:22px!important}
-.work-links-table .work-link-material-name::before{
-  content:"↳";
-  display:inline-block;
-  width:17px;
-  margin-left:-16px;
-  color:#8A8D94;
-}
-.work-links-table .work-link-unmatched-group td{
-  background:#FFF9EF!important;
-  color:#745529;
-}
-.work-links-table .work-link-unmatched-row td{background:#FFFDF8}
-.work-link-control.over{color:#A14A34;font-weight:600}
-.work-link-control.under{color:#9A6B1F;font-weight:600}
-.work-link-method{
-  display:inline-flex;
-  align-items:center;
-  min-height:19px;
-  padding:0 5px;
-  border-radius:4px;
-  font-size:10.5px;
-  white-space:nowrap;
-}
-.work-link-method.auto{background:#F1F3F5;color:#666A70}
-.work-link-method.manual{background:#EEF3FB;color:#365F9C}
-.action-sep{color:#B3B5BA}
-
-
-/* Work links v3 — panel geometry + material card affordance */
 .work-links-table th:nth-child(1),.work-links-table td:nth-child(1){width:42px}
 .work-links-table th:nth-child(2),.work-links-table td:nth-child(2){width:72px}
 .work-links-table th:nth-child(3),.work-links-table td:nth-child(3){width:150px}
@@ -2465,7 +2411,19 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 .work-links-table th:nth-child(8),.work-links-table td:nth-child(8){width:76px}
 .work-links-table th:nth-child(9),.work-links-table td:nth-child(9){width:155px}
 .work-links-table th:nth-child(10),.work-links-table td:nth-child(10){width:150px}
-.work-link-dim{white-space:nowrap;font-variant-numeric:tabular-nums}
-.work-link-area{white-space:nowrap;font-variant-numeric:tabular-nums}
+.work-links-table .work-link-work-row td{background:#F7F8FA;border-top:1px solid #DADDE2}
+.work-links-table .work-link-work-name{font-weight:600;color:#3F4248}
+.work-links-table .work-link-material-child td{background:#fff;color:#4F5258}
+.work-links-table .work-link-material-child:hover td{background:#FAFAFB}
+.work-links-table .work-link-material-name{padding-left:22px!important}
+.work-links-table .work-link-material-name::before{content:"↳";display:inline-block;width:17px;margin-left:-16px;color:#8A8D94}
+.work-links-table .work-link-unmatched-group td{background:#FFF9EF!important;color:#745529}
+.work-links-table .work-link-unmatched-row td{background:#FFFDF8}
+.work-link-method{display:inline-flex;align-items:center;min-height:19px;padding:0 5px;border-radius:4px;font-size:10.5px;white-space:nowrap}
+.work-link-method.auto{background:#F1F3F5;color:#666A70}
+.work-link-method.manual{background:#EEF3FB;color:#365F9C}
+.action-sep{color:#B3B5BA}
+.work-link-dim,.work-link-area{white-space:nowrap;font-variant-numeric:tabular-nums}
 .work-link-material-name[data-material-card-open]{cursor:pointer}
 .work-link-material-name[data-material-card-open]:hover{text-decoration:underline;text-underline-offset:2px}
+
