@@ -70,7 +70,8 @@
     supplierPrices: [],
     supplierPriceLinks: [],
     supplierPriceJournal: [],
-    supplierSnapshotRows: []
+    supplierSnapshotRows: [],
+    supplierControlJournal: []
   };
 
   const pages = {
