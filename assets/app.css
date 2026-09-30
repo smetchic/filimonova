@@ -2307,3 +2307,9 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 .supplier-project-candidate-table td:nth-child(5){width:110px}
 .supplier-project-candidate-table th:nth-child(6),
 .supplier-project-candidate-table td:nth-child(6){width:180px}
+
+
+.supplier-save-error{
+  color:#A13D31;
+  font-weight:600;
+}
