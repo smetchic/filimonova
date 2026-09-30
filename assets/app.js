@@ -476,7 +476,8 @@
 
   function columnFilterPass(field,value) {
     const set = filterBucket()[field];
-    if (!set || !set.size) return true;
+    if (!set) return true;
+    if (!set.size) return false;
     return set.has(String(value == null ? "" : value));
   }
 
@@ -484,7 +485,8 @@
     const filters = filterBucket();
     return Object.keys(filters).every(function(field) {
       const set = filters[field];
-      if (!set || !set.size) return true;
+      if (!set) return true;
+      if (!set.size) return false;
       return set.has(String(values[field] == null ? "" : values[field]));
     });
   }
@@ -617,6 +619,10 @@
       const shownValues = values;
       if (chosen.size === shownValues.length && shownValues.every(function(v){return chosen.has(v);})) delete filterBucket()[field];
       else filterBucket()[field]=new Set(Array.from(chosen));
+      if(ui.page==="spec"){
+        ui.collapseLeaves=false;
+        ui.collapsed.clear();
+      }
       pop.classList.remove("open");
       rerenderContent();
     };
@@ -3371,7 +3377,9 @@
 
   function renderSpecSummary() {
     const levels = levelCodes();
-    let rows = buildWorkingSummaryRows().filter(function(r){return rowPassesColumnFilters({mark:r.mark,name:r.name});});
+    let rows = buildWorkingSummaryRows().filter(function(r){
+      return columnFilterPass("mark",r.mark) && columnFilterPass("name",r.name);
+    });
     rows = sortRows(rows,{mark:function(r){return r.mark;},name:function(r){return r.name;}});
     ui.currentGroupKeys = [];
 
