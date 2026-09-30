@@ -5047,6 +5047,23 @@
     return score;
   }
 
+  function excelNumber(value) {
+    if(typeof value==="number") return Number.isFinite(value)?value:null;
+    const number=Number(String(value==null?"":value).replace(/\s/g,"").replace(",","."));
+    return Number.isFinite(number)?number:null;
+  }
+
+  function avrQuantityColumns(rows) {
+    const bySheet=new Map();
+    rows.forEach(function(entry){
+      entry.values.forEach(function(value,columnIndex){
+        const text=importNorm(value);
+        if(/единиц.*измер/.test(text)&&/колич/.test(text)&&!bySheet.has(entry.sheet)) bySheet.set(entry.sheet,columnIndex);
+      });
+    });
+    return bySheet;
+  }
+
   async function parseAvrWorkbook(file,expectedKey) {
     if(!window.XLSX) throw new Error("Модуль чтения Excel не загрузился.");
     const buffer=await file.arrayBuffer();
@@ -5072,6 +5089,7 @@
       const key=importNorm(estimateSourceValue(row,"basis"));
       if(!basisMap.has(key)) basisMap.set(key,[]);basisMap.get(key).push(row);
     });
+    const quantityColumns=avrQuantityColumns(rows);
     const parsed=[];const errors=[];let currentEstimate=null;
     rows.forEach(function(entry,rowIndex){
       const joined=entry.values.map(function(x){return String(x==null?"":x);}).join(" ");
@@ -5081,20 +5099,31 @@
         const key=importNorm(cell);
         let candidates=basisMap.get(key)||[];
         if(currentEstimate) candidates=candidates.filter(function(x){return x.estimate_id===currentEstimate.id;});
-        if(candidates.length>1){
-          const rowPosition=entry.values.map(function(x){return String(x==null?"":x).trim();});
-          candidates=candidates.filter(function(x){return rowPosition.includes(String(x.position));});
-        }
+        const sourcePosition=String(entry.values[1]==null?"":entry.values[1]).trim();
+        if(sourcePosition) candidates=candidates.filter(function(x){return String(x.position)===sourcePosition;});
         if(candidates.length!==1) return;
         const estimateRow=candidates[0];
         if(parsed.some(function(x){return x.estimate_row_id===estimateRow.id;})) return;
-        const numeric=[];
-        entry.values.forEach(function(value,columnIndex){
-          const number=typeof value==="number"?value:Number(String(value==null?"":value).replace(/\s/g,"").replace(",","."));
-          if(Number.isFinite(number)&&number>=0&&columnIndex!==basisIndex) numeric.push({value:number,columnIndex:columnIndex,score:headerScore(rows,rowIndex,columnIndex)+(columnIndex>basisIndex?1:0)});
-        });
-        numeric.sort(function(a,b){return b.score-a.score||a.columnIndex-b.columnIndex;});
-        const chosen=numeric[0];
+        let chosen=null;
+        const quantityColumn=quantityColumns.get(entry.sheet);
+        if(quantityColumn!=null){
+          for(let offset=0;offset<=2;offset++){
+            const candidateRow=rows[rowIndex+offset];
+            if(!candidateRow||candidateRow.sheet!==entry.sheet) break;
+            if(offset>0&&importNorm(candidateRow.values[2])) break;
+            const number=excelNumber(candidateRow.values[quantityColumn]);
+            if(number!=null&&number>=0){chosen={value:number,columnIndex:quantityColumn};break;}
+          }
+        }
+        if(!chosen){
+          const numeric=[];
+          entry.values.forEach(function(value,columnIndex){
+            const number=excelNumber(value);
+            if(number!=null&&number>=0&&columnIndex!==basisIndex) numeric.push({value:number,columnIndex:columnIndex,score:headerScore(rows,rowIndex,columnIndex)+(columnIndex>basisIndex?1:0)});
+          });
+          numeric.sort(function(a,b){return b.score-a.score||a.columnIndex-b.columnIndex;});
+          chosen=numeric[0];
+        }
         if(!chosen){errors.push("Строка "+entry.rowNo+": не найдено количество для позиции "+estimateRow.position);return;}
         const linked=linkedSpecRowsForEstimateRow(estimateRow);
         const volumes=Array.from(new Set(linked.map(function(x){return Number(x.volumePerPiece||0);}).filter(function(x){return x>0;}).map(function(x){return x.toFixed(6);})));
@@ -5141,24 +5170,42 @@
     const detected=detectWorkbookPeriod(all,expectedKey);
     if(!detected) throw new Error("Не удалось определить месяц бухгалтерского отчёта.");
     if(detected!==expectedKey) throw new Error("В отчёте указан "+periodLabel(detected,false)+", а выбран "+periodLabel(expectedKey,false)+".");
-    let headerAt=-1,columns=null;
+    let headerAt=-1,columns=null,dataAt=-1;
     for(let i=0;i<all.length;i++){
       const cells=all[i].values;
       const name=accountingHeaderIndex(cells,[/наимен/]);
-      const code=accountingHeaderIndex(cells,[/код.*материал/,/материал.*код/,/номенклатур.*код/,/^код$/]);
-      const qty=accountingHeaderIndex(cells,[/колич/,/списан/,/расход/]);
-      if(name>=0&&code>=0&&qty>=0){
-        headerAt=i;columns={name:name,code:code,qty:qty,account:accountingHeaderIndex(cells,[/счет/,/счёт/]),unit:accountingHeaderIndex(cells,[/ед.*изм/,/^ед$/]),price:accountingHeaderIndex(cells,[/цен/]),amount:accountingHeaderIndex(cells,[/сумм/,/стоим/])};break;
+      const code=accountingHeaderIndex(cells,[/код.*материал/,/материал.*код/,/номенклатур.*(?:код|номер)/,/^код$/]);
+      if(name>=0&&code>=0){
+        let qty=accountingHeaderIndex(cells,[/израсход/,/отпущ/,/списан/,/расход/]);
+        let amount=-1;
+        let subheader=i;
+        if(qty>=0){
+          for(let j=i+1;j<Math.min(all.length,i+6);j++){
+            if(all[j].sheet!==all[i].sheet) break;
+            const q=accountingHeaderIndex(all[j].values,[/^кол.*во$/,/^колич/]);
+            if(q>=qty&&q<=qty+2){
+              qty=q;
+              amount=all[j].values.findIndex(function(value,index){return index>q&&index<=q+2&&/^(сумм|стоим)/.test(importNorm(value));});
+              subheader=j;break;
+            }
+          }
+        }else{
+          qty=accountingHeaderIndex(cells,[/колич/]);
+          amount=accountingHeaderIndex(cells,[/сумм/,/стоим/]);
+        }
+        if(qty>=0){
+          headerAt=i;dataAt=subheader+1;columns={name:name,code:code,qty:qty,account:accountingHeaderIndex(cells,[/счет/,/счёт/]),unit:accountingHeaderIndex(cells,[/ед.*изм/,/^ед$/]),price:accountingHeaderIndex(cells,[/цен/]),amount:amount};break;
+        }
       }
     }
     if(headerAt<0) throw new Error("Не найдена таблица с колонками Код материала, Наименование и Количество.");
     const rows=[];
-    for(let i=headerAt+1;i<all.length;i++){
+    for(let i=dataAt;i<all.length;i++){
       const entry=all[i];const code=String(entry.values[columns.code]||"").trim();const name=String(entry.values[columns.name]||"").trim();
-      const qty=Number(String(entry.values[columns.qty]==null?"":entry.values[columns.qty]).replace(/\s/g,"").replace(",","."));
+      const qty=excelNumber(entry.values[columns.qty]);
       if(!code&&!name) continue;
-      if(!code||!name||!Number.isFinite(qty)) continue;
-      const numberAt=function(index){if(index<0)return null;const value=Number(String(entry.values[index]==null?"":entry.values[index]).replace(/\s/g,"").replace(",","."));return Number.isFinite(value)?value:null;};
+      if(!code||!name||qty==null) continue;
+      const numberAt=function(index){return index<0?null:excelNumber(entry.values[index]);};
       rows.push({source_row_no:entry.rowNo,account_code:columns.account>=0?String(entry.values[columns.account]||"").trim():null,material_code:code,name:name,unit:columns.unit>=0?String(entry.values[columns.unit]||"").trim():null,quantity:qty,unit_price:numberAt(columns.price),amount:numberAt(columns.amount),raw_data:{sheet:entry.sheet,row:entry.values}});
     }
     if(!rows.length) throw new Error("После проверки в бухгалтерском отчёте не осталось строк материалов.");
