@@ -2708,12 +2708,12 @@
       cells[13].innerHTML='<span class="price-state '+supplierStatusClass(model.status)+'">'+esc(model.status)+'</span>';
       cells[14].textContent=link.link_method==="manual"?"Вручную":"Авто";
       cells[15].textContent=model.reasons.length?model.reasons.join(" · "):"Нет";
-      cells[16].innerHTML='<button class="table-text-action" data-supplier-row-journal="'+esc(project.catalogItemId)+'" type="button">История</button>';
+      cells[16].innerHTML=supplierControlJournalCheckboxHtml(project.catalogItemId,supplierItemId);
       cells[17].innerHTML='<button class="table-text-action" data-supplier-match="'+esc(project.catalogItemId)+'" type="button">Изменить</button>';
       const duplicate=check.querySelector('[data-supplier-check-key="'+CSS.escape("catalog:"+project.catalogItemId)+'"]');
       if(duplicate && duplicate!==row) duplicate.remove();
-      const journal=cells[16].querySelector("[data-supplier-row-journal]");
-      if(journal) journal.onclick=function(){ui.supplierCheckTab="journal";ui.supplierCheckCatalog=project.catalogItemId;renderSupplierCheck();};
+      const journal=cells[16].querySelector("[data-supplier-control-journal]");
+      if(journal) journal.onchange=function(){setSupplierControlJournal(project.catalogItemId,supplierItemId,journal.checked,journal);};
       const change=cells[17].querySelector("[data-supplier-match]");
       if(change) change.onclick=function(){openSupplierMatchEditor(project.catalogItemId);};
     }else{
@@ -2722,8 +2722,10 @@
       cells[13].innerHTML='<span class="price-state supplier">Только у поставщика</span>';
       cells[14].textContent="—";
       cells[15].textContent="Не создаёт проектную позицию";
-      cells[16].textContent="";
+      cells[16].innerHTML=supplierControlJournalCheckboxHtml("",supplierItemId);
       cells[17].innerHTML='<button class="table-text-action" data-supplier-source-match="'+esc(supplierItemId)+'" type="button">Сопоставить</button>';
+      const journal=cells[16].querySelector("[data-supplier-control-journal]");
+      if(journal) journal.onchange=function(){setSupplierControlJournal("",supplierItemId,journal.checked,journal);};
       const match=cells[17].querySelector("[data-supplier-source-match]");
       if(match) match.onclick=function(){openSupplierSourceMatchEditor(supplierItemId);};
     }
