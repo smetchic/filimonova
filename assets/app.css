@@ -2281,3 +2281,29 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   text-align:right;
   white-space:nowrap;
 }
+
+
+/* Global movable dialog headers */
+.spec-import-head,
+.gpr-modal-head,
+.material-card-head{
+  cursor:move;
+  user-select:none;
+}
+.dialog-dragging{
+  user-select:none!important;
+}
+.supplier-project-candidate-table{
+  width:100%;
+  table-layout:fixed;
+}
+.supplier-project-candidate-table th:nth-child(1),
+.supplier-project-candidate-table td:nth-child(1){width:54px}
+.supplier-project-candidate-table th:nth-child(2),
+.supplier-project-candidate-table td:nth-child(2){width:150px}
+.supplier-project-candidate-table th:nth-child(4),
+.supplier-project-candidate-table td:nth-child(4){width:100px}
+.supplier-project-candidate-table th:nth-child(5),
+.supplier-project-candidate-table td:nth-child(5){width:110px}
+.supplier-project-candidate-table th:nth-child(6),
+.supplier-project-candidate-table td:nth-child(6){width:180px}
