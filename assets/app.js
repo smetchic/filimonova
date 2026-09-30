@@ -2592,21 +2592,57 @@
     return modal;
   }
 
-  function openSupplierMatchEditor(catalogId) {
-    const project=supplierCheckProjectRows().find(function(x){return x.catalogItemId===catalogId;});if(!project)return;
-    const snapshot=latestSupplierSnapshotRows();const model=supplierCheckRow(project,snapshot);const linked=model.link&&model.link.supplier_item_id;
-    const ranked=snapshot.map(function(s){return {row:s,score:supplierCandidateScore(project,s)};}).sort(function(a,b){return b.score-a.score||Number(a.row.source_row_no)-Number(b.row.source_row_no);});
+  function openSupplierMatchEditor(catalogId,scopeKey) {
+    const project=supplierCheckProjectRows().find(function(x){
+      return x.catalogItemId===catalogId && (!scopeKey || x.scopeKey===scopeKey);
+    });
+    if(!project)return;
+    scopeKey=project.scopeKey;
+    const snapshot=latestSupplierSnapshotRows();
+    const model=supplierCheckRow(project,snapshot);
+    const linked=model.link&&model.link.supplier_item_id;
+    const ranked=snapshot.map(function(s){return {row:s,score:supplierCandidateScore(project,s)};})
+      .sort(function(a,b){return b.score-a.score||Number(a.row.source_row_no)-Number(b.row.source_row_no);});
     const modal=supplierMatchEditorModal();
     modal.dataset.matchMode="project";
     modal.dataset.catalogId=catalogId;
+    modal.dataset.scopeKey=scopeKey;
     delete modal.dataset.supplierItemId;
     modal.querySelector(".spec-import-head strong").textContent="Сопоставить с прайсом";
     modal.querySelector(".spec-import-head span").textContent="Кандидаты поставщика отсортированы по вероятности";
-    modal.querySelector(".supplier-match-source").innerHTML='<span>Проектная номенклатура</span><strong>'+esc(project.mark)+' · '+esc(project.name)+'</strong><small>Проект: '+fmt0(project.qty)+' шт.'+(project.volume!=null?' · '+fmt(project.volume)+' м³/шт.':'')+'</small>';
+    modal.querySelector(".supplier-match-source").innerHTML=
+      '<span>Рабочая сводка</span><strong>'+esc(project.mark)+' · '+esc(project.name)+'</strong>'+
+      '<small>'+esc(project.zone)+' · '+esc(project.sectionName)+' · Проект: '+fmt0(project.qty)+' шт.'+(project.volume!=null?' · '+fmt(project.volume)+' м³/шт.':'')+'</small>';
     modal.querySelector(".supplier-link-remove").classList.toggle("hidden",!model.link);
-    modal.querySelector(".supplier-match-list").innerHTML='<table class="eng-table recon-candidate-table supplier-match-candidate-table"><thead><tr><th>Выбор</th><th>Строка прайса</th><th>Раздел поставщика</th><th>Марка поставщика</th><th>Наименование поставщика</th><th>Кол-во по прайсу</th><th>Объём за ед.</th><th>Цена за 1 шт.</th><th>Цена за 1 м³</th><th>Состояние</th></tr></thead><tbody>'+ranked.map(function(c,index){const s=c.row,r=s.raw_data||{},ps=Array.isArray(r.prices)?r.prices:[],piece=supplierApplicablePrice(ps.filter(function(p){return (p.price_basis||"piece")==="piece";})),qty=r.qty_house==null?null:Number(r.qty_house),vol=Number(r.unit_volume_m3||0),owner=(dataState.supplierPriceLinks||[]).find(function(x){return x.supplier_item_id===s.supplier_item_id;});const ownedElsewhere=owner&&owner.catalog_item_id!==catalogId;const disabled=ownedElsewhere&&owner.link_method==="manual";const stateText=disabled?'Вручную связано с другой позицией':ownedElsewhere?'Автосвязь с другой позицией — будет заменена':linked===s.supplier_item_id?'Текущая связь':'Кандидат';return '<tr class="supplier-candidate-row'+(linked===s.supplier_item_id?' is-selected':'')+'"><td class="center"><input type="radio" name="supplier-candidate" data-supplier-candidate="'+esc(s.supplier_item_id||'')+'" '+(linked===s.supplier_item_id?'checked':'')+' '+(disabled?'disabled':'')+'></td><td class="center">'+esc(s.source_row_no)+'</td><td class="supplier-match-section"><strong>'+esc(r.source_section||'—')+'</strong>'+(r.source_group?'<small>'+esc(r.source_group)+'</small>':'')+'</td><td><strong>'+esc(r.source_mark||'')+'</strong>'+(index===0?'<small class="recon-table-note">Предлагаем</small>':'')+'</td><td>'+esc(r.source_name||'')+'</td><td class="num">'+(qty==null?'—':fmt0(qty))+'</td><td class="num">'+(vol?fmt(vol):'—')+'</td><td class="num">'+(piece?money(piece.unit_price_gross):'—')+'</td><td class="num">'+(piece&&vol?money(Number(piece.unit_price_gross)/vol):'—')+'</td><td>'+stateText+'</td></tr>';}).join('')+'</tbody></table>';
+    modal.querySelector(".supplier-match-list").innerHTML=
+      '<table class="eng-table recon-candidate-table supplier-match-candidate-table"><thead><tr><th>Выбор</th><th>Строка прайса</th><th>Раздел поставщика</th><th>Марка поставщика</th><th>Наименование поставщика</th><th>Кол-во по прайсу</th><th>Объём за ед.</th><th>Цена за 1 шт.</th><th>Цена за 1 м³</th><th>Состояние</th></tr></thead><tbody>'+
+      ranked.map(function(c,index){
+        const s=c.row,r=s.raw_data||{},ps=Array.isArray(r.prices)?r.prices:[],
+          piece=supplierApplicablePrice(ps.filter(function(p){return (p.price_basis||"piece")==="piece";})),
+          qty=r.qty_house==null?null:Number(r.qty_house),vol=Number(r.unit_volume_m3||0),
+          owner=(dataState.supplierPriceLinks||[]).find(function(x){return x.supplier_item_id===s.supplier_item_id;});
+        const sameTarget=owner&&owner.catalog_item_id===catalogId&&supplierLinkScopeKey(owner,snapshot)===scopeKey;
+        const ownedElsewhere=owner&&!sameTarget;
+        const disabled=ownedElsewhere&&owner.link_method==="manual";
+        const stateText=disabled?'Вручную связано с другой строкой сводки':ownedElsewhere?'Автосвязь с другой строкой — будет заменена':linked===s.supplier_item_id?'Текущая связь':'Кандидат';
+        return '<tr class="supplier-candidate-row'+(linked===s.supplier_item_id?' is-selected':'')+'">'+
+          '<td class="center"><input type="radio" name="supplier-candidate" data-supplier-candidate="'+esc(s.supplier_item_id||'')+'" '+(linked===s.supplier_item_id?'checked':'')+' '+(disabled?'disabled':'')+'></td>'+
+          '<td class="center">'+esc(s.source_row_no)+'</td>'+
+          '<td class="supplier-match-section"><strong>'+esc(r.source_section||'—')+'</strong>'+(r.source_group?'<small>'+esc(r.source_group)+'</small>':'')+'</td>'+
+          '<td><strong>'+esc(r.source_mark||'')+'</strong>'+(index===0?'<small class="recon-table-note">Предлагаем</small>':'')+'</td>'+
+          '<td>'+esc(r.source_name||'')+'</td><td class="num">'+(qty==null?'—':fmt0(qty))+'</td>'+
+          '<td class="num">'+(vol?fmt(vol):'—')+'</td><td class="num">'+(piece?money(piece.unit_price_gross):'—')+'</td>'+
+          '<td class="num">'+(piece&&vol?money(Number(piece.unit_price_gross)/vol):'—')+'</td><td>'+stateText+'</td></tr>';
+      }).join('')+'</tbody></table>';
     modal.querySelector(".recon-edit-state").textContent="";
-    modal.querySelectorAll(".supplier-candidate-row").forEach(function(row){row.onclick=function(e){const radio=row.querySelector("input");if(radio.disabled)return;if(e.target!==radio)radio.checked=true;modal.querySelectorAll(".supplier-candidate-row").forEach(function(x){x.classList.toggle("is-selected",x.querySelector("input").checked);});};});
+    modal.querySelectorAll(".supplier-candidate-row").forEach(function(row){
+      row.onclick=function(e){
+        const radio=row.querySelector("input");
+        if(radio.disabled)return;
+        if(e.target!==radio)radio.checked=true;
+        modal.querySelectorAll(".supplier-candidate-row").forEach(function(x){x.classList.toggle("is-selected",x.querySelector("input").checked);});
+      };
+    });
     modal.querySelectorAll("table").forEach(function(table){installResizeAutofit(table);});
     modal.classList.add("open");
   }
@@ -2627,25 +2663,29 @@
     modal.dataset.matchMode="source";
     modal.dataset.supplierItemId=supplierItemId;
     delete modal.dataset.catalogId;
+    delete modal.dataset.scopeKey;
     modal.querySelector(".spec-import-head strong").textContent="Сопоставить позицию поставщика";
-    modal.querySelector(".spec-import-head span").textContent="Выберите позицию Рабочей сводки; наиболее вероятная показана первой";
+    modal.querySelector(".spec-import-head span").textContent="Выберите строку Рабочей сводки; наиболее вероятная показана первой";
     modal.querySelector(".supplier-match-source").innerHTML=
       '<span>Позиция поставщика</span><strong>'+esc(raw.source_mark||"")+' · '+esc(raw.source_name||"")+'</strong>'+
       '<small>'+esc(raw.source_section||"")+(raw.source_group?' · '+esc(raw.source_group):'')+'</small>';
     modal.querySelector(".supplier-link-remove").classList.add("hidden");
     modal.querySelector(".supplier-match-list").innerHTML=
-      '<table class="eng-table recon-candidate-table supplier-project-candidate-table" data-table-key="supplier-source-project-match-v1">'+
-      '<thead><tr><th>Выбор</th><th>Марка проекта</th><th>Наименование</th><th>Проект, шт.</th><th>Объём за ед.</th><th>Состояние</th></tr></thead><tbody>'+
+      '<table class="eng-table recon-candidate-table supplier-project-candidate-table" data-table-key="supplier-source-project-match-v2">'+
+      '<thead><tr><th>Выбор</th><th>Марка проекта</th><th>Наименование</th><th>Зона / раздел</th><th>Проект, шт.</th><th>Объём за ед.</th><th>Состояние</th></tr></thead><tbody>'+
       ranked.map(function(c,index){
         const p=c.project;
-        const owner=(dataState.supplierPriceLinks||[]).find(function(x){return x.catalog_item_id===p.catalogItemId;});
+        const owner=(dataState.supplierPriceLinks||[]).find(function(x){
+          return x.catalog_item_id===p.catalogItemId && supplierLinkScopeKey(x,snapshot)===p.scopeKey;
+        });
         const occupied=owner&&owner.supplier_item_id!==supplierItemId;
         const disabled=occupied&&owner.link_method==="manual";
         const stateText=disabled?"Уже сопоставлено вручную":occupied?"Есть автосвязь — будет заменена":"Свободно";
         return '<tr class="supplier-candidate-row">'+
-          '<td class="center"><input type="radio" name="supplier-project-candidate" data-project-candidate="'+esc(p.catalogItemId)+'" '+(disabled?'disabled':'')+'></td>'+
+          '<td class="center"><input type="radio" name="supplier-project-candidate" data-project-candidate="'+esc(p.catalogItemId)+'" data-project-scope="'+esc(p.scopeKey)+'" '+(disabled?'disabled':'')+'></td>'+
           '<td><strong>'+esc(p.mark||"")+'</strong>'+(index===0?'<small class="recon-table-note">Предлагаем</small>':'')+'</td>'+
           '<td>'+esc(p.name||"")+'</td>'+
+          '<td class="supplier-match-section"><strong>'+esc(p.sectionName||"")+'</strong><small>'+esc(p.zone||"")+'</small></td>'+
           '<td class="num">'+fmt0(p.qty)+'</td>'+
           '<td class="num">'+(p.volume==null?'—':fmt(p.volume))+'</td>'+
           '<td>'+esc(stateText)+'</td></tr>';
