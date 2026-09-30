@@ -2452,3 +2452,20 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 .work-link-method.auto{background:#F1F3F5;color:#666A70}
 .work-link-method.manual{background:#EEF3FB;color:#365F9C}
 .action-sep{color:#B3B5BA}
+
+
+/* Work links v3 — panel geometry + material card affordance */
+.work-links-table th:nth-child(1),.work-links-table td:nth-child(1){width:42px}
+.work-links-table th:nth-child(2),.work-links-table td:nth-child(2){width:72px}
+.work-links-table th:nth-child(3),.work-links-table td:nth-child(3){width:150px}
+.work-links-table th:nth-child(4),.work-links-table td:nth-child(4){min-width:330px}
+.work-links-table th:nth-child(5),.work-links-table td:nth-child(5){width:170px}
+.work-links-table th:nth-child(6),.work-links-table td:nth-child(6){width:105px}
+.work-links-table th:nth-child(7),.work-links-table td:nth-child(7){width:112px}
+.work-links-table th:nth-child(8),.work-links-table td:nth-child(8){width:76px}
+.work-links-table th:nth-child(9),.work-links-table td:nth-child(9){width:155px}
+.work-links-table th:nth-child(10),.work-links-table td:nth-child(10){width:150px}
+.work-link-dim{white-space:nowrap;font-variant-numeric:tabular-nums}
+.work-link-area{white-space:nowrap;font-variant-numeric:tabular-nums}
+.work-link-material-name[data-material-card-open]{cursor:pointer}
+.work-link-material-name[data-material-card-open]:hover{text-decoration:underline;text-underline-offset:2px}
