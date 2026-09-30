@@ -4588,12 +4588,15 @@
       const an=Number(a.source_row_no),bn=Number(b.source_row_no);
       return an-bn;
     });
-    const projectByCatalog=new Map(supplierCheckProjectRows().map(function(x){return [x.catalogItemId,x];}));
-    const checkByCatalog=new Map();
-    projectByCatalog.forEach(function(project,catalogId){checkByCatalog.set(catalogId,supplierCheckRow(project,snapshot));});
+    const projects=supplierCheckProjectRows();
 
     function rowStatus(row){
-      if(row.catalog_item_id&&checkByCatalog.has(row.catalog_item_id)) return checkByCatalog.get(row.catalog_item_id).status;
+      if(row.catalog_item_id){
+        const scope=supplierSourceScopeKey(row);
+        const project=projects.find(function(x){return x.catalogItemId===row.catalog_item_id&&x.scopeKey===scope;})
+          || projects.find(function(x){return x.catalogItemId===row.catalog_item_id;});
+        if(project) return supplierCheckRow(project,snapshot).status;
+      }
       if(row.validation_state==="review"||row.validation_state==="needs_review") return "Требует проверки";
       return "Только у поставщика";
     }
