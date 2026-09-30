@@ -2406,3 +2406,49 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 .work-link-note{display:block;margin-top:2px;color:#3568B8;font-size:10px;font-weight:600}
 .work-link-save-state{font-size:11px;color:#6B6D73;max-width:520px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .work-link-modal .spec-import-foot{border-top:1px solid #E4E4E7}
+
+
+/* Work links v2 — work first, materials nested below */
+.work-links-table th:nth-child(1),.work-links-table td:nth-child(1){width:42px}
+.work-links-table th:nth-child(2),.work-links-table td:nth-child(2){width:72px}
+.work-links-table th:nth-child(3),.work-links-table td:nth-child(3){width:150px}
+.work-links-table th:nth-child(4),.work-links-table td:nth-child(4){min-width:360px}
+.work-links-table th:nth-child(5),.work-links-table td:nth-child(5){width:118px}
+.work-links-table th:nth-child(6),.work-links-table td:nth-child(6){width:78px}
+.work-links-table th:nth-child(7),.work-links-table td:nth-child(7){width:160px}
+.work-links-table th:nth-child(8),.work-links-table td:nth-child(8){width:150px}
+
+.work-links-table .work-link-work-row td{
+  background:#F7F8FA;
+  border-top:1px solid #DADDE2;
+}
+.work-links-table .work-link-work-name{font-weight:600;color:#3F4248}
+.work-links-table .work-link-material-child td{background:#fff;color:#4F5258}
+.work-links-table .work-link-material-child:hover td{background:#FAFAFB}
+.work-links-table .work-link-material-name{padding-left:22px!important}
+.work-links-table .work-link-material-name::before{
+  content:"↳";
+  display:inline-block;
+  width:17px;
+  margin-left:-16px;
+  color:#8A8D94;
+}
+.work-links-table .work-link-unmatched-group td{
+  background:#FFF9EF!important;
+  color:#745529;
+}
+.work-links-table .work-link-unmatched-row td{background:#FFFDF8}
+.work-link-control.over{color:#A14A34;font-weight:600}
+.work-link-control.under{color:#9A6B1F;font-weight:600}
+.work-link-method{
+  display:inline-flex;
+  align-items:center;
+  min-height:19px;
+  padding:0 5px;
+  border-radius:4px;
+  font-size:10.5px;
+  white-space:nowrap;
+}
+.work-link-method.auto{background:#F1F3F5;color:#666A70}
+.work-link-method.manual{background:#EEF3FB;color:#365F9C}
+.action-sep{color:#B3B5BA}
