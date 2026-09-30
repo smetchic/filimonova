@@ -6960,17 +6960,23 @@
   }
   syncSidebarState();
 
+  let searchRenderTimer=null;
   $("searchInput").addEventListener("input",function() {
     const key = currentViewKey();
     ui.search[key] = $("searchInput").value;
     $("globalSearch").classList.toggle("has-value",!!$("searchInput").value);
-    rerenderContent();
+    if(searchRenderTimer) clearTimeout(searchRenderTimer);
+    searchRenderTimer=setTimeout(function(){
+      searchRenderTimer=null;
+      rerenderContent();
+    },90);
   });
   $("searchClear").addEventListener("click",function() {
     const key = currentViewKey();
     ui.search[key] = "";
     $("searchInput").value = "";
     $("globalSearch").classList.remove("has-value");
+    if(searchRenderTimer){clearTimeout(searchRenderTimer);searchRenderTimer=null;}
     rerenderContent();
     $("searchInput").focus();
   });
