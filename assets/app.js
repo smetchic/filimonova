@@ -1814,6 +1814,40 @@
     return supplierMatchName(value).replace(/[оo0]/g,"0");
   }
 
+  function supplierNumericSignature(value) {
+    return (supplierMatchName(value).match(/\d+/g)||[]).join("|");
+  }
+
+  function supplierAutoAttentionNotes(project,raw) {
+    const notes=[];
+    const projectMark=supplierMatchMark(project.mark);
+    const supplierMark=supplierMatchMark(raw.source_mark);
+    const projectName=supplierMatchName(project.name);
+    const supplierName=supplierMatchName(raw.source_name);
+
+    if(projectMark!==supplierMark){
+      if(supplierCompareMark(project.mark)===supplierCompareMark(raw.source_mark)){
+        notes.push("Марка: допустимая замена символов (например О/0)");
+      }else{
+        notes.push("Марка записана иначе");
+      }
+    }
+
+    if(projectName!==supplierName){
+      if(supplierCompareName(project.name)===supplierCompareName(raw.source_name)){
+        notes.push("Наименование: допустимая замена символов (например О/0)");
+      }else if(
+        supplierNumericSignature(project.name) &&
+        supplierNumericSignature(project.name)===supplierNumericSignature(raw.source_name)
+      ){
+        notes.push("Наименование записано иначе при совпадающих числах");
+      }else{
+        notes.push("Наименование отличается");
+      }
+    }
+    return notes;
+  }
+
   function supplierColumnLabel(table,header,col) {
     const parts=[];
     for(let r=Math.max(0,header-2);r<=Math.min(table.length-1,header+2);r++){
@@ -2311,9 +2345,15 @@
     if(link&&!source) reasons.push("Нет в новой версии");
     if(!link && candidates.length>1) reasons.push("Несколько кандидатов");
     if(!link && candidates.length<=1) reasons.push("Нет подтверждённой связи");
+    const autoAttentionNotes=source&&link&&link.link_method==="auto"
+      ? supplierAutoAttentionNotes(project,raw)
+      : [];
     if(source){
       if(supplierCompareMark(project.mark)!==supplierCompareMark(raw.source_mark)) reasons.push("Марка");
       if(supplierCompareName(project.name)!==supplierCompareName(raw.source_name)) reasons.push("Наименование");
+      autoAttentionNotes.forEach(function(note){
+        if(!reasons.includes(note)) reasons.push(note);
+      });
       if(!prices.length) reasons.push("Без цены");
       if(new Set(prices.map(function(p){return String(p.effective_from)+"|"+String(p.unit_price_gross);})).size!==prices.length) reasons.push("Несколько цен");
       if(raw.qty_house!=null&&Math.abs(Number(raw.qty_house)-project.qty)>1e-6) reasons.push("Количество: "+fmt0(raw.qty_house)+" ≠ "+fmt0(project.qty));
@@ -2331,12 +2371,13 @@
     else if(manualConfirmed) status="Сопоставлено вручную";
     else if(raw.qty_house!=null&&Math.abs(Number(raw.qty_house)-project.qty)>1e-6) status="Расхождение количества";
     else if(supplierVolume!=null&&project.volume!=null&&Math.abs(supplierVolume-project.volume)>1e-6) status="Расхождение объёма";
+    else if(autoAttentionNotes.length) status="Сопоставлено с замечанием";
     return {project:project,link:link,source:source,raw:raw,prices:prices,piece:piece,perM3:perM3,status:status,reasons:reasons,candidates:candidates};
   }
 
   function supplierStatusClass(status) {
     if(status==="Сопоставлено"||status==="Сопоставлено вручную") return "ok";
-    if(status==="Изменена цена"||status.indexOf("Расхождение")===0||status==="Требует проверки") return "review";
+    if(status==="Изменена цена"||status.indexOf("Расхождение")===0||status==="Требует проверки"||status==="Сопоставлено с замечанием") return "review";
     return "none";
   }
 
