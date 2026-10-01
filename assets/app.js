@@ -5259,7 +5259,9 @@
       versions.forEach(function(v){
         const source=importForVersion(v);
         let actions='<span class="context-muted">—</span>';
-        if(v.state!=="signed"&&!v.signed_at){
+        if(v.state==="signed"||v.signed_at){
+          actions='<button class="inline-action" data-avr-unsign="'+v.id+'">Отменить подписание</button>';
+        }else{
           actions=(v.state!=="in_use"?'<button class="inline-action" data-avr-use="'+v.id+'">использовать</button>':'')+'<button class="inline-action" data-avr-sign="'+v.id+'">Отметить как подписанный</button>';
         }
         body+='<tr class="data-row"><td>'+esc(periodLabel(doc.period_month,false))+'</td><td>'+esc(doc.display_number||"—")+'</td><td>'+esc(source&&source.source_name||"—")+'</td><td class="num">'+v.version_no+'</td><td>'+dateTimeLabel(v.created_at)+'</td><td><span class="execution-status '+esc(v.state)+'">'+esc(avrStatus(v))+'</span></td><td class="registry-actions">'+actions+'</td></tr>';
@@ -6741,6 +6743,10 @@
       const ok=await executionConfirm("Подписание АВР","Версия v"+version.version_no+" станет окончательным источником месяца для журнала 6-КС и С-29.","Отметить как подписанный");
       if(!ok) return;
     }
+    if(action==="unsign"){
+      const ok=await executionConfirm("Отмена подписания АВР","Версия v"+version.version_no+" снова станет рабочей версией «Используется». Для тестирования действие временно доступно без проверки роли администратора.","Отменить подписание");
+      if(!ok) return;
+    }
     const result=await client.rpc("set_avr_version_state",{p_project_id:dataState.project.id,p_version_id:versionId,p_action:action});
     if(result.error) throw result.error;
     await refreshProjectDataSlices(["avrVersions"],dataState.project);
@@ -7135,6 +7141,7 @@
     if(importButton&&fileInput){importButton.onclick=function(){fileInput.click();};fileInput.onchange=function(){const file=fileInput.files&&fileInput.files[0];if(file)importAvrFile(file,ui.avr.registryPeriod);};}
     document.querySelectorAll("[data-avr-use]").forEach(function(btn){btn.onclick=function(){btn.disabled=true;setAvrVersionState(btn.dataset.avrUse,"use").catch(function(err){alert(err.message||err);btn.disabled=false;});};});
     document.querySelectorAll("[data-avr-sign]").forEach(function(btn){btn.onclick=function(){btn.disabled=true;setAvrVersionState(btn.dataset.avrSign,"sign").catch(function(err){alert(err.message||err);btn.disabled=false;});};});
+    document.querySelectorAll("[data-avr-unsign]").forEach(function(btn){btn.onclick=function(){btn.disabled=true;setAvrVersionState(btn.dataset.avrUnsign,"unsign").catch(function(err){alert(err.message||err);btn.disabled=false;});};});
     const s29=document.querySelector("[data-s29-period]");
     if(s29) s29.onchange=function(){ui.s29.period=s29.value;localStorage.setItem("filimonova.s29.period",s29.value);renderPage("s29",0);};
     const accountingPeriod=document.querySelector("[data-accounting-period]");
