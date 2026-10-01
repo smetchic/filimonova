@@ -306,7 +306,7 @@
       fetchAllRows("suppliers","id,name",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("name");}),
       fetchAllRows("supplier_items","id,supplier_id,catalog_item_id,source_mark,source_name,source_section,source_key,unit_volume_m3,link_method,link_state,source_import_row_id",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("source_mark");}),
       fetchAllRows("supplier_prices_current","id,supplier_item_id,effective_from,price_basis,unit_price_gross,unit_volume_snapshot_m3,source_import_row_id,source_imported_at",function(q){return q.eq("project_id",project.id).order("effective_from");}),
-      fetchAllRows("supply_documents","id,supplier_id,document_type,receipt_date,ttn_number,status,note,created_at",function(q){return q.eq("project_id",project.id).order("receipt_date");}),
+      fetchAllRows("supply_documents","id,supplier_id,document_type,receipt_date,ttn_number,status,note,source_file_name,source_file_path,created_at,updated_at",function(q){return q.eq("project_id",project.id).order("receipt_date");}),
       fetchAllRows("supply_document_lines","id,document_id,sort_order,source_mark,source_name,catalog_item_id,supplier_item_id,qty_pieces,qty_m3,unit_volume_snapshot_m3,price_basis,unit_price,amount_net,vat_percent,vat_amount,amount_gross,match_state",function(q){return q.eq("project_id",project.id).order("sort_order");}),
       fetchAllRows("supply_line_allocations","id,white_line_id,green_line_id,allocated_pieces,allocated_m3",function(q){return q.eq("project_id",project.id);}),
       fetchAllRows("montage_events","id,specification_row_id,level_code,event_date,event_type,quantity,note",function(q){return q.eq("project_id",project.id).order("event_date");}),
@@ -423,6 +423,9 @@
       case "suppliers": return fetchAllRows("suppliers","id,name",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("name");});
       case "supplierItems": return fetchAllRows("supplier_items","id,supplier_id,catalog_item_id,source_mark,source_name,source_section,source_key,unit_volume_m3,link_method,link_state,source_import_row_id",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("source_mark");});
       case "supplierPrices": return fetchAllRows("supplier_prices_current","id,supplier_item_id,effective_from,price_basis,unit_price_gross,unit_volume_snapshot_m3,source_import_row_id,source_imported_at",function(q){return q.eq("project_id",project.id).order("effective_from");});
+      case "supplyDocuments": return fetchAllRows("supply_documents","id,supplier_id,document_type,receipt_date,ttn_number,status,note,source_file_name,source_file_path,created_at,updated_at",function(q){return q.eq("project_id",project.id).order("receipt_date");});
+      case "supplyDocumentLines": return fetchAllRows("supply_document_lines","id,document_id,sort_order,source_mark,source_name,catalog_item_id,supplier_item_id,qty_pieces,qty_m3,unit_volume_snapshot_m3,price_basis,unit_price,amount_net,vat_percent,vat_amount,amount_gross,match_state",function(q){return q.eq("project_id",project.id).order("sort_order");});
+      case "supplyLineAllocations": return fetchAllRows("supply_line_allocations","id,white_line_id,green_line_id,allocated_pieces,allocated_m3",function(q){return q.eq("project_id",project.id);});
       case "estimateWorkLinks": return fetchAllRows("estimate_work_links","id,material_row_id,work_row_id,link_method",function(q){return q.eq("project_id",project.id);});
       case "montageEvents": return fetchAllRows("montage_events","id,specification_row_id,level_code,event_date,event_type,quantity,note,created_at,updated_at",function(q){return q.eq("project_id",project.id).order("event_date").order("created_at");});
       case "gprPlans": return fetchAllRows("gpr_plans","id,name,status,start_month,end_month,created_at,updated_at",function(q){return q.eq("project_id",project.id).order("created_at");});
@@ -3576,7 +3579,7 @@
       return '<span class="context-caption">FIFO: сначала погашается экономия предыдущих месяцев</span>';
     }
     if (pageKey === "supply") {
-      if (tab === 1) return '<span class="context-caption">Документы поставки</span><span>Белые ТТН фиксируют фактическое поступление сразу; зелёные ТТН документально подтверждают его.</span><span class="spacer"></span><span class="context-muted">Накладные будут подключены к данным поставки</span>';
+      if (tab === 1) return '<span class="context-caption">Документы поставки</span><span class="context-muted">Белая ТТН — факт поступления · зелёная ТТН — документальное подтверждение</span><span class="spacer"></span><button class="context-link" data-supply-doc-add type="button">+ Добавить накладную</button>';
       if (tab === 2) return '<span class="context-caption">Прайс поставщика</span><span>Исходный порядок и данные поставщика · сверка с Рабочей сводкой</span><span class="spacer"></span><button class="context-link" data-supplier-check-open type="button">Проверить прайс</button><button class="context-link" data-supplier-import-open type="button">Импорт прайса поставщика</button>';
       return '<span class="context-muted">Данные по всему объекту</span>';
     }
@@ -5070,9 +5073,38 @@
     $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table supply-table" data-table-key="supply-summary">' + head + '<tbody>' + body + '</tbody></table></div></div>';
   }
 
+  function supplyDateLabel(value) {
+    const s=String(value||"").slice(0,10);
+    if(!s) return "—";
+    const p=s.split("-");
+    return p.length===3 ? p[2]+"."+p[1]+"."+p[0] : s;
+  }
+
+  function supplyDocumentTypeLabel(type) {
+    return type==="green" ? "Зелёная ТТН" : "Белая ТТН";
+  }
+
+  function supplyDocumentStateLabel(doc) {
+    if(doc.status==="cancelled") return "Отменена";
+    if(doc.status==="draft") return "Черновик";
+    return doc.document_type==="green" ? "Подтверждение" : "Факт поступления";
+  }
+
   function renderSupplyDocuments() {
     $("workArea").className = "work-area table-work";
-    let docs=(dataState.supplyDocuments||[]).filter(function(d){return passesSearch([d.receipt_date,d.document_type,d.ttn_number,d.status]);});
+    let docs=(dataState.supplyDocuments||[]).slice().sort(function(a,b){
+      return String(b.receipt_date||"").localeCompare(String(a.receipt_date||"")) ||
+        String(b.created_at||"").localeCompare(String(a.created_at||""));
+    }).filter(function(d){
+      return passesSearch([d.receipt_date,supplyDocumentTypeLabel(d.document_type),d.ttn_number,d.source_file_name,supplyDocumentStateLabel(d)]);
+    }).filter(function(d){
+      return rowPassesColumnFilters({
+        date:supplyDateLabel(d.receipt_date),
+        type:supplyDocumentTypeLabel(d.document_type),
+        ttn:d.ttn_number||""
+      });
+    });
+
     let body=docs.map(function(d){
       const lines=(dataState.supplyDocumentLines||[]).filter(function(x){return x.document_id===d.id;});
       const pcs=lines.reduce(function(a,x){return a+Number(x.qty_pieces||0);},0);
@@ -5080,14 +5112,23 @@
       const net=lines.reduce(function(a,x){return a+Number(x.amount_net||0);},0);
       const vat=lines.reduce(function(a,x){return a+Number(x.vat_amount||0);},0);
       const gross=lines.reduce(function(a,x){return a+Number(x.amount_gross||0);},0);
-      return '<tr class="data-row">'+
-        filterCell("date",d.receipt_date,esc(d.receipt_date||""),"")+
-        filterCell("type",d.document_type,esc(d.document_type||""),"")+
-        filterCell("ttn",d.ttn_number,esc(d.ttn_number||""),"")+
-        '<td>—</td><td class="num">'+fmt0(lines.length)+'</td><td class="num">'+fmt(pcs)+'</td><td class="num">'+fmt(m3)+'</td>'+
-        '<td class="num">'+money(net)+'</td><td class="num">'+money(vat)+'</td><td class="num">'+money(gross)+'</td><td>'+esc(d.status||"")+'</td></tr>';
+      const review=lines.filter(function(x){return x.match_state==="review"||x.match_state==="unmatched";}).length;
+      const state=supplyDocumentStateLabel(d)+(review?" · проверить "+review:"");
+      return '<tr class="data-row supply-document-row" data-supply-doc-id="'+esc(d.id)+'">'+
+        filterCell("date",supplyDateLabel(d.receipt_date),esc(supplyDateLabel(d.receipt_date)),"")+
+        filterCell("type",supplyDocumentTypeLabel(d.document_type),esc(supplyDocumentTypeLabel(d.document_type)),"")+
+        filterCell("ttn",d.ttn_number||"",esc(d.ttn_number||"—"),"")+
+        '<td class="supply-file-cell">'+esc(d.source_file_name||"—")+'</td>'+
+        '<td class="num">'+exFmt0(lines.length)+'</td>'+
+        '<td class="num">'+(pcs?exFmt(pcs):"")+'</td>'+
+        '<td class="num">'+(m3?exFmt(m3):"")+'</td>'+
+        '<td class="num">'+(net?exMoney(net):"")+'</td>'+
+        '<td class="num">'+(vat?exMoney(vat):"")+'</td>'+
+        '<td class="num">'+(gross?exMoney(gross):"")+'</td>'+
+        '<td class="status-cell"><span class="supply-doc-state '+esc(d.document_type)+'">'+esc(state)+'</span></td></tr>';
     }).join("");
-    if(!body) body=tableMessage("Накладных пока нет. Фактические поступления не подменяются тестовыми документами.",11);
+
+    if(!body) body=tableMessage("Накладных пока нет. Добавьте фактический документ поставки.",11);
     const head='<thead><tr>'+
       '<th class="filterable-head">'+filterHeader("Дата поступления","date")+'</th>'+
       '<th class="filterable-head">'+filterHeader("Тип","type")+'</th>'+
@@ -5096,6 +5137,14 @@
     $("workArea").innerHTML =
       '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table supply-doc-table" data-table-key="supply-documents">'+head+
       '<tbody>'+body+'</tbody></table></div></div>';
+
+    document.querySelectorAll("[data-supply-doc-id]").forEach(function(row){
+      row.ondblclick=function(e){
+        e.preventDefault();
+        const doc=(dataState.supplyDocuments||[]).find(function(x){return x.id===row.dataset.supplyDocId;});
+        if(doc) openSupplyDocumentEditor(doc);
+      };
+    });
   }
 
   function supplierApplicablePrice(prices) {
@@ -7581,6 +7630,8 @@
   }
 
   function wireContextControls() {
+    const supplyDocAdd=document.querySelector("[data-supply-doc-add]");
+    if(supplyDocAdd) supplyDocAdd.onclick=function(){openSupplyDocumentEditor(null);};
     const supplierImport=document.querySelector("[data-supplier-import-open]");
     if(supplierImport) supplierImport.onclick=openSupplierImportModal;
     const supplierCheck=document.querySelector("[data-supplier-check-open]");
