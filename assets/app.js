@@ -5211,7 +5211,7 @@
   function monthSelectHtml(value,attr,includeAll) {
     let html=includeAll?'<option value="all"'+(value==="all"?' selected':'')+'>Весь период</option>':"";
     executionPeriods().forEach(function(key){html+='<option value="'+key+'"'+(key===value?' selected':'')+'>'+esc(periodLabel(key,false))+'</option>';});
-    return '<select class="execution-select" '+attr+'>'+html+'</select>';
+    return '<select class="execution-select execution-period-select" '+attr+'>'+html+'</select>';
   }
 
   function versionsForDocument(documentId) {
