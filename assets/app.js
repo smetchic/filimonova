@@ -6189,13 +6189,18 @@
     if(trigger) trigger.disabled=true;
     try{
       if(autoToRemove.length){
-        const result=await client.from("estimate_work_links").delete().in("id",autoToRemove.map(function(x){return x.id;}));
-        if(result.error) throw result.error;
+        const removeIds=autoToRemove.map(function(x){return x.id;});
+        const deleteBatchSize=80;
+        for(let i=0;i<removeIds.length;i+=deleteBatchSize){
+          const result=await client.from("estimate_work_links").delete().in("id",removeIds.slice(i,i+deleteBatchSize));
+          if(result.error) throw result.error;
+        }
       }
       let inserted=[];
       if(candidates.length){
-        for(let i=0;i<candidates.length;i+=500){
-          const result=await client.from("estimate_work_links").insert(candidates.slice(i,i+500)).select("id,material_row_id,work_row_id,link_method");
+        const insertBatchSize=200;
+        for(let i=0;i<candidates.length;i+=insertBatchSize){
+          const result=await client.from("estimate_work_links").insert(candidates.slice(i,i+insertBatchSize)).select("id,material_row_id,work_row_id,link_method");
           if(result.error) throw result.error;
           inserted=inserted.concat(result.data||[]);
         }
@@ -6206,7 +6211,9 @@
       renderPage("links",0);
     }catch(err){
       console.error(err);
-      alert("Автосопоставление не выполнено: "+(err&&err.message?err.message:String(err)));
+      const details=err&&err.details?(" · "+err.details):"";
+      const hint=err&&err.hint?(" · "+err.hint):"";
+      alert("Автосопоставление не выполнено: "+(err&&err.message?err.message:String(err))+details+hint);
       if(trigger) trigger.disabled=false;
     }
   }
