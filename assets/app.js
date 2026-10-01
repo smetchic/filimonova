@@ -1255,25 +1255,9 @@
     )).map(Number);
     const volumePerPiece=supplierVolumes.length===1?supplierVolumes[0]:0;
     const projectM3=st.qty*volumePerPiece;
-    const supplyDocsById=new Map((dataState.supplyDocuments||[]).map(function(d){return [d.id,d];}));
-    const greenLineIds=new Set((dataState.supplyLineAllocations||[]).map(function(a){return a.green_line_id;}).filter(Boolean));
-    const whiteLineIds=new Set((dataState.supplyLineAllocations||[]).map(function(a){return a.white_line_id;}).filter(Boolean));
-    function isSupplyFactLine(line){
-      if(!line || !item.id || line.catalog_item_id!==item.id) return false;
-      if(greenLineIds.has(line.id)) return false;
-      if(whiteLineIds.has(line.id)) return true;
-      const doc=supplyDocsById.get(line.document_id)||{};
-      const type=importNorm(doc.document_type||"");
-      const status=importNorm(doc.status||"posted");
-      if(/чернов|draft|отмен|cancel/.test(status)) return false;
-      if(/зелен|green/.test(type)) return false;
-      // Белая ТТН фиксирует поступление. Для старых документов без явного типа
-      // считаем фактом любой проведённый документ, который не является зелёным подтверждением.
-      return true;
-    }
-    const suppliedLines=(dataState.supplyDocumentLines||[]).filter(isSupplyFactLine);
-    const suppliedQty=suppliedLines.reduce(function(a,x){return a+Number(x.qty_pieces||0);},0);
-    const suppliedM3=suppliedLines.reduce(function(a,x){return a+Number(x.qty_m3||0);},0);
+    const itemSupplyFact=item.id?(supplyFactState().byCatalog.get(item.id)||{pieces:0,m3:0}):{pieces:0,m3:0};
+    const suppliedQty=Number(itemSupplyFact.pieces||0);
+    const suppliedM3=Number(itemSupplyFact.m3||0);
     const mountedEvents=(dataState.montageEvents||[]).filter(function(x){
       return st.rows.some(function(sr){return sr.id===x.specification_row_id;}) && x.event_type==="fact";
     });
@@ -5012,65 +4996,171 @@
     wireGprFormulaBar();
   }
 
+  function supplyFactState() {
+    const docs=new Map((dataState.supplyDocuments||[]).map(function(d){return [d.id,d];}));
+    const allocatedByGreen=new Map();
+    (dataState.supplyLineAllocations||[]).forEach(function(a){
+      const key=a.green_line_id;
+      if(!allocatedByGreen.has(key)) allocatedByGreen.set(key,{pieces:0,m3:0});
+      const v=allocatedByGreen.get(key);
+      v.pieces+=Number(a.allocated_pieces||0);
+      v.m3+=Number(a.allocated_m3||0);
+    });
+    const byCatalog=new Map(),unmatched=[];
+    (dataState.supplyDocumentLines||[]).forEach(function(line){
+      const doc=docs.get(line.document_id);
+      if(!doc||doc.status!=="posted") return;
+      let pieces=Number(line.qty_pieces||0),m3=Number(line.qty_m3||0);
+      if(doc.document_type==="green"){
+        const a=allocatedByGreen.get(line.id)||{pieces:0,m3:0};
+        pieces=Math.max(0,pieces-a.pieces);
+        m3=Math.max(0,m3-a.m3);
+      }
+      if(pieces<=0&&m3<=0) return;
+      const fact={
+        line:line,doc:doc,pieces:pieces,m3:m3,
+        mark:line.source_mark||"",name:line.source_name||""
+      };
+      if(!line.catalog_item_id){unmatched.push(fact);return;}
+      if(!byCatalog.has(line.catalog_item_id)) byCatalog.set(line.catalog_item_id,{pieces:0,m3:0});
+      const v=byCatalog.get(line.catalog_item_id);
+      v.pieces+=pieces;v.m3+=m3;
+    });
+    return {byCatalog:byCatalog,unmatched:unmatched};
+  }
+
+  function supplyMountedByCatalog() {
+    const specById=new Map((dataState.specRows||[]).map(function(r){return [r.id,r];}));
+    const map=new Map();
+    (dataState.montageEvents||[]).forEach(function(event){
+      if(event.event_type!=="fact") return;
+      const sr=specById.get(event.specification_row_id);
+      if(!sr||!sr.catalog_item_id) return;
+      map.set(sr.catalog_item_id,Number(map.get(sr.catalog_item_id)||0)+Number(event.quantity||0));
+    });
+    return map;
+  }
+
   function renderSupplySummary() {
-    let rows = buildWorkingSummaryRows().filter(function(r){ return passesSearch([r.mark,r.name]); })
+    const fact=supplyFactState();
+    const mountedByCatalog=supplyMountedByCatalog();
+    let rows=buildWorkingSummaryRows().filter(function(r){return passesSearch([r.mark,r.name]);})
       .filter(function(r){return rowPassesColumnFilters({mark:r.mark,name:r.name});});
     rows=sortRows(rows,{mark:function(r){return r.mark;},name:function(r){return r.name;}});
-    ui.currentGroupKeys = [];
-    let body = "";
+    ui.currentGroupKeys=[];
+    let body="";
 
-    function supplyVector(list) {
-      let qty = 0, vol = 0;
-      list.forEach(function(r) {
-        const q = Number(r.bySection["Секция 1"]||0)+Number(r.bySection["Секция 2"]||0);
-        qty += q; vol += q*Number(r.volumePerPiece||0);
+    function vectorForRow(r){
+      const projectPieces=Number(r.bySection["Секция 1"]||0)+Number(r.bySection["Секция 2"]||0);
+      const projectM3=projectPieces*Number(r.volumePerPiece||0);
+      const delivered=fact.byCatalog.get(r.catalogItemId)||{pieces:0,m3:0};
+      const mountedPieces=Number(mountedByCatalog.get(r.catalogItemId)||0);
+      const mountedM3=mountedPieces*Number(r.volumePerPiece||0);
+      const onObjectPieces=Math.max(0,Number(delivered.pieces||0)-mountedPieces);
+      const onObjectM3=Math.max(0,Number(delivered.m3||0)-mountedM3);
+      const remainPieces=Math.max(0,projectPieces-Number(delivered.pieces||0));
+      const remainM3=Math.max(0,projectM3-Number(delivered.m3||0));
+      let status="";
+      if(Number(delivered.pieces||0)<=0&&Number(delivered.m3||0)<=0) status="Не поставлялось";
+      else if(Number(delivered.pieces||0)>projectPieces+1e-9) status="Перепоставка";
+      else if(Number(delivered.pieces||0)<projectPieces-1e-9) status="Частично";
+      return {
+        projectPieces:projectPieces,projectM3:projectM3,
+        deliveredPieces:Number(delivered.pieces||0),deliveredM3:Number(delivered.m3||0),
+        onObjectPieces:onObjectPieces,onObjectM3:onObjectM3,
+        mountedPieces:mountedPieces,mountedM3:mountedM3,
+        remainPieces:remainPieces,remainM3:remainM3,status:status
+      };
+    }
+
+    function supplyVector(list){
+      return list.reduce(function(acc,r){
+        const v=vectorForRow(r);
+        Object.keys(acc).forEach(function(k){acc[k]+=Number(v[k]||0);});
+        return acc;
+      },{
+        projectPieces:0,projectM3:0,deliveredPieces:0,deliveredM3:0,
+        onObjectPieces:0,onObjectM3:0,mountedPieces:0,mountedM3:0,remainPieces:0,remainM3:0
       });
-      return {qty:qty,vol:vol};
-    }
-    function group(label,list,key,depth) {
-      registerGroup(key);
-      const v = supplyVector(list);
-      return '<tr class="group-row group-toggle" data-group-key="'+esc(key)+'">' +
-        '<td colspan="3" class="group-title spec-group-title" style="padding-left:'+(8+depth*14)+'px"><span class="group-arrow">'+groupArrow(key)+'</span>'+esc(label)+'</td>' +
-        '<td class="num">'+fmt0(v.qty)+'</td><td class="num">'+fmt(v.vol)+'</td>' +
-        '<td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">0</td>' +
-        '<td class="num">0</td><td class="num">0</td><td class="num">'+fmt0(v.qty)+'</td><td class="num">'+fmt(v.vol)+'</td><td></td></tr>';
     }
 
-    if (!rows.length) body = tableMessage("Нет строк по текущему фильтру.",14);
-    else {
-      const root = "supply:root";
-      body += group("Всего по дому",rows,root,0);
-      if (!ui.collapsed.has(root)) {
-        ["Цоколь","Выше 0.000"].forEach(function(zone) {
-          const zr = rows.filter(function(r){return r.zone===zone;});
-          if (!zr.length) return;
-          const zk = "supply:zone:"+zone;
-          body += group(zone,zr,zk,1);
-          if (ui.collapsed.has(zk)) return;
-          Array.from(new Set(zr.map(function(r){return r.sectionName;}))).forEach(function(name) {
-            const sr = zr.filter(function(r){return r.sectionName===name;});
-            const sk = "supply:section:"+zone+":"+name;
-            body += group(name,sr,sk,2);
-            if (ui.collapsed.has(sk) || ui.collapseLeaves) return;
-            sr.forEach(function(r,index) {
-              const q = Number(r.bySection["Секция 1"]||0)+Number(r.bySection["Секция 2"]||0),v=q*Number(r.volumePerPiece||0);
-              body += '<tr class="data-row" data-material-id="'+esc(r.catalogItemId||"")+'"><td class="sticky-1 center">'+(index+1)+'</td>'+
-                filterCell("mark",r.mark,esc(r.mark),"sticky-2")+filterCell("name",r.name,esc(r.name),"sticky-3")+
-                '<td class="num">'+fmt0(q)+'</td><td class="num">'+fmt(v)+'</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">'+fmt0(q)+'</td><td class="num">'+fmt(v)+'</td><td class="status-cell">Не поставлялось</td></tr>';
-            });
+    function group(label,list,key,depth){
+      registerGroup(key);
+      const v=supplyVector(list);
+      return '<tr class="group-row group-toggle" data-group-key="'+esc(key)+'">'+
+        '<td colspan="3" class="group-title spec-group-title" style="padding-left:'+(8+depth*14)+'px"><span class="group-arrow">'+groupArrow(key)+'</span>'+esc(label)+'</td>'+
+        '<td class="num">'+exFmt0(v.projectPieces)+'</td><td class="num">'+exFmt(v.projectM3)+'</td>'+
+        '<td class="num">'+exFmt0(v.deliveredPieces)+'</td><td class="num">'+exFmt(v.deliveredM3)+'</td>'+
+        '<td class="num">'+exFmt0(v.onObjectPieces)+'</td><td class="num">'+exFmt(v.onObjectM3)+'</td>'+
+        '<td class="num">'+exFmt0(v.mountedPieces)+'</td><td class="num">'+exFmt(v.mountedM3)+'</td>'+
+        '<td class="num">'+exFmt0(v.remainPieces)+'</td><td class="num">'+exFmt(v.remainM3)+'</td><td></td></tr>';
+    }
+
+    function leaf(r,index){
+      const v=vectorForRow(r);
+      return '<tr class="data-row" data-material-id="'+esc(r.catalogItemId||"")+'"><td class="sticky-1 center">'+(index+1)+'</td>'+
+        filterCell("mark",r.mark,esc(r.mark),"sticky-2")+filterCell("name",r.name,esc(r.name),"sticky-3")+
+        '<td class="num">'+exFmt0(v.projectPieces)+'</td><td class="num">'+exFmt(v.projectM3)+'</td>'+
+        '<td class="num">'+(v.deliveredPieces?exFmt(v.deliveredPieces):"")+'</td><td class="num">'+(v.deliveredM3?exFmt(v.deliveredM3):"")+'</td>'+
+        '<td class="num">'+(v.onObjectPieces?exFmt(v.onObjectPieces):"")+'</td><td class="num">'+(v.onObjectM3?exFmt(v.onObjectM3):"")+'</td>'+
+        '<td class="num">'+(v.mountedPieces?exFmt(v.mountedPieces):"")+'</td><td class="num">'+(v.mountedM3?exFmt(v.mountedM3):"")+'</td>'+
+        '<td class="num">'+exFmt(v.remainPieces)+'</td><td class="num">'+exFmt(v.remainM3)+'</td>'+
+        '<td class="status-cell">'+esc(v.status)+'</td></tr>';
+    }
+
+    if(rows.length){
+      const root="supply:root";
+      body+=group("Всего по дому",rows,root,0);
+      if(!ui.collapsed.has(root)){
+        ["Цоколь","Выше 0.000"].forEach(function(zone){
+          const zr=rows.filter(function(r){return r.zone===zone;});
+          if(!zr.length) return;
+          const zk="supply:zone:"+zone;
+          body+=group(zone,zr,zk,1);
+          if(ui.collapsed.has(zk)) return;
+          Array.from(new Set(zr.map(function(r){return r.sectionName;}))).forEach(function(name){
+            const sr=zr.filter(function(r){return r.sectionName===name;});
+            const sk="supply:section:"+zone+":"+name;
+            body+=group(name,sr,sk,2);
+            if(ui.collapsed.has(sk)||ui.collapseLeaves) return;
+            sr.forEach(function(r,index){body+=leaf(r,index);});
           });
+        });
+        const stairs=rows.filter(function(r){return r.zone==="Лестницы"||r.sectionName==="Элементы лестниц";});
+        if(stairs.length){
+          const sk="supply:stairs";
+          body+=group("Элементы лестниц",stairs,sk,1);
+          if(!ui.collapsed.has(sk)&&!ui.collapseLeaves) stairs.forEach(function(r,index){body+=leaf(r,index);});
+        }
+      }
+    }
+
+    const unmatched=fact.unmatched.filter(function(x){return passesSearch([x.mark,x.name]);});
+    if(unmatched.length){
+      const key="supply:unmatched";
+      registerGroup(key);
+      const totals=unmatched.reduce(function(a,x){a.pieces+=x.pieces;a.m3+=x.m3;return a;},{pieces:0,m3:0});
+      body+='<tr class="group-row group-toggle" data-group-key="'+key+'"><td colspan="3" class="group-title spec-group-title"><span class="group-arrow">'+groupArrow(key)+'</span>Не сопоставлено</td>'+
+        '<td></td><td></td><td class="num">'+exFmt(totals.pieces)+'</td><td class="num">'+exFmt(totals.m3)+'</td><td class="num">'+exFmt(totals.pieces)+'</td><td class="num">'+exFmt(totals.m3)+'</td><td></td><td></td><td></td><td></td><td>Не сопоставлено</td></tr>';
+      if(!ui.collapsed.has(key)&&!ui.collapseLeaves){
+        unmatched.forEach(function(x,index){
+          body+='<tr class="data-row" data-material-mark="'+esc(x.mark)+'" data-material-name="'+esc(x.name)+'"><td class="sticky-1 center">'+(index+1)+'</td>'+
+            filterCell("mark",x.mark,esc(x.mark||"—"),"sticky-2")+filterCell("name",x.name,esc(x.name||"—"),"sticky-3")+
+            '<td></td><td></td><td class="num">'+exFmt(x.pieces)+'</td><td class="num">'+exFmt(x.m3)+'</td>'+
+            '<td class="num">'+exFmt(x.pieces)+'</td><td class="num">'+exFmt(x.m3)+'</td><td></td><td></td><td></td><td></td><td>Не сопоставлено</td></tr>';
         });
       }
     }
 
-    const head = '<thead><tr><th class="sticky-1" rowspan="2">№</th>'+
+    if(!body) body=tableMessage("Нет строк по текущему фильтру.",14);
+
+    const head='<thead><tr><th class="sticky-1" rowspan="2">№</th>'+
       '<th class="sticky-2 filterable-head" rowspan="2">'+filterHeader("Марка","mark")+'</th>'+
       '<th class="sticky-3 filterable-head" rowspan="2">'+filterHeader("Наименование","name")+'</th>'+
       '<th colspan="2">По проекту</th><th colspan="2">Поставлено</th><th colspan="2">На объекте</th><th colspan="2">Смонтировано</th><th colspan="2">Осталось поставить</th><th rowspan="2">Статус</th></tr>'+
       '<tr><th>шт.</th><th>м³</th><th>шт.</th><th>м³</th><th>шт.</th><th>м³</th><th>шт.</th><th>м³</th><th>шт.</th><th>м³</th></tr></thead>';
-    $("workArea").className = "work-area table-work";
-    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table supply-table" data-table-key="supply-summary">' + head + '<tbody>' + body + '</tbody></table></div></div>';
+    $("workArea").className="work-area table-work";
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table supply-table" data-table-key="supply-summary">'+head+'<tbody>'+body+'</tbody></table></div></div>';
   }
 
   function supplyDateLabel(value) {
@@ -5713,20 +5803,9 @@
   }
 
   function montageSupplyFactMap() {
-    const docs=new Map((dataState.supplyDocuments||[]).map(function(d){return [d.id,d];}));
-    const greenIds=new Set((dataState.supplyLineAllocations||[]).map(function(a){return a.green_line_id;}).filter(Boolean));
-    const whiteIds=new Set((dataState.supplyLineAllocations||[]).map(function(a){return a.white_line_id;}).filter(Boolean));
+    const fact=supplyFactState();
     const result=new Map();
-    (dataState.supplyDocumentLines||[]).forEach(function(line){
-      if(!line.catalog_item_id) return;
-      const doc=docs.get(line.document_id)||{};
-      const status=norm(doc.status||"posted");
-      const type=norm(doc.document_type||"");
-      if(/draft|чернов|cancel|отмен/.test(status)) return;
-      if(greenIds.has(line.id)) return;
-      if(!whiteIds.has(line.id) && /green|зелен/.test(type)) return;
-      result.set(line.catalog_item_id,Number(result.get(line.catalog_item_id)||0)+Number(line.qty_pieces||0));
-    });
+    fact.byCatalog.forEach(function(v,id){result.set(id,Number(v.pieces||0));});
     return result;
   }
 
