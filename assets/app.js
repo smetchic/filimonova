@@ -5400,10 +5400,13 @@
     widthSample(0,"Р");widthSample(0,"М");
 
     function rowFacts(rows){
+      // Итоги по смете и разделам в 6-КС считаем только по материальным позициям (М).
+      // Работы (Р) остаются отдельными строками журнала, но в агрегаты не входят.
+      const materialOnly=(rows||[]).filter(function(r){return r.row_type==="material";});
       const monthTotals=sources.map(function(x){
-        return x.version?rows.reduce(function(sum,r){return sum+(factByVersionRow.get(x.version.id+":"+r.id)||0);},0):0;
+        return x.version?materialOnly.reduce(function(sum,r){return sum+(factByVersionRow.get(x.version.id+":"+r.id)||0);},0):0;
       });
-      const estimateTotal=rows.reduce(function(sum,r){return sum+Number(r.quantity||0);},0);
+      const estimateTotal=materialOnly.reduce(function(sum,r){return sum+Number(r.quantity||0);},0);
       const accrued=monthTotals.reduce(function(sum,v){return sum+v;},0);
       return {estimateTotal:estimateTotal,monthTotals:monthTotals,accrued:accrued,rest:estimateTotal-accrued};
     }
