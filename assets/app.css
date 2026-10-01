@@ -2646,3 +2646,16 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   #accountingLinkModal .recon-source-grid{grid-template-columns:1fr}
   #accountingLinkModal .accounting-col-section{display:none}
 }
+
+
+/* Execution KPI rows always occupy the full available page width. */
+.execution-work{
+  align-items:stretch!important;
+  width:100%!important;
+}
+.execution-work .execution-metrics,
+.execution-work .execution-table{
+  width:100%!important;
+  min-width:0!important;
+  align-self:stretch!important;
+}
