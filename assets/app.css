@@ -3115,3 +3115,121 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 .ttn-recon th{background:#FAFAFB;color:#666A73;font-weight:500}
 .ttn-recon .num{text-align:right}
 .ttn-recon-empty{padding:8px 10px 11px;color:var(--muted);font-size:11px}
+
+
+/* Supply → Documents: canonical context row and registry. */
+.supply-doc-context-row{
+  gap:10px!important;
+  overflow:hidden!important;
+}
+.supply-doc-context-row .supply-doc-context-note{
+  flex:0 1 auto;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.supply-doc-context-row .spacer{
+  min-width:8px;
+}
+.supply-doc-context-row .supply-doc-add-link{
+  flex:0 0 auto;
+  color:#2563EB;
+  font-weight:500;
+  white-space:nowrap;
+}
+.supply-doc-context-row .supply-doc-edit-hint{
+  flex:0 0 auto;
+  white-space:nowrap;
+}
+.supply-doc-work .engineering-shell,
+.supply-doc-work .engineering-scroll{
+  padding-top:0!important;
+  margin-top:0!important;
+}
+.supply-doc-table{
+  width:100%!important;
+  min-width:1180px;
+  margin-top:0!important;
+}
+.supply-doc-table .supply-file-cell{
+  max-width:none;
+}
+.supply-file-link{
+  display:block;
+  max-width:100%;
+  padding:0!important;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:#2563EB!important;
+  text-align:left;
+}
+.supply-doc-row{
+  cursor:default;
+}
+.supply-doc-state{
+  display:inline-flex;
+  align-items:center;
+  min-height:19px;
+  padding:0 6px;
+  border:1px solid #D7D9DC;
+  border-radius:4px;
+  font-size:10.5px;
+  line-height:17px;
+  white-space:nowrap;
+  background:#F7F7F8;
+  color:#62656B;
+}
+.supply-doc-state.ok{
+  color:#356244;
+  border-color:#C9DDD0;
+  background:#EFF7F1;
+}
+.supply-doc-state.partial{
+  color:#7A5B22;
+  border-color:#E6D8B6;
+  background:#FFF8E8;
+}
+.supply-doc-state.waiting,
+.supply-doc-state.draft{
+  color:#62656B;
+  border-color:#D9DADD;
+  background:#F5F5F6;
+}
+.supply-doc-state.issue{
+  color:#9B3A32;
+  border-color:#E7C7C4;
+  background:#FFF2F1;
+}
+.supply-doc-state.cancelled{
+  color:#8A8D94;
+  border-color:#DDDDE0;
+  background:#FAFAFA;
+  text-decoration:line-through;
+}
+
+/* Unified TTN editor: compact approved leaf columns, source volume remains internal data. */
+.ttn-inline-note{
+  flex:0 0 auto;
+  min-height:34px;
+  display:flex;
+  align-items:center;
+  padding:0 10px;
+  border-top:1px solid #E4E4E7;
+  background:#FAFAFB;
+  color:#71717A;
+  font-size:10.5px;
+}
+.ttn-grid th:nth-child(1),
+.ttn-grid td:nth-child(1){min-width:125px}
+.ttn-grid th:nth-child(2),
+.ttn-grid td:nth-child(2){min-width:245px}
+.ttn-recon table{
+  table-layout:fixed;
+}
+.ttn-recon th:nth-child(1){width:145px}
+.ttn-recon th:nth-child(2){width:150px}
+
+@media(max-width:1100px){
+  .supply-doc-context-row .supply-doc-edit-hint{display:none}
+}
