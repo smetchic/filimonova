@@ -2693,3 +2693,33 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   height:18px;
   padding:0 4px;
 }
+
+
+/* Period selectors are inline text controls, not boxed buttons. */
+.execution-period-select{
+  field-sizing:content;
+  width:auto;
+  min-width:0;
+  max-width:190px;
+  height:24px;
+  border:0!important;
+  border-radius:0!important;
+  background-color:transparent!important;
+  padding:0 18px 0 0!important;
+  color:#30313A;
+  font-weight:500;
+  text-decoration:underline;
+  text-decoration-thickness:1px;
+  text-underline-offset:3px;
+  cursor:pointer;
+  box-shadow:none!important;
+  outline:none;
+}
+.execution-period-select:hover{
+  color:#2563EB;
+}
+.execution-period-select:focus,
+.execution-period-select:focus-visible{
+  outline:none;
+  box-shadow:none!important;
+}
