@@ -2757,3 +2757,19 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   font-size:10.5px;
   white-space:nowrap;
 }
+
+
+/* Material card: compact overview, clear totals and visible drag affordance. */
+#materialCardModal .material-card-head{
+  cursor:move!important;
+}
+#materialCardModal .material-card-head:active{
+  cursor:grabbing!important;
+}
+#materialCardModal .mv-total-row td{
+  background:#F7F7F8;
+  border-top:1px solid #D4D4D8;
+}
+#materialCardModal .mv-overview-qty .mv-qty strong{
+  white-space:nowrap;
+}
