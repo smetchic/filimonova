@@ -1064,7 +1064,7 @@
   function tableColumnMinimum(table,index) {
     // Estimate-derived grids use content, not header text, as the sizing source.
     if(table.classList.contains("ks-table")) {
-      if(index===0) return 32;  // Р/М
+      if(index===0) return 42;  // Р/М: как в смете, с запасом под маркер без ellipsis
       if(index===1) return 48;  // Поз. см.
       if(index===2) return 96;  // Обоснование
       if(index===3) return 140; // Наименование
@@ -1075,7 +1075,7 @@
       return 42;                // месяцы
     }
     if(table.classList.contains("avr-table")) {
-      if(index===0) return 32;
+      if(index===0) return 42;
       if(index===1) return 48;
       if(index===2) return 96;
       if(index===3) return 72;
