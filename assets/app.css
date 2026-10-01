@@ -2659,3 +2659,37 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   min-width:0!important;
   align-self:stretch!important;
 }
+
+
+/* 6-KS follows the estimate grid: hierarchy, compact identity columns and two-level periods. */
+.ks-table .est-group-title{
+  background:var(--group)!important;
+  font-weight:600;
+  color:#45454D;
+  text-align:left;
+}
+.ks-table .ks-year-head,
+.ks-table .ks-month-head{
+  text-align:center!important;
+  white-space:nowrap!important;
+  overflow-wrap:normal!important;
+}
+.ks-table .ks-year-head{
+  font-weight:600!important;
+}
+.ks-table .ks-month-head{
+  font-size:10.5px!important;
+  font-weight:500!important;
+  padding-left:4px!important;
+  padding-right:4px!important;
+}
+.ks-table td:nth-child(2),
+.avr-table td:nth-child(2){
+  font-variant-numeric:tabular-nums;
+}
+.ks-table .type-mark,
+.avr-table .type-mark{
+  min-width:19px;
+  height:18px;
+  padding:0 4px;
+}
