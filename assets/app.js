@@ -204,6 +204,27 @@
     setStatus(signupStatus, "");
   }
 
+  let excelJsLoadPromise=null;
+  function ensureExcelJsLoaded() {
+    if(window.ExcelJS) return Promise.resolve(window.ExcelJS);
+    if(excelJsLoadPromise) return excelJsLoadPromise;
+    excelJsLoadPromise=new Promise(function(resolve,reject){
+      const script=document.createElement("script");
+      script.src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js";
+      script.async=true;
+      script.onload=function(){
+        if(window.ExcelJS) resolve(window.ExcelJS);
+        else reject(new Error("Модуль ExcelJS загрузился без ExcelJS."));
+      };
+      script.onerror=function(){
+        excelJsLoadPromise=null;
+        reject(new Error("Не удалось загрузить модуль ExcelJS."));
+      };
+      document.head.appendChild(script);
+    });
+    return excelJsLoadPromise;
+  }
+
   let xlsxLoadPromise=null;
   function ensureXlsxLoaded() {
     if(window.XLSX) return Promise.resolve(window.XLSX);
@@ -5801,6 +5822,8 @@
   }
 
   function wireReconciliationControls() {
+    const journalExport=document.querySelector("[data-recon-journal-export]");
+    if(journalExport) journalExport.onclick=function(){exportEstimateJournalExcel();};
     const linkSelect=document.querySelector("[data-recon-link-select]");
     if(linkSelect) linkSelect.onchange=function(){
       ui.reconLinkFilter=linkSelect.value||"all";
@@ -5838,12 +5861,13 @@
     return "Нет";
   }
 
-  function renderEstimateJournal() {
+  function journalNaturalCompare(a,b) {
+    return String(a==null?"":a).localeCompare(String(b==null?"":b),"ru",{numeric:true,sensitivity:"base"});
+  }
+
+  function sortedEstimateJournalRows() {
     const estimateRowById=new Map((dataState.estimateRows||[]).map(function(x){return [x.id,x];}));
     const estimateById=new Map((dataState.estimates||[]).map(function(x){return [x.id,x];}));
-    const journalNaturalCompare=function(a,b){
-      return String(a==null?"":a).localeCompare(String(b==null?"":b),"ru",{numeric:true,sensitivity:"base"});
-    };
     const rows=(dataState.reconciliationJournal||[])
       .filter(function(j){return j.status==="open";})
       .slice()
@@ -5865,6 +5889,162 @@
         const specB=(sb.specification_positions||[])[0]||"";
         return journalNaturalCompare(specA,specB);
       });
+    return {rows:rows,estimateRowById:estimateRowById,estimateById:estimateById};
+  }
+
+  function journalDiffRichText(left,right) {
+    const a=String(left||""), b=String(right||"");
+    if(!a) return [{text:"—"}];
+    const na=importNorm(a), nb=importNorm(b);
+    if(na===nb) return [{text:a}];
+    const parts=a.split(/(\s+|[-–—,.;:()\/]+)/);
+    const rightTokens=new Set(
+      b.split(/(\s+|[-–—,.;:()\/]+)/)
+       .map(function(x){return importNorm(x);})
+       .filter(Boolean)
+    );
+    return parts.map(function(x){
+      const n=importNorm(x);
+      const plain=!n || /^\s+$|^[-–—,.;:()\/]+$/.test(x) || rightTokens.has(n);
+      return plain
+        ? {text:x}
+        : {text:x,font:{color:{argb:"FFA52A2A"},bold:true}};
+    });
+  }
+
+  async function exportEstimateJournalExcel() {
+    const trigger=document.querySelector("[data-recon-journal-export]");
+    if(trigger) trigger.disabled=true;
+    try{
+      await ensureExcelJsLoaded();
+      const bundle=sortedEstimateJournalRows();
+      if(!bundle.rows.length){
+        alert("В журнале нет записей для экспорта.");
+        return;
+      }
+
+      const workbook=new ExcelJS.Workbook();
+      workbook.creator="ПТО Филимонова";
+      workbook.created=new Date();
+      const ws=workbook.addWorksheet("Журнал сверки",{
+        views:[{state:"frozen",ySplit:2}]
+      });
+
+      ws.mergeCells("A1:D1");
+      ws.mergeCells("E1:H1");
+      ws.mergeCells("I1:J1");
+      ws.getCell("A1").value="Спецификация";
+      ws.getCell("E1").value="Смета";
+      ws.getCell("I1").value="Контроль";
+
+      const headers=["Поз. спецификации","Марка","Наименование по спецификации","Проект, шт.","№ сметы","Поз. сметы","Наименование по смете","Смета, шт.","Разница","Расхождение"];
+      ws.addRow(headers);
+
+      const thin={style:"thin",color:{argb:"FFD9DDE3"}};
+      const border={top:thin,left:thin,bottom:thin,right:thin};
+      const groupFill={type:"pattern",pattern:"solid",fgColor:{argb:"FFF1F3F5"}};
+      const headerFill={type:"pattern",pattern:"solid",fgColor:{argb:"FFF7F8FA"}};
+      const diffFill={type:"pattern",pattern:"solid",fgColor:{argb:"FFFFF7F6"}};
+      const diffFont={color:{argb:"FFB42318"},bold:true};
+
+      ["A1","E1","I1"].forEach(function(addr){
+        const cell=ws.getCell(addr);
+        cell.font={bold:true,color:{argb:"FF4F5258"}};
+        cell.alignment={horizontal:"center",vertical:"middle"};
+        cell.fill=groupFill;
+      });
+      ws.getRow(1).height=22;
+      ws.getRow(2).height=34;
+      ws.getRow(2).eachCell(function(cell){
+        cell.font={bold:true,color:{argb:"FF4F5258"}};
+        cell.alignment={horizontal:"center",vertical:"middle",wrapText:true};
+        cell.fill=headerFill;
+        cell.border=border;
+      });
+      for(let c=1;c<=10;c++) ws.getCell(1,c).border=border;
+
+      bundle.rows.forEach(function(j){
+        const r=bundle.estimateRowById.get(j.estimate_row_id)||null;
+        const e=r?bundle.estimateById.get(r.estimate_id)||null:null;
+        const snap=j.snapshot||{};
+        const srows=r?linkedSpecRowsForEstimateRow(r):[];
+        const linked=srows.length>0 || (snap.specification_positions||[]).length>0;
+        const positions=srows.length?srows.map(function(x){return x.position_no;}):(snap.specification_positions||[]);
+        const marks=srows.length?Array.from(new Set(srows.map(function(x){return x.mark;}))):(snap.specification_marks||[]);
+        const specNames=srows.length?Array.from(new Set(srows.map(function(x){return x.name;}))):(snap.specification_names||[]);
+        const specName=specNames.join(" / ");
+        const estimateName=r?String(estimateSourceValue(r,"name")||""):String(snap.estimate_name||"");
+        const projectQty=srows.length?srows.reduce(function(sum,x){return sum+Number(x.total||0);},0):(snap.project_quantity_pieces==null?null:Number(snap.project_quantity_pieces));
+        const estimateQty=r?estimateQuantityPieces(r,srows):snap.estimate_quantity_pieces;
+        const diff=projectQty==null||estimateQty==null?null:Number(projectQty)-Number(estimateQty);
+        const discrepancy=journalDiscrepancyLabel(specName,estimateName,diff,linked);
+
+        const row=ws.addRow([
+          positions.length?positions.join(", "):"—",
+          marks.length?marks.join(" / "):"—",
+          "",
+          projectQty==null?"—":Number(projectQty),
+          e?e.number:(snap.estimate_number||"—"),
+          r?r.position:(snap.estimate_position||"—"),
+          "",
+          estimateQty==null?"—":Number(estimateQty),
+          diff==null?"—":Number(diff),
+          discrepancy
+        ]);
+
+        row.getCell(3).value={richText:journalDiffRichText(specName,estimateName)};
+        row.getCell(7).value={richText:journalDiffRichText(estimateName,specName)};
+
+        row.eachCell({includeEmpty:true},function(cell,col){
+          cell.border=border;
+          cell.alignment={
+            vertical:"top",
+            wrapText:true,
+            horizontal:[1,4,5,6,8,9].includes(col)?"center":"left"
+          };
+        });
+
+        if(diff!=null && Math.abs(Number(diff))>1e-9){
+          [4,8,9].forEach(function(col){
+            const cell=row.getCell(col);
+            cell.font=diffFont;
+            cell.fill=diffFill;
+          });
+        }
+      });
+
+      ws.columns=[
+        {width:16},{width:18},{width:46},{width:12},{width:11},
+        {width:12},{width:54},{width:12},{width:12},{width:24}
+      ];
+      ws.autoFilter={from:{row:2,column:1},to:{row:2,column:10}};
+      ws.getColumn(4).numFmt="0.###";
+      ws.getColumn(8).numFmt="0.###";
+      ws.getColumn(9).numFmt="0.###";
+
+      const buffer=await workbook.xlsx.writeBuffer();
+      const blob=new Blob([buffer],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+      const url=URL.createObjectURL(blob);
+      const link=document.createElement("a");
+      link.href=url;
+      link.download="Журнал_сверки.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(function(){URL.revokeObjectURL(url);},1000);
+    }catch(err){
+      console.error(err);
+      alert("Экспорт Журнала не выполнен: "+(err&&err.message?err.message:String(err)));
+    }finally{
+      if(trigger) trigger.disabled=false;
+    }
+  }
+
+  function renderEstimateJournal() {
+    const bundle=sortedEstimateJournalRows();
+    const rows=bundle.rows;
+    const estimateRowById=bundle.estimateRowById;
+    const estimateById=bundle.estimateById;
     let body=rows.map(function(j){
       const r=estimateRowById.get(j.estimate_row_id)||null;
       const e=r?estimateById.get(r.estimate_id)||null:null;
@@ -6949,6 +7129,9 @@
           '<option value="unlinked"'+(ui.reconLinkFilter==="unlinked"?' selected':'')+'>Без связи</option>' +
           '<option value="linked"'+(ui.reconLinkFilter==="linked"?' selected':'')+'>Связано</option>' +
         '</select>';
+    } else if(pageKey==="recon" && tab===1){
+      $("serviceRight").innerHTML =
+        '<button class="service-action" data-recon-journal-export type="button">Экспорт в Excel</button>';
     } else if(pageKey==="links"){
       if(!ui.workLinkFilter) ui.workLinkFilter="all";
       $("serviceRight").innerHTML =
