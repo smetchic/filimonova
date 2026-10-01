@@ -5051,7 +5051,7 @@
     let body="";
 
     function vectorForRow(r){
-      const projectPieces=Number(r.bySection["Секция 1"]||0)+Number(r.bySection["Секция 2"]||0);
+      const projectPieces=r.houseOnly?Number(r.houseTotal||0):(Number(r.bySection["Секция 1"]||0)+Number(r.bySection["Секция 2"]||0));
       const projectM3=projectPieces*Number(r.volumePerPiece||0);
       const delivered=fact.byCatalog.get(r.catalogItemId)||{pieces:0,m3:0};
       const mountedPieces=Number(mountedByCatalog.get(r.catalogItemId)||0);
@@ -8796,6 +8796,7 @@
     $("serviceLeft").innerHTML = buildServiceLeft(pageKey,tab);
     $("serviceRow").classList.toggle("hidden",
       (pageKey==="estimates" && (tab===1 || tab===2)) ||
+      (pageKey==="supply" && tab===1) ||
       (pageKey==="avr" && tab===0) ||
       (pageKey==="s29" && tab===0)
     );
