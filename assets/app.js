@@ -611,6 +611,12 @@
     }
     function up(){
       card.classList.remove("dialog-dragging");
+      if(card.classList.contains("material-card")){
+        try{
+          const r=card.getBoundingClientRect();
+          localStorage.setItem("filimonova.materialCard.position",JSON.stringify({left:Math.round(r.left),top:Math.round(r.top)}));
+        }catch(_){}
+      }
       document.removeEventListener("mousemove",move,true);
       document.removeEventListener("mouseup",up,true);
     }
@@ -1283,6 +1289,29 @@
       '<nav class="material-tabs"><button class="active" data-mtab="overview">Обзор</button><button data-mtab="projectEstimate">Проект и смета</button><button data-mtab="supplyMontage">Поставка и монтаж</button><button data-mtab="avrS29">АВР и С-29</button><button data-mtab="history">История</button></nav>'+
       '<div class="material-body"></div></div>';
     modal.classList.add("open");
+    const materialCard=modal.querySelector(".material-card");
+    if(materialCard){
+      try{
+        const saved=JSON.parse(localStorage.getItem("filimonova.materialCard.position")||"null");
+        if(saved&&Number.isFinite(saved.left)&&Number.isFinite(saved.top)){
+          const maxLeft=Math.max(0,window.innerWidth-materialCard.offsetWidth);
+          const maxTop=Math.max(0,window.innerHeight-Math.min(materialCard.offsetHeight,window.innerHeight-18));
+          materialCard.style.position="fixed";
+          materialCard.style.left=Math.max(0,Math.min(maxLeft,saved.left))+"px";
+          materialCard.style.top=Math.max(0,Math.min(maxTop,saved.top))+"px";
+          materialCard.style.right="auto";
+          materialCard.style.bottom="auto";
+          materialCard.style.margin="0";
+          materialCard.style.transform="none";
+        }
+      }catch(_){}
+      const head=materialCard.querySelector(".material-card-head");
+      if(head) head.ondblclick=function(e){
+        if(e.target.closest("button,input,select,textarea,a,label")) return;
+        localStorage.removeItem("filimonova.materialCard.position");
+        materialCard.removeAttribute("style");
+      };
+    }
     function kpi(label,value,sub,cls){return '<div class="mv-kpi '+(cls||"")+'"><div class="mv-kpi-label">'+esc(label)+'</div><div class="mv-kpi-value">'+value+'</div>'+(sub?'<div class="mv-kpi-sub">'+sub+'</div>':'')+'</div>';}
     function block(title,html,extra){return '<section class="mv-block '+(extra||"")+'"><div class="mv-block-title">'+title+'</div>'+html+'</section>';}
     function body(tab){
