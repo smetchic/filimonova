@@ -5277,6 +5277,15 @@
         const estimateRows=rows.map(function(x){return {fact:x,row:estimateRowMap.get(x.estimate_row_id)};})
           .filter(function(x){return x.row&&x.row.estimate_id===estimate.id&&passesSearch([x.row.position,x.row.basis,x.row.name]);});
         if(!estimateRows.length) return;
+        estimateRows.forEach(function(x){
+          const r=x.row,f=x.fact,item=(dataState.catalogItems||[]).find(function(c){return c.id===r.catalog_item_id;});
+          const displayBasis=estimateDisplayBasis(r),displayName=estimateDisplayName(r),mark=item&&item.mark||"";
+          widthSample(1,r.position);widthSample(2,displayBasis);widthSample(3,mark);
+          if(r.row_type==="material"){widthSample(4,displayName);widthSample(5,r.unit);}
+          widthSample(6,exFmt(f.quantity));
+          if(r.row_type==="material") widthSample(7,exFmt(f.quantity_m3));
+          widthSample(8,exMoney(f.amount));
+        });
         const estimateKey="avr:"+estimate.id;
         registerGroup(estimateKey);
         const estimateQty=estimateRows.reduce(function(s,x){return s+Number(x.fact.quantity||0);},0);
@@ -5424,6 +5433,16 @@
       });
       rows.sort(function(a,b){return Number(a.sort_order||0)-Number(b.sort_order||0);});
       if(!rows.length&&(currentSearch()||Object.keys(filterBucket()).length)) return;
+      rows.forEach(function(r){
+        const values=sources.map(function(x){return x.version?(factByVersionRow.get(x.version.id+":"+r.id)||0):0;});
+        const sum=values.reduce(function(s,v){return s+v;},0);
+        const rest=Number(r.quantity||0)-sum;
+        const basis=estimateDisplayBasis(r),name=estimateDisplayName(r);
+        widthSample(1,r.position);widthSample(2,basis);
+        if(r.row_type==="material"){widthSample(3,name);widthSample(4,r.unit);}
+        widthSample(5,exFmt(r.quantity));widthSample(6,exFmt(sum));widthSample(7,exFmt(rest));
+        values.forEach(function(v,i){widthSample(8+i,exFmt(v));});
+      });
 
       const estimateKey="ks6:"+e.id;
       body+=groupRow("Смета №"+e.number+" · "+(e.name||""),rows,estimateKey,0);
