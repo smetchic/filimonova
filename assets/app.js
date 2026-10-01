@@ -5147,6 +5147,388 @@
     });
   }
 
+  function supplyEditorCatalogItems() {
+    const ids=new Set((dataState.specRows||[]).map(function(r){return r.catalog_item_id;}).filter(Boolean));
+    return (dataState.catalogItems||[]).filter(function(item){return ids.has(item.id);});
+  }
+
+  function supplyEditorVolumeInfo(catalogItemId) {
+    if(!catalogItemId) return {volume:null,supplierItemId:null,ambiguous:false};
+    const direct=(dataState.supplierItems||[]).filter(function(si){return si.catalog_item_id===catalogItemId;});
+    const linkedIds=new Set((dataState.supplierPriceLinks||[])
+      .filter(function(l){return l.catalog_item_id===catalogItemId&&l.supplier_item_id;})
+      .map(function(l){return l.supplier_item_id;}));
+    const items=(dataState.supplierItems||[]).filter(function(si){
+      return si.catalog_item_id===catalogItemId || linkedIds.has(si.id);
+    });
+    const values=Array.from(new Set(items.map(function(si){return Number(si.unit_volume_m3||0);})
+      .filter(function(v){return v>0;}).map(function(v){return v.toFixed(6);}))).map(Number);
+    return {
+      volume:values.length===1?values[0]:null,
+      supplierItemId:items.length===1?items[0].id:null,
+      ambiguous:values.length>1
+    };
+  }
+
+  function supplyEditorResolveRow(row) {
+    const catalog=supplyEditorCatalogItems();
+    const mark=norm(row.source_mark||"");
+    const name=norm(row.source_name||"");
+    let candidates=catalog.slice();
+    if(mark) candidates=candidates.filter(function(item){return norm(item.mark)===mark;});
+    if(name) candidates=candidates.filter(function(item){return norm(item.name)===name;});
+    if(candidates.length===1 && (mark||name)){
+      row.catalog_item_id=candidates[0].id;
+      const info=supplyEditorVolumeInfo(row.catalog_item_id);
+      row.supplier_item_id=info.supplierItemId||null;
+      if(!(Number(row.unit_volume_snapshot_m3)>0) && info.volume!=null) row.unit_volume_snapshot_m3=info.volume;
+      return candidates[0];
+    }
+    row.catalog_item_id=null;
+    row.supplier_item_id=null;
+    if(!Number(row.unit_volume_snapshot_m3)>0) row.unit_volume_snapshot_m3=null;
+    return null;
+  }
+
+  function supplyEditorNumber(value) {
+    if(value==null||value==="") return null;
+    const n=Number(String(value).replace(",",".").replace(/\s/g,""));
+    return Number.isFinite(n)?n:null;
+  }
+
+  function supplyEditorComputed(row,type) {
+    supplyEditorResolveRow(row);
+    const volume=supplyEditorNumber(row.unit_volume_snapshot_m3);
+    let pcs=supplyEditorNumber(row.qty_pieces);
+    let m3=supplyEditorNumber(row.qty_m3);
+    let price=supplyEditorNumber(row.unit_price);
+    let vatPercent=supplyEditorNumber(row.vat_percent);
+    if(type==="white"){
+      m3=pcs!=null&&volume!=null?pcs*volume:null;
+      return {pcs:pcs,m3:m3,volume:volume,net:null,vat:null,gross:null};
+    }
+    pcs=m3!=null&&volume!=null&&volume>0?m3/volume:null;
+    const net=m3!=null&&price!=null?m3*price:null;
+    const vat=net!=null&&vatPercent!=null?net*vatPercent/100:null;
+    const gross=net!=null?(net+(vat||0)):null;
+    return {pcs:pcs,m3:m3,volume:volume,net:net,vat:vat,gross:gross};
+  }
+
+  function supplyEditorRowStatus(row,type) {
+    const c=supplyEditorComputed(row,type);
+    if(!row.catalog_item_id) return "Не сопоставлено";
+    if(!(c.volume>0)) return "Нет объёма";
+    if(type==="green" && c.pcs!=null && Math.abs(c.pcs-Math.round(c.pcs))>0.000001) return "Проверить";
+    return "Сопоставлено";
+  }
+
+  function closeTtnSuggestions() {
+    document.querySelectorAll(".ttn-suggest-popup").forEach(function(x){x.remove();});
+  }
+
+  function openTtnSuggestions(input,field,row,draftRows,rerender) {
+    closeTtnSuggestions();
+    const query=norm(input.value||"");
+    if(!query) return;
+    let candidates=supplyEditorCatalogItems();
+    const other=field==="mark"?norm(row.source_name||""):norm(row.source_mark||"");
+    if(other){
+      candidates=candidates.filter(function(item){
+        return field==="mark" ? norm(item.name)===other : norm(item.mark)===other;
+      });
+    }
+    candidates=candidates.filter(function(item){
+      const value=field==="mark"?item.mark:item.name;
+      return norm(value).includes(query);
+    });
+    const seen=new Set();
+    const values=[];
+    candidates.forEach(function(item){
+      const value=field==="mark"?item.mark:item.name;
+      const key=norm(value);
+      if(!seen.has(key)){seen.add(key);values.push({value:value,item:item});}
+    });
+    if(!values.length) return;
+    const rect=input.getBoundingClientRect();
+    const pop=document.createElement("div");
+    pop.className="ttn-suggest-popup";
+    pop.style.left=rect.left+"px";
+    pop.style.top=(rect.bottom+2)+"px";
+    pop.style.width=Math.max(rect.width,220)+"px";
+    values.slice(0,30).forEach(function(x){
+      const option=document.createElement("button");
+      option.type="button";
+      option.textContent=x.value;
+      option.onclick=function(e){
+        e.preventDefault();
+        if(field==="mark") row.source_mark=x.value; else row.source_name=x.value;
+        supplyEditorResolveRow(row);
+        closeTtnSuggestions();
+        rerender();
+      };
+      pop.appendChild(option);
+    });
+    document.body.appendChild(pop);
+  }
+
+  function supplyReconciliationHtml(doc) {
+    if(!doc || doc.document_type!=="green") return "";
+    const greenLines=(dataState.supplyDocumentLines||[]).filter(function(l){return l.document_id===doc.id;});
+    const greenIds=new Set(greenLines.map(function(l){return l.id;}));
+    const allocations=(dataState.supplyLineAllocations||[]).filter(function(a){return greenIds.has(a.green_line_id);});
+    if(!allocations.length){
+      return '<div class="ttn-recon"><div class="ttn-recon-title">Сверка с белыми ТТН</div><div class="ttn-recon-empty">Связанных количеств пока нет.</div></div>';
+    }
+    const lineById=new Map((dataState.supplyDocumentLines||[]).map(function(l){return [l.id,l];}));
+    const docById=new Map((dataState.supplyDocuments||[]).map(function(d){return [d.id,d];}));
+    const rows=allocations.map(function(a){
+      const white=lineById.get(a.white_line_id)||{};
+      const green=lineById.get(a.green_line_id)||{};
+      const whiteDoc=docById.get(white.document_id)||{};
+      return '<tr><td>'+esc(supplyDateLabel(whiteDoc.receipt_date))+'</td><td>'+esc(whiteDoc.ttn_number||"Белая ТТН")+'</td><td>'+esc(green.source_mark||white.source_mark||"—")+'</td><td class="num">'+(a.allocated_pieces?exFmt(a.allocated_pieces):"")+'</td><td class="num">'+(a.allocated_m3?exFmt(a.allocated_m3):"")+'</td><td>Подтверждено</td></tr>';
+    }).join("");
+    return '<div class="ttn-recon"><div class="ttn-recon-title">Сверка с белыми ТТН</div><div class="ttn-recon-scroll"><table><thead><tr><th>Дата факта</th><th>Белая ТТН</th><th>Марка</th><th>шт.</th><th>м³</th><th>Статус</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+  }
+
+  function openSupplyDocumentEditor(documentRow) {
+    closeTtnSuggestions();
+    const existing=documentRow||null;
+    let type=existing&&existing.document_type==="green"?"green":"white";
+    let receiptDate=existing&&existing.receipt_date?String(existing.receipt_date).slice(0,10):new Date().toISOString().slice(0,10);
+    let ttnNumber=existing&&existing.ttn_number||"";
+    let fileName=existing&&existing.source_file_name||"";
+    let filePath=existing&&existing.source_file_path||"";
+    let pendingFile=null;
+    let draftRows=existing?(dataState.supplyDocumentLines||[]).filter(function(l){return l.document_id===existing.id;})
+      .sort(function(a,b){return Number(a.sort_order||0)-Number(b.sort_order||0);})
+      .map(function(l){return {
+        id:l.id||null,source_mark:l.source_mark||"",source_name:l.source_name||"",
+        catalog_item_id:l.catalog_item_id||null,supplier_item_id:l.supplier_item_id||null,
+        qty_pieces:l.qty_pieces==null?"":String(l.qty_pieces),
+        qty_m3:l.qty_m3==null?"":String(l.qty_m3),
+        unit_volume_snapshot_m3:l.unit_volume_snapshot_m3==null?"":String(l.unit_volume_snapshot_m3),
+        unit_price:l.unit_price==null?"":String(l.unit_price),
+        vat_percent:l.vat_percent==null?"":String(l.vat_percent)
+      }):[];
+    function blankRow(){
+      return {id:null,source_mark:"",source_name:"",catalog_item_id:null,supplier_item_id:null,qty_pieces:"",qty_m3:"",unit_volume_snapshot_m3:"",unit_price:"",vat_percent:""};
+    }
+    if(!draftRows.length) draftRows=[blankRow()];
+
+    let backdrop=document.getElementById("supplyDocumentModal");
+    if(!backdrop){backdrop=document.createElement("div");backdrop.id="supplyDocumentModal";backdrop.className="ttn-modal-backdrop";document.body.appendChild(backdrop);}
+    backdrop.classList.add("open");
+    backdrop.innerHTML='<div class="ttn-modal" role="dialog" aria-modal="true">'+
+      '<div class="ttn-modal-head"><div><strong>'+(existing?'Накладная поставки':'Новая накладная')+'</strong><span>'+(existing?'Редактирование документа':'Фактическое поступление или официальное подтверждение')+'</span></div><button class="ttn-close" type="button">×</button></div>'+
+      '<div class="ttn-type-tabs"><button type="button" data-ttn-type="white">Белая ТТН</button><button type="button" data-ttn-type="green">Зелёная ТТН</button></div>'+
+      '<div class="ttn-meta">'+
+        '<label><span>Дата поступления</span><input type="date" data-ttn-date></label>'+
+        '<label><span>№ ТТН</span><input type="text" data-ttn-number></label>'+
+        '<div class="ttn-file"><span>Файл</span><input type="file" data-ttn-file hidden><button class="context-link" type="button" data-ttn-file-action></button></div>'+
+      '</div>'+
+      '<div class="ttn-table-zone"></div>'+
+      '<div class="ttn-modal-foot"><span class="ttn-status" data-ttn-status></span><span class="spacer"></span><button class="context-link" type="button" data-ttn-cancel>Отмена</button><button class="context-link ttn-save" type="button" data-ttn-save>Сохранить</button></div>'+
+      '</div>';
+
+    const modal=backdrop.querySelector(".ttn-modal");
+    const dateInput=modal.querySelector("[data-ttn-date]");
+    const numberInput=modal.querySelector("[data-ttn-number]");
+    const fileInput=modal.querySelector("[data-ttn-file]");
+    const fileAction=modal.querySelector("[data-ttn-file-action]");
+    const zone=modal.querySelector(".ttn-table-zone");
+    const status=modal.querySelector("[data-ttn-status]");
+    dateInput.value=receiptDate;
+    numberInput.value=ttnNumber;
+
+    function syncHeader(){
+      modal.querySelectorAll("[data-ttn-type]").forEach(function(btn){btn.classList.toggle("active",btn.dataset.ttnType===type);});
+      numberInput.disabled=type==="white";
+      numberInput.placeholder=type==="white"?"не требуется":"номер зелёной ТТН";
+      if(type==="white") numberInput.value="";
+      fileAction.textContent=pendingFile?pendingFile.name:(fileName?fileName+" · заменить":"Прикрепить файл");
+    }
+
+    function rowPayload(row,index){
+      const c=supplyEditorComputed(row,type);
+      return {
+        id:row.id||null,
+        sort_order:index,
+        source_mark:String(row.source_mark||"").trim(),
+        source_name:String(row.source_name||"").trim(),
+        catalog_item_id:row.catalog_item_id||null,
+        supplier_item_id:row.supplier_item_id||null,
+        qty_pieces:c.pcs==null?null:c.pcs,
+        qty_m3:c.m3==null?null:c.m3,
+        unit_volume_snapshot_m3:c.volume==null?null:c.volume,
+        unit_price:type==="green"?supplyEditorNumber(row.unit_price):null,
+        vat_percent:type==="green"?supplyEditorNumber(row.vat_percent):null
+      };
+    }
+
+    function renderLines(){
+      closeTtnSuggestions();
+      const green=type==="green";
+      const cols=green?12:7;
+      let totalPcs=0,totalM3=0,totalNet=0,totalVat=0,totalGross=0;
+      const body=draftRows.map(function(row,index){
+        const c=supplyEditorComputed(row,type);
+        totalPcs+=Number(c.pcs||0);totalM3+=Number(c.m3||0);totalNet+=Number(c.net||0);totalVat+=Number(c.vat||0);totalGross+=Number(c.gross||0);
+        const state=supplyEditorRowStatus(row,type);
+        const common='<td class="ttn-source-input"><input data-ttn-mark="'+index+'" value="'+esc(row.source_mark||"")+'" autocomplete="off"></td>'+
+          '<td class="ttn-source-input ttn-name-input"><input data-ttn-name="'+index+'" value="'+esc(row.source_name||"")+'" autocomplete="off"></td>';
+        if(!green){
+          return '<tr data-ttn-row="'+index+'">'+common+
+            '<td class="num-input"><input data-ttn-pieces="'+index+'" inputmode="decimal" value="'+esc(row.qty_pieces||"")+'"></td>'+
+            '<td class="num computed">'+(c.volume!=null?exFmt(c.volume):"—")+'</td>'+
+            '<td class="num computed">'+(c.m3!=null?exFmt(c.m3):"—")+'</td>'+
+            '<td class="ttn-link-state '+(state==="Сопоставлено"?"ok":"review")+'">'+esc(state)+'</td>'+
+            '<td class="center"><button class="table-text-action" data-ttn-remove="'+index+'" type="button">удалить</button></td></tr>';
+        }
+        return '<tr data-ttn-row="'+index+'">'+common+
+          '<td class="num-input"><input data-ttn-m3="'+index+'" inputmode="decimal" value="'+esc(row.qty_m3||"")+'"></td>'+
+          '<td class="num computed">'+(c.volume!=null?exFmt(c.volume):"—")+'</td>'+
+          '<td class="num computed">'+(c.pcs!=null?exFmt(c.pcs):"—")+'</td>'+
+          '<td class="num-input"><input data-ttn-price="'+index+'" inputmode="decimal" value="'+esc(row.unit_price||"")+'"></td>'+
+          '<td class="num-input vat-input"><input data-ttn-vat="'+index+'" inputmode="decimal" value="'+esc(row.vat_percent||"")+'"></td>'+
+          '<td class="num computed">'+(c.net!=null?exMoney(c.net):"—")+'</td>'+
+          '<td class="num computed">'+(c.vat!=null?exMoney(c.vat):"—")+'</td>'+
+          '<td class="num computed">'+(c.gross!=null?exMoney(c.gross):"—")+'</td>'+
+          '<td class="ttn-link-state '+(state==="Сопоставлено"?"ok":"review")+'">'+esc(state)+'</td>'+
+          '<td class="center"><button class="table-text-action" data-ttn-remove="'+index+'" type="button">удалить</button></td></tr>';
+      }).join("");
+
+      const head=green
+        ? '<thead><tr><th>Марка</th><th>Наименование</th><th>м³</th><th>Объём 1 шт., м³</th><th>шт.</th><th>Цена 1 м³ без НДС</th><th>НДС, %</th><th>Без НДС</th><th>НДС</th><th>С НДС</th><th>Связь</th><th></th></tr></thead>'
+        : '<thead><tr><th>Марка</th><th>Наименование</th><th>Кол-во, шт.</th><th>Объём 1 шт., м³</th><th>Всего, м³</th><th>Связь</th><th></th></tr></thead>';
+
+      const foot=green
+        ? '<tfoot><tr class="ttn-total-row"><td colspan="2">ИТОГО</td><td class="num">'+(totalM3?exFmt(totalM3):"")+'</td><td></td><td class="num">'+(totalPcs?exFmt(totalPcs):"")+'</td><td></td><td></td><td class="num">'+(totalNet?exMoney(totalNet):"")+'</td><td class="num">'+(totalVat?exMoney(totalVat):"")+'</td><td class="num">'+(totalGross?exMoney(totalGross):"")+'</td><td></td><td></td></tr>'+
+          '<tr class="ttn-add-row"><td colspan="'+cols+'"><button class="table-text-action" data-ttn-add-row type="button">+ Добавить строку</button></td></tr></tfoot>'
+        : '<tfoot><tr class="ttn-total-row"><td colspan="2">ИТОГО</td><td class="num">'+(totalPcs?exFmt(totalPcs):"")+'</td><td></td><td class="num">'+(totalM3?exFmt(totalM3):"")+'</td><td></td><td></td></tr>'+
+          '<tr class="ttn-add-row"><td colspan="'+cols+'"><button class="table-text-action" data-ttn-add-row type="button">+ Добавить строку</button></td></tr></tfoot>';
+
+      zone.innerHTML='<div class="ttn-grid-scroll"><table class="ttn-grid">'+head+'<tbody>'+body+'</tbody>'+foot+'</table></div>'+
+        (green?supplyReconciliationHtml(existing):"");
+
+      zone.querySelector("[data-ttn-add-row]").onclick=function(){draftRows.push(blankRow());renderLines();};
+      zone.querySelectorAll("[data-ttn-remove]").forEach(function(btn){
+        btn.onclick=function(){
+          const index=Number(btn.dataset.ttnRemove);
+          draftRows.splice(index,1);
+          if(!draftRows.length) draftRows.push(blankRow());
+          renderLines();
+        };
+      });
+      zone.querySelectorAll("[data-ttn-mark]").forEach(function(input){
+        const index=Number(input.dataset.ttnMark);
+        input.oninput=function(){draftRows[index].source_mark=input.value;draftRows[index].catalog_item_id=null;openTtnSuggestions(input,"mark",draftRows[index],draftRows,renderLines);};
+        input.onfocus=function(){if(input.value) openTtnSuggestions(input,"mark",draftRows[index],draftRows,renderLines);};
+        input.onblur=function(){setTimeout(closeTtnSuggestions,150);};
+      });
+      zone.querySelectorAll("[data-ttn-name]").forEach(function(input){
+        const index=Number(input.dataset.ttnName);
+        input.oninput=function(){draftRows[index].source_name=input.value;draftRows[index].catalog_item_id=null;openTtnSuggestions(input,"name",draftRows[index],draftRows,renderLines);};
+        input.onfocus=function(){if(input.value) openTtnSuggestions(input,"name",draftRows[index],draftRows,renderLines);};
+        input.onblur=function(){setTimeout(closeTtnSuggestions,150);};
+      });
+      function bindNumeric(selector,key){
+        zone.querySelectorAll(selector).forEach(function(input){
+          const index=Number(input.getAttribute(selector.match(/data-([^\]]+)/)[1]));
+        });
+      }
+      zone.querySelectorAll("[data-ttn-pieces]").forEach(function(input){
+        const index=Number(input.dataset.ttnPieces);
+        input.onchange=function(){draftRows[index].qty_pieces=input.value;renderLines();};
+      });
+      zone.querySelectorAll("[data-ttn-m3]").forEach(function(input){
+        const index=Number(input.dataset.ttnM3);
+        input.onchange=function(){draftRows[index].qty_m3=input.value;renderLines();};
+      });
+      zone.querySelectorAll("[data-ttn-price]").forEach(function(input){
+        const index=Number(input.dataset.ttnPrice);
+        input.onchange=function(){draftRows[index].unit_price=input.value;renderLines();};
+      });
+      zone.querySelectorAll("[data-ttn-vat]").forEach(function(input){
+        const index=Number(input.dataset.ttnVat);
+        input.onchange=function(){draftRows[index].vat_percent=input.value;renderLines();};
+      });
+    }
+
+    async function save(){
+      receiptDate=dateInput.value;
+      ttnNumber=numberInput.value.trim();
+      const payload=draftRows.map(rowPayload).filter(function(r){
+        return r.source_mark||r.source_name||Number(r.qty_pieces||0)>0||Number(r.qty_m3||0)>0;
+      });
+      if(!receiptDate){status.textContent="Укажите дату поступления.";return;}
+      if(type==="green"&&!ttnNumber){status.textContent="Для зелёной ТТН укажите номер.";return;}
+      if(!payload.length){status.textContent="Добавьте хотя бы одну строку.";return;}
+      status.textContent="Сохранение…";
+      modal.querySelector("[data-ttn-save]").disabled=true;
+      try{
+        const result=await client.rpc("save_supply_document",{
+          p_project_id:dataState.project.id,
+          p_document_id:existing&&existing.id||null,
+          p_document_type:type,
+          p_receipt_date:receiptDate,
+          p_ttn_number:type==="green"?ttnNumber:null,
+          p_source_file_name:fileName||null,
+          p_source_file_path:filePath||null,
+          p_rows:payload
+        });
+        if(result.error) throw result.error;
+        const documentId=result.data;
+
+        if(pendingFile){
+          const safeName=pendingFile.name.replace(/[^0-9A-Za-zА-Яа-яЁё._-]+/g,"_");
+          const path=dataState.project.id+"/"+documentId+"/"+Date.now()+"-"+safeName;
+          const upload=await client.storage.from("supply-documents").upload(path,pendingFile,{upsert:false});
+          if(upload.error) throw upload.error;
+          const upd=await client.from("supply_documents").update({
+            source_file_name:pendingFile.name,
+            source_file_path:path,
+            updated_at:new Date().toISOString()
+          }).eq("id",documentId).eq("project_id",dataState.project.id);
+          if(upd.error) throw upd.error;
+          if(filePath&&filePath!==path) client.storage.from("supply-documents").remove([filePath]).catch(function(){});
+        }
+
+        if(type==="green"){
+          const rec=await client.rpc("rebuild_green_supply_allocations",{p_project_id:dataState.project.id,p_document_id:documentId});
+          if(rec.error) throw rec.error;
+        }
+
+        await refreshProjectDataSlices(["supplyDocuments","supplyDocumentLines","supplyLineAllocations"],dataState.project);
+        closeTtnSuggestions();
+        backdrop.classList.remove("open");
+        backdrop.innerHTML="";
+        renderPage("supply",1);
+      }catch(err){
+        status.textContent=err&&err.message?err.message:String(err);
+        modal.querySelector("[data-ttn-save]").disabled=false;
+      }
+    }
+
+    syncHeader();
+    renderLines();
+
+    modal.querySelector(".ttn-close").onclick=function(){closeTtnSuggestions();backdrop.classList.remove("open");backdrop.innerHTML="";};
+    modal.querySelector("[data-ttn-cancel]").onclick=modal.querySelector(".ttn-close").onclick;
+    backdrop.onclick=function(e){if(e.target===backdrop) modal.querySelector(".ttn-close").click();};
+    modal.querySelectorAll("[data-ttn-type]").forEach(function(btn){
+      btn.onclick=function(){
+        type=btn.dataset.ttnType;
+        syncHeader();
+        renderLines();
+      };
+    });
+    dateInput.onchange=function(){receiptDate=dateInput.value;};
+    numberInput.oninput=function(){ttnNumber=numberInput.value;};
+    fileAction.onclick=function(){fileInput.click();};
+    fileInput.onchange=function(){pendingFile=fileInput.files&&fileInput.files[0]||null;syncHeader();};
+    modal.querySelector("[data-ttn-save]").onclick=save;
+  }
+
   function supplierApplicablePrice(prices) {
     const list=(prices||[]).slice().filter(function(p){return p && p.unit_price_gross!=null;}).sort(function(a,b){
       return String(a.effective_from||"").localeCompare(String(b.effective_from||""));
