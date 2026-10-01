@@ -5565,47 +5565,167 @@
     $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table"><thead><tr><th>Период</th><th>Файл</th><th>Импортирован</th><th>Строк</th><th>Статус</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
 
-  function accountingCompact(value) {
-    return importNorm(value).replace(/[^a-zA-Zа-яА-ЯёЁ0-9]/g,"");
+  function accountingBaseText(value) {
+    return importNorm(value)
+      .replace(/ё/g,"е")
+      .replace(/[–—−]/g,"-");
+  }
+
+  function accountingTokens(value,visual) {
+    let text=accountingBaseText(value);
+    if(visual) text=text.replace(/[oо0]/g,"0");
+    return text.match(/[a-zа-я]+|[0-9]+/gi)||[];
+  }
+
+  function accountingTokenKey(value,visual) {
+    return accountingTokens(value,visual).join("|");
   }
 
   function accountingNumbers(value) {
-    return (String(value==null?"":value).match(/[0-9]+/g)||[]).join("|");
+    return accountingTokens(value,false).filter(function(x){return /^[0-9]+$/.test(x);}).join("|");
+  }
+
+  function accountingSourceParts(value) {
+    const raw=String(value==null?"":value).trim();
+    const open=raw.indexOf("(");
+    if(open<0) return {raw:raw,outer:raw,inner:raw,hasParen:false};
+    const close=raw.lastIndexOf(")");
+    return {
+      raw:raw,
+      outer:raw.slice(0,open).trim(),
+      inner:raw.slice(open+1,close>open?close:raw.length).trim(),
+      hasParen:true
+    };
+  }
+
+  function accountingTokensEndWith(haystack,needle) {
+    if(!needle.length||needle.length>haystack.length) return false;
+    const start=haystack.length-needle.length;
+    for(let i=0;i<needle.length;i++) if(haystack[start+i]!==needle[i]) return false;
+    return true;
   }
 
   function accountingTokenSimilarity(a,b) {
-    const aa=new Set(importNorm(a).split(/[^a-zа-яё0-9]+/i).filter(function(x){return x.length>1;}));
-    const bb=new Set(importNorm(b).split(/[^a-zа-яё0-9]+/i).filter(function(x){return x.length>1;}));
+    const aa=new Set(accountingTokens(a,true).filter(function(x){return x.length>1 || /^[0-9]+$/.test(x);}));
+    const bb=new Set(accountingTokens(b,true).filter(function(x){return x.length>1 || /^[0-9]+$/.test(x);}));
     if(!aa.size||!bb.size) return 0;
     let common=0;
     aa.forEach(function(x){if(bb.has(x)) common++;});
     return common/Math.max(aa.size,bb.size);
   }
 
-  function accountingLinkCandidates(code,query) {
-    const rows=(dataState.accountingRows||[]).filter(function(x){return x.material_code===code;});
-    const sourceName=rows[0]&&rows[0].name||"";
-    const sourceCompact=accountingCompact(sourceName);
-    const sourceNums=accountingNumbers(sourceName);
-    const current=(dataState.accountingCodeLinks||[]).find(function(x){return x.accounting_code===code;});
+  function accountingMatchingCatalogContext() {
     const specIds=new Set((dataState.specRows||[]).map(function(x){return x.catalog_item_id;}));
+    const catalog=(dataState.catalogItems||[]).filter(function(item){return specIds.has(item.id);});
+    const markCounts=new Map();
+    catalog.forEach(function(item){
+      const key=accountingTokenKey(item.mark,true);
+      markCounts.set(key,Number(markCounts.get(key)||0)+1);
+    });
+    return {catalog:catalog,markCounts:markCounts};
+  }
+
+  function accountingManualNameMemory() {
+    const manualByCode=new Map();
+    (dataState.accountingCodeLinks||[]).forEach(function(link){
+      if(link.link_method==="manual"&&link.accounting_code&&link.catalog_item_id) {
+        manualByCode.set(String(link.accounting_code),link.catalog_item_id);
+      }
+    });
+    const buckets=new Map();
+    (dataState.accountingRows||[]).forEach(function(row){
+      const id=manualByCode.get(String(row.material_code||""));
+      if(!id) return;
+      const key=accountingTokenKey(row.name,true);
+      if(!key) return;
+      if(!buckets.has(key)) buckets.set(key,new Set());
+      buckets.get(key).add(id);
+    });
+    const learned=new Map();
+    buckets.forEach(function(ids,key){
+      if(ids.size===1) learned.set(key,Array.from(ids)[0]);
+    });
+    return {manualByCode:manualByCode,learnedByName:learned};
+  }
+
+  function accountingMatchEvidence(sourceName,item,context) {
+    const parts=accountingSourceParts(sourceName);
+    const outerTokens=accountingTokens(parts.outer,true);
+    const fullTokens=accountingTokens(parts.raw,true);
+    const innerTokens=accountingTokens(parts.inner,false);
+    const innerVisualTokens=accountingTokens(parts.inner,true);
+    const markTokens=accountingTokens(item.mark,true);
+    const nameTokens=accountingTokens(item.name,false);
+    const nameVisualTokens=accountingTokens(item.name,true);
+
+    const markExact=accountingTokensEndWith(outerTokens,markTokens);
+    const nameExact=innerTokens.length>0 && innerTokens.join("|")===nameTokens.join("|");
+    const nameVisualExact=innerVisualTokens.length>0 && innerVisualTokens.join("|")===nameVisualTokens.join("|");
+    const nameContained=!parts.hasParen && nameVisualTokens.length>=3 && accountingTokensEndWith(fullTokens,nameVisualTokens);
+    const sourceNums=accountingNumbers(parts.inner);
+    const projectNums=accountingNumbers(item.name);
+    const numbersExact=!!sourceNums && sourceNums===projectNums;
+    const markKey=accountingTokenKey(item.mark,true);
+    const markUnique=Number(context.markCounts.get(markKey)||0)===1;
+    const enoughNumbers=sourceNums ? sourceNums.split("|").length>=2 : false;
+
+    let score=0;
+    if(nameExact) score+=30000;
+    else if(nameVisualExact) score+=29000;
+    else if(nameContained) score+=28000;
+    if(markExact) score+=5000;
+    if(markExact&&markUnique&&numbersExact&&enoughNumbers) score+=7000;
+    else if(numbersExact) score+=1000;
+    score+=Math.round(accountingTokenSimilarity(sourceName,(item.mark||"")+" "+(item.name||""))*500);
+
+    const autoSafe=nameExact||nameVisualExact||nameContained||(markExact&&markUnique&&numbersExact&&enoughNumbers);
+    let reason="Похожее совпадение";
+    if(nameExact&&markExact) reason="Марка + точное обозначение";
+    else if(nameExact) reason="Точное обозначение";
+    else if(nameVisualExact&&markExact) reason="Марка + обозначение О/0";
+    else if(nameVisualExact) reason="Обозначение с допустимой О/0";
+    else if(nameContained) reason="Номенклатура в тексте отчёта";
+    else if(markExact&&markUnique&&numbersExact&&enoughNumbers) reason="Марка + числовое обозначение";
+
+    const attention=autoSafe&&!markExact&&(nameExact||nameVisualExact)
+      ?"Наименование совпало, марка в отчёте отличается"
+      :"";
+
+    return {
+      score:score,
+      autoSafe:autoSafe,
+      reason:reason,
+      attention:attention,
+      markExact:markExact,
+      nameExact:nameExact,
+      nameVisualExact:nameVisualExact,
+      numbersExact:numbersExact
+    };
+  }
+
+  function accountingLinkCandidates(code,query) {
+    const rows=(dataState.accountingRows||[]).filter(function(x){return String(x.material_code||"")===String(code||"");});
+    const sourceName=rows[0]&&rows[0].name||"";
+    const current=(dataState.accountingCodeLinks||[]).find(function(x){return String(x.accounting_code||"")===String(code||"");});
+    const context=accountingMatchingCatalogContext();
     const q=importNorm(query||"");
-    return (dataState.catalogItems||[]).filter(function(item){
-      if(!specIds.has(item.id)) return false;
+
+    return context.catalog.filter(function(item){
       if(!q) return true;
       return importNorm(item.mark).includes(q)||importNorm(item.name).includes(q);
     }).map(function(item){
-      const mark=accountingCompact(item.mark);
-      const name=accountingCompact(item.name);
-      const nums=accountingNumbers((item.mark||"")+" "+(item.name||""));
-      let score=0;
-      if(name&&sourceCompact.includes(name)) score+=2600+name.length;
-      if(mark&&sourceCompact.includes(mark)) score+=1700+mark.length;
-      if(sourceCompact&&name&&name.includes(sourceCompact)) score+=500;
-      if(sourceNums&&nums&&sourceNums===nums) score+=800;
-      score+=accountingTokenSimilarity(sourceName,(item.mark||"")+" "+(item.name||""))*500;
-      if(current&&current.catalog_item_id===item.id) score+=10000;
-      return {item:item,score:score,current:!!(current&&current.catalog_item_id===item.id)};
+      const evidence=accountingMatchEvidence(sourceName,item,context);
+      let score=evidence.score;
+      const isCurrent=!!(current&&current.catalog_item_id===item.id);
+      if(isCurrent) score+=100000;
+      return {
+        item:item,
+        score:score,
+        current:isCurrent,
+        autoSafe:evidence.autoSafe,
+        reason:evidence.reason,
+        attention:evidence.attention
+      };
     }).sort(function(a,b){
       return b.score-a.score||
         String(a.item.mark||"").localeCompare(String(b.item.mark||""),"ru",{numeric:true,sensitivity:"base"})||
@@ -5700,7 +5820,7 @@
         }).filter(Boolean)));
         return '<tr class="recon-candidate-row'+(c.current?' is-selected':'')+'" data-accounting-candidate-row>'+
           '<td class="recon-pick-cell"><input type="radio" name="accounting-catalog-candidate" data-accounting-catalog="'+esc(c.item.id)+'" '+(c.current?'checked':'')+'></td>'+
-          '<td><strong>'+esc(c.item.mark||"—")+'</strong>'+(index===0&&!c.current?'<small class="recon-table-note">Предлагаем</small>':c.current?'<small class="recon-table-note">Текущая связь</small>':'')+'</td>'+
+          '<td><strong>'+esc(c.item.mark||"—")+'</strong>'+(index===0&&!c.current?'<small class="recon-table-note">Предлагаем · '+esc(c.reason||"")+'</small>':c.current?'<small class="recon-table-note">Текущая связь</small>':'')+'</td>'+
           '<td>'+esc(c.item.name||"—")+'</td>'+
           '<td>'+esc(sections.slice(0,2).join(" / ")||"—")+'</td>'+
         '</tr>';
@@ -5774,7 +5894,7 @@
         '<td title="'+esc(name)+'">'+esc(name)+'</td>'+
         '<td>'+esc(x.item&&x.item.mark||"—")+'</td>'+
         '<td>'+esc(x.item&&x.item.name||"Не сопоставлено")+'</td>'+
-        '<td><span class="accounting-link-kind '+(!x.link?'unmatched':x.link.link_method)+'">'+esc(linkLabel)+'</span><span> · </span><button class="table-text-action" type="button" data-accounting-link-edit="'+esc(x.code)+'">'+action+'</button></td>'+
+        '<td title="'+esc(x.link&&x.link.note||"")+'"><span class="accounting-link-kind '+(!x.link?'unmatched':x.link.link_method)+'">'+esc(linkLabel)+'</span><span> · </span><button class="table-text-action" type="button" data-accounting-link-edit="'+esc(x.code)+'">'+action+'</button></td>'+
       '</tr>';
     }).join("");
     if(!body) body=tableMessage(filter==="all"?"После импорта бухгалтерии здесь появятся коды для сопоставления.":"По выбранному фильтру строк нет.",5);
@@ -7387,52 +7507,63 @@
     return values.findIndex(function(value){const text=importNorm(value);return patterns.some(function(pattern){return pattern.test(text);});});
   }
 
-  function accountingMatchNorm(value) {
-    return String(value==null?"":value)
-      .toLowerCase()
-      .replace(/[()]/g,"")
-      .replace(/[^a-zA-Zа-яА-ЯёЁ0-9]/g,"");
-  }
-
   function accountingAutoLinkMap(rows) {
     const sourceByCode=new Map();
     (rows||[]).forEach(function(row){
       const code=String(row.material_code||"").trim();
-      const name=accountingMatchNorm(row.name);
+      const name=String(row.name||"").trim();
       if(!code||!name) return;
       if(!sourceByCode.has(code)) sourceByCode.set(code,new Set());
       sourceByCode.get(code).add(name);
     });
 
-    const catalog=(dataState.catalogItems||[]).map(function(item){
-      return {
-        id:item.id,
-        mark:accountingMatchNorm(item.mark),
-        name:accountingMatchNorm(item.name)
-      };
-    }).filter(function(item){return item.mark.length>=4;});
-
+    const context=accountingMatchingCatalogContext();
+    const memory=accountingManualNameMemory();
     const result=new Map();
-    sourceByCode.forEach(function(names,code){
-      let bestScore=0;
-      let bestIds=[];
-      catalog.forEach(function(item){
-        let itemScore=0;
+
+    sourceByCode.forEach(function(namesSet,code){
+      const names=Array.from(namesSet);
+      const manualId=memory.manualByCode.get(code);
+      if(manualId){
+        result.set(code,{catalog_item_id:manualId,reason:"Сохранённая ручная связь"});
+        return;
+      }
+
+      const learnedIds=new Set();
+      names.forEach(function(name){
+        const learned=memory.learnedByName.get(accountingTokenKey(name,true));
+        if(learned) learnedIds.add(learned);
+      });
+      if(learnedIds.size===1){
+        result.set(code,{catalog_item_id:Array.from(learnedIds)[0],reason:"Обучено по ручной связи такого же наименования"});
+        return;
+      }
+
+      let bestScore=-1;
+      let best=[];
+      context.catalog.forEach(function(item){
+        let bestEvidence=null;
         names.forEach(function(sourceName){
-          let score=0;
-          if(item.name.length>=4&&sourceName.indexOf(item.name)>=0) score+=item.name.length*100;
-          if(item.mark.length>=4&&sourceName.indexOf(item.mark)>=0) score+=item.mark.length;
-          if(score>itemScore) itemScore=score;
+          const evidence=accountingMatchEvidence(sourceName,item,context);
+          if(!evidence.autoSafe) return;
+          if(!bestEvidence||evidence.score>bestEvidence.score) bestEvidence=evidence;
         });
-        if(itemScore<=0) return;
-        if(itemScore>bestScore){
-          bestScore=itemScore;
-          bestIds=[item.id];
-        }else if(itemScore===bestScore&&bestIds.indexOf(item.id)<0){
-          bestIds.push(item.id);
+        if(!bestEvidence) return;
+        if(bestEvidence.score>bestScore){
+          bestScore=bestEvidence.score;
+          best=[{item:item,evidence:bestEvidence}];
+        }else if(bestEvidence.score===bestScore){
+          best.push({item:item,evidence:bestEvidence});
         }
       });
-      if(bestIds.length===1) result.set(code,bestIds[0]);
+
+      if(best.length===1){
+        const chosen=best[0];
+        const note=chosen.evidence.attention
+          ? chosen.evidence.reason+"; "+chosen.evidence.attention
+          : chosen.evidence.reason;
+        result.set(code,{catalog_item_id:chosen.item.id,reason:note});
+      }
     });
     return result;
   }
@@ -7492,7 +7623,11 @@
     }
     if(!rows.length) throw new Error("После проверки в бухгалтерском отчёте не осталось строк материалов.");
     const autoLinks=accountingAutoLinkMap(rows);
-    rows.forEach(function(row){row.catalog_item_id=autoLinks.get(String(row.material_code||"").trim())||null;});
+    rows.forEach(function(row){
+      const matched=autoLinks.get(String(row.material_code||"").trim())||null;
+      row.catalog_item_id=matched&&matched.catalog_item_id||null;
+      row.catalog_match_reason=matched&&matched.reason||null;
+    });
     return {buffer:buffer,rows:rows,period:detected};
   }
 
