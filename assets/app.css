@@ -2716,10 +2716,17 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   outline:none;
 }
 .execution-period-select:hover{
-  color:#2563EB;
+  color:#30313A;
 }
 .execution-period-select:focus,
 .execution-period-select:focus-visible{
+  color:#30313A;
   outline:none;
   box-shadow:none!important;
+}
+.execution-period-select option{
+  color:#30313A;
+  background:#fff;
+  font-weight:400;
+  text-decoration:none;
 }
