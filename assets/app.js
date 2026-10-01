@@ -1226,7 +1226,7 @@
           '<div class="mv-qty"><b>Осталось смонтировать</b><strong>'+fmt0(Math.max(0,st.qty-mountedQty))+' шт.</strong><span>'+fmt(Math.max(0,st.qty-mountedQty)*volumePerPiece)+' м³</span></div></div>');
         const geometry=block("Характеристики",'<div class="mv-cost-grid">'+
           '<div class="mv-cost"><b>Размеры панели</b><strong>'+(cardGeometry?esc(cardGeometry.label):"—")+'</strong><span>длина × высота × толщина</span></div>'+
-          '<div class="mv-cost"><b>Площадь панели</b><strong>'+(cardGeometry?numFmt.format(cardGeometry.area)+" м²":"—")+'</strong><span>длина × высота</span></div>'+
+          '<div class="mv-cost"><b>Площадь панели</b><strong>'+(cardGeometry&&cardGeometry.area!=null?numFmt.format(cardGeometry.area)+" м²":"—")+'</strong><span>длина × высота</span></div>'+
           '<div class="mv-cost"><b>Объём 1 шт.</b><strong>'+(volumePerPiece?fmt(volumePerPiece)+" м³":"—")+'</strong><span>из прайса поставщика · константа</span></div>'+
           '</div>','mv-mt');
         const cost=block("Стоимость",'<div class="mv-cost-grid"><div class="mv-cost"><b>По смете</b><strong>'+(estimateAmount?money(estimateAmount)+" BYN":"—")+'</strong><span>связанные позиции материала</span></div><div class="mv-cost"><b>Запроцентовано</b><strong>'+(avrAmount?money(avrAmount)+" BYN":"—")+'</strong><span>по действующим АВР</span></div><div class="mv-cost"><b>Остаток</b><strong>'+(estimateAmount?money(Math.max(0,estimateAmount-avrAmount))+" BYN":"—")+'</strong><span>по сметной стоимости</span></div></div>','mv-mt');
@@ -6284,7 +6284,7 @@
                 '<td>'+esc(estimateDisplayBasis(m)||"")+'</td>'+
                 '<td class="work-link-material-name" data-material-card-open="'+esc(m.catalog_item_id||"")+'">'+esc(estimateDisplayName(m)||"")+'</td>'+
                 '<td class="center work-link-dim">'+(geometry?esc(geometry.label):"—")+'</td>'+
-                '<td class="num work-link-area">'+(geometry?numFmt.format(geometry.area):"—")+'</td>'+
+                '<td class="num work-link-area">'+(geometry&&geometry.area!=null?numFmt.format(geometry.area):"—")+'</td>'+
                 '<td class="center">'+esc(m.unit||"")+'</td>'+
                 '<td class="num">'+fmt(m.quantity)+'</td>'+
                 '<td><span class="work-link-method '+(method==="ручная"?"manual":"auto")+'">'+method+'</span></td>'+
@@ -6308,7 +6308,7 @@
                   '<td>'+esc(estimateDisplayBasis(m)||"")+'</td>'+
                   '<td class="work-link-material-name" data-material-card-open="'+esc(m.catalog_item_id||"")+'">'+esc(estimateDisplayName(m)||"")+'</td>'+
                   '<td class="center work-link-dim">'+(geometry?esc(geometry.label):"—")+'</td>'+
-                  '<td class="num work-link-area">'+(geometry?numFmt.format(geometry.area):"—")+'</td>'+
+                  '<td class="num work-link-area">'+(geometry&&geometry.area!=null?numFmt.format(geometry.area):"—")+'</td>'+
                   '<td class="center">'+esc(m.unit||"")+'</td>'+
                   '<td class="num">'+fmt(m.quantity)+'</td>'+
                   '<td><span class="work-link-status warn">Без работы</span></td>'+
