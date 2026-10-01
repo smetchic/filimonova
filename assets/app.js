@@ -47,6 +47,7 @@
     s29: {
       period: localStorage.getItem("filimonova.s29.period") || ""
     },
+    accountingLinkFilter: localStorage.getItem("filimonova.accounting.linkFilter") || "unmatched",
     columnFilters: {},
     columnSort: {},
     isAdmin: false
@@ -5363,17 +5364,221 @@
     $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table"><thead><tr><th>Период</th><th>Файл</th><th>Импортирован</th><th>Строк</th><th>Статус</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
 
+  function accountingCompact(value) {
+    return importNorm(value).replace(/[^a-zA-Zа-яА-ЯёЁ0-9]/g,"");
+  }
+
+  function accountingNumbers(value) {
+    return (String(value==null?"":value).match(/[0-9]+/g)||[]).join("|");
+  }
+
+  function accountingTokenSimilarity(a,b) {
+    const aa=new Set(importNorm(a).split(/[^a-zа-яё0-9]+/i).filter(function(x){return x.length>1;}));
+    const bb=new Set(importNorm(b).split(/[^a-zа-яё0-9]+/i).filter(function(x){return x.length>1;}));
+    if(!aa.size||!bb.size) return 0;
+    let common=0;
+    aa.forEach(function(x){if(bb.has(x)) common++;});
+    return common/Math.max(aa.size,bb.size);
+  }
+
+  function accountingLinkCandidates(code,query) {
+    const rows=(dataState.accountingRows||[]).filter(function(x){return x.material_code===code;});
+    const sourceName=rows[0]&&rows[0].name||"";
+    const sourceCompact=accountingCompact(sourceName);
+    const sourceNums=accountingNumbers(sourceName);
+    const current=(dataState.accountingCodeLinks||[]).find(function(x){return x.accounting_code===code;});
+    const specIds=new Set((dataState.specRows||[]).map(function(x){return x.catalog_item_id;}));
+    const q=importNorm(query||"");
+    return (dataState.catalogItems||[]).filter(function(item){
+      if(!specIds.has(item.id)) return false;
+      if(!q) return true;
+      return importNorm(item.mark).includes(q)||importNorm(item.name).includes(q);
+    }).map(function(item){
+      const mark=accountingCompact(item.mark);
+      const name=accountingCompact(item.name);
+      const nums=accountingNumbers((item.mark||"")+" "+(item.name||""));
+      let score=0;
+      if(name&&sourceCompact.includes(name)) score+=2600+name.length;
+      if(mark&&sourceCompact.includes(mark)) score+=1700+mark.length;
+      if(sourceCompact&&name&&name.includes(sourceCompact)) score+=500;
+      if(sourceNums&&nums&&sourceNums===nums) score+=800;
+      score+=accountingTokenSimilarity(sourceName,(item.mark||"")+" "+(item.name||""))*500;
+      if(current&&current.catalog_item_id===item.id) score+=10000;
+      return {item:item,score:score,current:!!(current&&current.catalog_item_id===item.id)};
+    }).sort(function(a,b){
+      return b.score-a.score||
+        String(a.item.mark||"").localeCompare(String(b.item.mark||""),"ru",{numeric:true,sensitivity:"base"})||
+        String(a.item.name||"").localeCompare(String(b.item.name||""),"ru",{numeric:true,sensitivity:"base"});
+    });
+  }
+
+  function accountingLinkModal() {
+    let modal=document.getElementById("accountingLinkModal");
+    if(modal) return modal;
+    modal=document.createElement("div");
+    modal.id="accountingLinkModal";
+    modal.className="spec-import-backdrop";
+    modal.innerHTML=
+      '<div class="recon-edit-modal accounting-link-modal">'+
+        '<div class="spec-import-head"><div><strong>Связь с бухгалтерией</strong><span class="accounting-link-caption">Выберите позицию нашей спецификации</span></div><button class="spec-import-close" type="button">×</button></div>'+
+        '<div class="recon-source-card"><div class="recon-block-label">Строка бухгалтерии — привязываем</div><div class="recon-source-grid">'+
+          '<div><span>Код материала</span><strong class="accounting-source-code"></strong></div>'+
+          '<div class="recon-source-name-wrap"><span>Наименование бухгалтерии</span><strong class="accounting-source-name"></strong></div>'+
+          '<div><span>Текущая связь</span><strong class="accounting-current-link"></strong></div>'+
+        '</div></div>'+
+        '<div class="accounting-link-search-row"><span>Наша спецификация</span><input type="text" data-accounting-candidate-search placeholder="Поиск по марке или наименованию"></div>'+
+        '<div class="recon-edit-list accounting-candidate-list"></div>'+
+        '<div class="spec-import-foot"><button class="context-link accounting-link-remove" type="button">Убрать связь</button><span class="accounting-link-state"></span><span class="spacer"></span><button class="context-link accounting-link-cancel" type="button">Отмена</button><button class="context-link accounting-link-save" type="button">Сохранить</button></div>'+
+      '</div>';
+    document.body.appendChild(modal);
+    const close=function(){modal.classList.remove("open");};
+    modal.querySelector(".spec-import-close").onclick=close;
+    modal.querySelector(".accounting-link-cancel").onclick=close;
+    modal.onclick=function(e){if(e.target===modal) close();};
+    modal.querySelector("[data-accounting-candidate-search]").oninput=function(){
+      renderAccountingLinkCandidates(modal,modal.dataset.accountingCode,this.value);
+    };
+    modal.querySelector(".accounting-link-save").onclick=async function(){
+      const code=modal.dataset.accountingCode;
+      const picked=modal.querySelector("[data-accounting-catalog]:checked");
+      if(!picked) return;
+      const state=modal.querySelector(".accounting-link-state");
+      state.textContent="Сохраняю…";
+      try{
+        const result=await client.rpc("set_accounting_code_link",{
+          p_project_id:dataState.project.id,
+          p_accounting_code:code,
+          p_catalog_item_id:picked.dataset.accountingCatalog
+        });
+        if(result.error) throw result.error;
+        await refreshProjectDataSlices(["accountingCodeLinks"],dataState.project);
+        modal.classList.remove("open");
+        rerenderContent();
+      }catch(err){
+        state.textContent=err&&err.message?err.message:String(err);
+      }
+    };
+    modal.querySelector(".accounting-link-remove").onclick=async function(){
+      const code=modal.dataset.accountingCode;
+      const current=(dataState.accountingCodeLinks||[]).find(function(x){return x.accounting_code===code;});
+      if(!current) return;
+      const ok=await executionConfirm("Убрать связь","Бухгалтерский код "+code+" больше не будет связан с проектной номенклатурой.","Убрать связь");
+      if(!ok) return;
+      const state=modal.querySelector(".accounting-link-state");
+      state.textContent="Удаляю…";
+      try{
+        const result=await client.rpc("set_accounting_code_link",{
+          p_project_id:dataState.project.id,
+          p_accounting_code:code,
+          p_catalog_item_id:null
+        });
+        if(result.error) throw result.error;
+        await refreshProjectDataSlices(["accountingCodeLinks"],dataState.project);
+        modal.classList.remove("open");
+        rerenderContent();
+      }catch(err){
+        state.textContent=err&&err.message?err.message:String(err);
+      }
+    };
+    return modal;
+  }
+
+  function renderAccountingLinkCandidates(modal,code,query) {
+    const ranked=accountingLinkCandidates(code,query);
+    const list=modal.querySelector(".accounting-candidate-list");
+    const shown=ranked.slice(0,80);
+    if(!shown.length){
+      list.innerHTML='<div class="review-note">По запросу ничего не найдено.</div>';
+      return;
+    }
+    list.innerHTML='<table class="recon-candidate-table accounting-candidate-table"><colgroup><col class="accounting-col-pick"><col class="accounting-col-mark"><col><col class="accounting-col-section"></colgroup><thead><tr><th>Выбор</th><th>Марка</th><th>Наименование проекта</th><th>Раздел</th></tr></thead><tbody>'+
+      shown.map(function(c,index){
+        const sections=Array.from(new Set((dataState.specRows||[]).filter(function(r){return r.catalog_item_id===c.item.id;}).map(function(r){
+          const s=(dataState.specSections||[]).find(function(x){return x.id===r.section_id;});
+          return s?s.name:"";
+        }).filter(Boolean)));
+        return '<tr class="recon-candidate-row'+(c.current?' is-selected':'')+'" data-accounting-candidate-row>'+
+          '<td class="recon-pick-cell"><input type="radio" name="accounting-catalog-candidate" data-accounting-catalog="'+esc(c.item.id)+'" '+(c.current?'checked':'')+'></td>'+
+          '<td><strong>'+esc(c.item.mark||"—")+'</strong>'+(index===0&&!c.current?'<small class="recon-table-note">Предлагаем</small>':c.current?'<small class="recon-table-note">Текущая связь</small>':'')+'</td>'+
+          '<td>'+esc(c.item.name||"—")+'</td>'+
+          '<td>'+esc(sections.slice(0,2).join(" / ")||"—")+'</td>'+
+        '</tr>';
+      }).join("")+'</tbody></table>';
+    list.querySelectorAll("[data-accounting-candidate-row]").forEach(function(row){
+      const input=row.querySelector("[data-accounting-catalog]");
+      row.onclick=function(ev){
+        if(ev.target!==input) input.checked=true;
+        list.querySelectorAll("[data-accounting-candidate-row]").forEach(function(r){
+          r.classList.toggle("is-selected",!!r.querySelector("[data-accounting-catalog]:checked"));
+        });
+      };
+      input.onchange=function(){
+        list.querySelectorAll("[data-accounting-candidate-row]").forEach(function(r){
+          r.classList.toggle("is-selected",!!r.querySelector("[data-accounting-catalog]:checked"));
+        });
+      };
+    });
+  }
+
+  function openAccountingLinkEditor(code) {
+    const rows=(dataState.accountingRows||[]).filter(function(x){return x.material_code===code;});
+    if(!rows.length) return;
+    const link=(dataState.accountingCodeLinks||[]).find(function(x){return x.accounting_code===code;});
+    const item=link?(dataState.catalogItems||[]).find(function(x){return x.id===link.catalog_item_id;}):null;
+    const modal=accountingLinkModal();
+    modal.dataset.accountingCode=code;
+    modal.querySelector(".accounting-source-code").textContent=code;
+    modal.querySelector(".accounting-source-name").textContent=rows[0].name||"—";
+    modal.querySelector(".accounting-current-link").textContent=item?(item.mark+" · "+item.name):"Не сопоставлено";
+    modal.querySelector(".accounting-link-state").textContent="";
+    modal.querySelector(".accounting-link-remove").style.display=link?"":"none";
+    const search=modal.querySelector("[data-accounting-candidate-search]");
+    search.value="";
+    renderAccountingLinkCandidates(modal,code,"");
+    modal.classList.add("open");
+    setTimeout(function(){search.focus();},0);
+  }
+
   function renderAccountingLinks() {
-    const catalog=new Map(dataState.catalogItems.map(function(x){return [x.id,x];}));
-    const codes=Array.from(new Set((dataState.accountingRows||[]).map(function(x){return x.material_code;}))).sort();
-    let body=codes.map(function(code){
-      const rows=(dataState.accountingRows||[]).filter(function(x){return x.material_code===code;});
-      const link=(dataState.accountingCodeLinks||[]).find(function(x){return x.accounting_code===code;});const item=link?catalog.get(link.catalog_item_id):null;
-      return '<tr class="data-row"><td>'+esc(code)+'</td><td>'+esc(rows[0]&&rows[0].name||"")+'</td><td>'+esc(item&&item.mark||"—")+'</td><td>'+esc(item&&item.name||"Не сопоставлено")+'</td><td>'+esc(link&&link.link_method==="manual"?"Ручная":"Авто")+'</td></tr>';
+    const catalog=new Map((dataState.catalogItems||[]).map(function(x){return [x.id,x];}));
+    const byCode=new Map();
+    (dataState.accountingRows||[]).forEach(function(row){
+      const code=String(row.material_code||"").trim();
+      if(!code) return;
+      if(!byCode.has(code)) byCode.set(code,[]);
+      byCode.get(code).push(row);
+    });
+    const filter=ui.accountingLinkFilter||"unmatched";
+    const rows=Array.from(byCode.entries()).map(function(entry){
+      const code=entry[0],sourceRows=entry[1];
+      const link=(dataState.accountingCodeLinks||[]).find(function(x){return x.accounting_code===code;});
+      const item=link?catalog.get(link.catalog_item_id):null;
+      return {code:code,sourceRows:sourceRows,link:link,item:item};
+    }).filter(function(x){
+      if(filter==="unmatched") return !x.link;
+      if(filter==="auto") return !!x.link&&x.link.link_method==="auto";
+      if(filter==="manual") return !!x.link&&x.link.link_method==="manual";
+      return true;
+    }).sort(function(a,b){
+      if(!!a.link!==!!b.link) return a.link?1:-1;
+      return String(a.code).localeCompare(String(b.code),"ru",{numeric:true});
+    });
+
+    let body=rows.map(function(x){
+      const name=x.sourceRows[0]&&x.sourceRows[0].name||"";
+      const linkLabel=!x.link?"Не сопоставлено":x.link.link_method==="manual"?"Ручная":"Авто";
+      const action=!x.link?"сопоставить":"изменить";
+      return '<tr class="data-row">'+
+        '<td>'+esc(x.code)+'</td>'+
+        '<td title="'+esc(name)+'">'+esc(name)+'</td>'+
+        '<td>'+esc(x.item&&x.item.mark||"—")+'</td>'+
+        '<td>'+esc(x.item&&x.item.name||"Не сопоставлено")+'</td>'+
+        '<td><span class="accounting-link-kind '+(!x.link?'unmatched':x.link.link_method)+'">'+esc(linkLabel)+'</span><span> · </span><button class="table-text-action" type="button" data-accounting-link-edit="'+esc(x.code)+'">'+action+'</button></td>'+
+      '</tr>';
     }).join("");
-    if(!body) body=tableMessage("После импорта бухгалтерии здесь появятся коды для сопоставления.",5);
+    if(!body) body=tableMessage(filter==="all"?"После импорта бухгалтерии здесь появятся коды для сопоставления.":"По выбранному фильтру строк нет.",5);
     $("workArea").className="work-area table-work";
-    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table"><thead><tr><th>Код материала</th><th>Наименование бухгалтерии</th><th>Марка проекта</th><th>Номенклатура проекта</th><th>Связь</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table accounting-links-table"><thead><tr><th>Код материала</th><th>Наименование бухгалтерии</th><th>Марка проекта</th><th>Номенклатура проекта</th><th>Связь</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
 
   function renderCarryovers() {
@@ -7161,6 +7366,15 @@
     if(accountingPeriod) accountingPeriod.onchange=function(){ui.s29.period=accountingPeriod.value;localStorage.setItem("filimonova.s29.period",accountingPeriod.value);renderPage("s29",1);};
     const accountingButton=document.querySelector("[data-accounting-import]");const accountingFile=document.querySelector("[data-accounting-file]");
     if(accountingButton&&accountingFile){accountingButton.onclick=function(){accountingFile.click();};accountingFile.onchange=function(){const file=accountingFile.files&&accountingFile.files[0];if(file)importAccountingFile(file,ui.s29.period);};}
+    const accountingLinkFilter=document.querySelector("[data-accounting-link-filter]");
+    if(accountingLinkFilter) accountingLinkFilter.onchange=function(){
+      ui.accountingLinkFilter=accountingLinkFilter.value;
+      localStorage.setItem("filimonova.accounting.linkFilter",ui.accountingLinkFilter);
+      rerenderContent();
+    };
+    document.querySelectorAll("[data-accounting-link-edit]").forEach(function(btn){
+      btn.onclick=function(e){e.stopPropagation();openAccountingLinkEditor(btn.dataset.accountingLinkEdit);};
+    });
     const calculate=document.querySelector("[data-s29-calculate]");if(calculate)calculate.onclick=calculateS29;
     const fix=document.querySelector("[data-s29-fix]");if(fix)fix.onclick=function(){fix.disabled=true;fixS29(fix.dataset.s29Fix).catch(function(err){alert(err.message||err);fix.disabled=false;});};
     const excel=document.querySelector("[data-s29-excel]");if(excel)excel.onclick=exportS29Excel;
@@ -7290,6 +7504,15 @@
     } else if(pageKey==="recon" && tab===1){
       $("serviceRight").innerHTML =
         '<button class="service-action" data-recon-journal-export type="button">Экспорт в Excel</button>';
+    } else if(pageKey==="s29" && tab===2){
+      $("serviceRight").innerHTML =
+        '<span class="context-muted">Показать:</span>'+
+        '<select class="service-select" data-accounting-link-filter aria-label="Фильтр связей бухгалтерии">'+
+          '<option value="unmatched"'+(ui.accountingLinkFilter==="unmatched"?' selected':'')+'>Не сопоставлено</option>'+
+          '<option value="all"'+(ui.accountingLinkFilter==="all"?' selected':'')+'>Все</option>'+
+          '<option value="auto"'+(ui.accountingLinkFilter==="auto"?' selected':'')+'>Авто</option>'+
+          '<option value="manual"'+(ui.accountingLinkFilter==="manual"?' selected':'')+'>Ручные</option>'+
+        '</select>';
     } else if(pageKey==="links"){
       if(!ui.workLinkFilter) ui.workLinkFilter="all";
       $("serviceRight").innerHTML =
