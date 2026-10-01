@@ -6938,11 +6938,15 @@
     const workbook=XLSX.read(buffer,{type:"array",cellDates:true,cellFormula:false});
     const all=[];
     workbook.SheetNames.forEach(function(sheet){
-      XLSX.utils.sheet_to_json(workbook.Sheets[sheet],{header:1,defval:null,raw:true,blankrows:false}).forEach(function(values,index){all.push({sheet:sheet,rowNo:index+1,values:values});});
+      const rawRows=XLSX.utils.sheet_to_json(workbook.Sheets[sheet],{header:1,defval:null,raw:true,blankrows:false});
+      const displayRows=XLSX.utils.sheet_to_json(workbook.Sheets[sheet],{header:1,defval:null,raw:false,blankrows:false,dateNF:"dd.mm.yyyy"});
+      rawRows.forEach(function(values,index){
+        all.push({sheet:sheet,rowNo:index+1,values:values,displayValues:displayRows[index]||[]});
+      });
     });
-    const detected=detectWorkbookPeriod(all,expectedKey);
-    if(!detected) throw new Error("Не удалось определить месяц бухгалтерского отчёта.");
-    if(detected!==expectedKey) throw new Error("В отчёте указан "+periodLabel(detected,false)+", а выбран "+periodLabel(expectedKey,false)+".");
+    const detected=detectAccountingPeriod(all,expectedKey,file&&file.name||"");
+    if(!detected) throw new Error("Не удалось однозначно определить месяц бухгалтерского отчёта по дате отчёта.");
+    if(detected!==expectedKey) throw new Error("В отчёте определён "+periodLabel(detected,false)+", а выбран "+periodLabel(expectedKey,false)+".");
     let headerAt=-1,columns=null,dataAt=-1;
     for(let i=0;i<all.length;i++){
       const cells=all[i].values;
