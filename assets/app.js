@@ -5768,6 +5768,7 @@
             status:"open",
             snapshot:{
               estimate_id:row.estimate_id,
+              estimate_number:(dataState.estimates.find(function(e){return e.id===row.estimate_id;})||{}).number||"",
               estimate_position:row.position,
               estimate_basis:estimateSourceValue(row,"basis"),
               estimate_name:estimateSourceValue(row,"name"),
@@ -5838,10 +5839,35 @@
   }
 
   function renderEstimateJournal() {
-    const rows=(dataState.reconciliationJournal||[]).filter(function(j){return j.status==="open";});
+    const estimateRowById=new Map((dataState.estimateRows||[]).map(function(x){return [x.id,x];}));
+    const estimateById=new Map((dataState.estimates||[]).map(function(x){return [x.id,x];}));
+    const journalNaturalCompare=function(a,b){
+      return String(a==null?"":a).localeCompare(String(b==null?"":b),"ru",{numeric:true,sensitivity:"base"});
+    };
+    const rows=(dataState.reconciliationJournal||[])
+      .filter(function(j){return j.status==="open";})
+      .slice()
+      .sort(function(a,b){
+        const ra=estimateRowById.get(a.estimate_row_id)||null;
+        const rb=estimateRowById.get(b.estimate_row_id)||null;
+        const ea=ra?estimateById.get(ra.estimate_id)||null:null;
+        const eb=rb?estimateById.get(rb.estimate_id)||null:null;
+        const sa=a.snapshot||{}, sb=b.snapshot||{};
+        const estimateNoA=ea?ea.number:(sa.estimate_number||"");
+        const estimateNoB=eb?eb.number:(sb.estimate_number||"");
+        const byEstimate=journalNaturalCompare(estimateNoA,estimateNoB);
+        if(byEstimate) return byEstimate;
+        const positionA=ra?ra.position:(sa.estimate_position||"");
+        const positionB=rb?rb.position:(sb.estimate_position||"");
+        const byPosition=journalNaturalCompare(positionA,positionB);
+        if(byPosition) return byPosition;
+        const specA=(sa.specification_positions||[])[0]||"";
+        const specB=(sb.specification_positions||[])[0]||"";
+        return journalNaturalCompare(specA,specB);
+      });
     let body=rows.map(function(j){
-      const r=dataState.estimateRows.find(function(x){return x.id===j.estimate_row_id;});
-      const e=r?dataState.estimates.find(function(x){return x.id===r.estimate_id;}):null;
+      const r=estimateRowById.get(j.estimate_row_id)||null;
+      const e=r?estimateById.get(r.estimate_id)||null:null;
       const snap=j.snapshot||{};
       const srows=r?linkedSpecRowsForEstimateRow(r):[];
       const linked=srows.length>0 || (snap.specification_positions||[]).length>0;
