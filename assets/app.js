@@ -1249,7 +1249,7 @@
     const supplierUnit=supplierModel && supplierModel.singlePrice!=null && supplierModel.state!=="Проверить"
       ?Number(supplierModel.singlePrice):null;
     const cardGeometry=workLinkMaterialGeometry(item)||workLinkMaterialGeometry(linkedEstimateRows[0]||null);
-    function unitMoney(value){return value!=null && Number.isFinite(value) && value>0?money(value)+" BYN":"—";}
+    function unitMoney(value){return value!=null && Number.isFinite(value) && value>0?money(value)+" руб.":"—";}
     const sectionLabel=st.rows.length&&st.rows[0].section?st.rows[0].section.name:"Раздел";
     const allNames=Array.from(new Set(dataState.catalogItems.map(function(x){return x.name;}).filter(Boolean))).sort(function(a,b){return a.localeCompare(b,"ru",{numeric:true});});
     let modal=document.getElementById("materialCardModal");
@@ -1282,7 +1282,7 @@
           '<div class="mv-cost"><b>Площадь панели</b><strong>'+(cardGeometry&&cardGeometry.area!=null?numFmt.format(cardGeometry.area)+" м²":"—")+'</strong><span>длина × высота</span></div>'+
           '<div class="mv-cost"><b>Объём 1 шт.</b><strong>'+(volumePerPiece?fmt(volumePerPiece)+" м³":"—")+'</strong><span>из прайса поставщика · константа</span></div>'+
           '</div>','mv-mt');
-        const cost=block("Стоимость",'<div class="mv-cost-grid"><div class="mv-cost"><b>По смете</b><strong>'+(estimateAmount?money(estimateAmount)+" BYN":"—")+'</strong><span>связанные позиции материала</span></div><div class="mv-cost"><b>Запроцентовано</b><strong>'+(avrAmount?money(avrAmount)+" BYN":"—")+'</strong><span>по действующим АВР</span></div><div class="mv-cost"><b>Остаток</b><strong>'+(estimateAmount?money(Math.max(0,estimateAmount-avrAmount))+" BYN":"—")+'</strong><span>по сметной стоимости</span></div></div>','mv-mt');
+        const cost=block("Стоимость",'<div class="mv-cost-grid"><div class="mv-cost"><b>По смете</b><strong>'+(estimateAmount?money(estimateAmount)+" руб.":"—")+'</strong><span>связанные позиции материала</span></div><div class="mv-cost"><b>Запроцентовано</b><strong>'+(avrAmount?money(avrAmount)+" руб.":"—")+'</strong><span>по действующим АВР</span></div><div class="mv-cost"><b>Остаток</b><strong>'+(estimateAmount?money(Math.max(0,estimateAmount-avrAmount))+" руб.":"—")+'</strong><span>по сметной стоимости</span></div></div>','mv-mt');
         const unitCost=block('Стоимость единицы <span class="mv-badge">с НДС</span>',
           '<div class="mv-unit-grid">'+
           '<div class="mv-unit"><b>Материал по смете, 1 шт.</b><strong>'+unitMoney(materialUnit)+'</strong><span>сметная стоимость материала</span></div>'+
@@ -1325,7 +1325,7 @@
           '<div class="mv-grid2">'+block("Поставка",'<div class="mv-meter-row"><b>Поставлено</b><div class="mv-track"><div class="mv-fill" style="width:'+Math.min(100,st.qty?suppliedQty/st.qty*100:0)+'%"></div></div><div class="mv-meter-val">'+fmt0(suppliedQty)+' / '+fmt0(st.qty)+' шт.</div></div><div class="mv-meter-row"><b>Осталось поставить</b><div></div><div class="mv-meter-val">'+fmt0(Math.max(0,st.qty-suppliedQty))+' шт.</div></div>')+
           block("Монтаж",'<div class="mv-meter-row"><b>Смонтировано</b><div class="mv-track"><div class="mv-fill good" style="width:'+Math.min(100,st.qty?mountedQty/st.qty*100:0)+'%"></div></div><div class="mv-meter-val">'+fmt0(mountedQty)+' / '+fmt0(st.qty)+' шт.</div></div><div class="mv-meter-row"><b>Осталось смонтировать</b><div></div><div class="mv-meter-val">'+fmt0(Math.max(0,st.qty-mountedQty))+' шт.</div></div>')+'</div>';
       } else if(tab==="avrS29"){
-        b.innerHTML='<div class="mv-grid3 mv-mb">'+block("Запроцентовано",'<div class="mv-single"><div class="mv-kpi-value good">'+fmt0(avrQty)+' шт. / '+fmt(avrM3)+' м³</div><div class="mv-kpi-sub">'+(avrAmount?money(avrAmount)+" BYN":"—")+'</div></div>')+
+        b.innerHTML='<div class="mv-grid3 mv-mb">'+block("Запроцентовано",'<div class="mv-single"><div class="mv-kpi-value good">'+fmt0(avrQty)+' шт. / '+fmt(avrM3)+' м³</div><div class="mv-kpi-sub">'+(avrAmount?money(avrAmount)+" руб.":"—")+'</div></div>')+
           block('Списано <span class="mv-badge">без НДС</span>','<div class="mv-single"><div class="mv-kpi-value warn">'+fmt(writtenM3)+' м³</div><div class="mv-kpi-sub">по С-29 / бухгалтерии</div></div>')+
           block("Разница",'<div class="mv-single"><div class="mv-kpi-value warn">'+fmt(Math.abs(avrM3-writtenM3))+' м³</div></div>')+'</div>'+
           block("АВР и списание по месяцам",'<div class="mv-table-wrap"><table><thead><tr><th>Показатель</th><th>Кол-во, шт.</th><th>АВР, м³</th><th>Стоимость АВР</th><th>С-29, м³</th><th>Разница</th></tr></thead><tbody><tr><td>Накопительно</td><td class="num">'+fmt0(avrQty)+'</td><td class="num">'+fmt(avrM3)+'</td><td class="num">'+money(avrAmount)+'</td><td class="num">'+fmt(writtenM3)+'</td><td class="num">'+fmt(avrM3-writtenM3)+'</td></tr></tbody></table></div>');
@@ -5255,7 +5255,7 @@
     $("workArea").innerHTML=renderExecutionMetrics([
       {label:"Панелей в акте",value:exFmt0(qty)+" шт.",note:"принятые строки М"},
       {label:"Объём панелей",value:exFmt(m3)+" м³",note:"по доверенным объёмам"},
-      {label:"Стоимость по акту",value:exMoney(amount)+" BYN",note:"запроцентовано Р/М"},
+      {label:"Стоимость по акту",value:exMoney(amount)+" руб.",note:"запроцентовано Р/М"},
       {label:"Требует проверки",value:exFmt0(requiresCheck),note:"несопоставленные строки",tone:requiresCheck>0?"warn":""}
     ])+'<div class="engineering-shell execution-table">'+
       '<div class="execution-table-title avr-execution-title"><span class="avr-execution-caption">'+avrTitle+'</span><span class="spacer"></span>'+
