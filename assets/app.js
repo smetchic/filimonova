@@ -5387,48 +5387,88 @@
     document.querySelectorAll(".ttn-suggest-popup").forEach(function(x){x.remove();});
   }
 
-  function openTtnSuggestions(input,field,row,draftRows,rerender) {
-    closeTtnSuggestions();
-    const query=norm(input.value||"");
-    if(!query) return;
-    let candidates=supplyEditorCatalogItems();
-    const other=field==="mark"?norm(row.source_name||""):norm(row.source_mark||"");
-    if(other){
-      candidates=candidates.filter(function(item){
-        return field==="mark" ? norm(item.name)===other : norm(item.mark)===other;
-      });
-    }
-    candidates=candidates.filter(function(item){
-      const value=field==="mark"?item.mark:item.name;
-      return norm(value).includes(query);
+  function supplyEditorSuggestionValues(field,row,query) {
+    const q=norm(query||"");
+    const otherRaw=field==="mark"?String(row.source_name||""):String(row.source_mark||"");
+    const other=norm(otherRaw);
+    const valueOf=function(item){return field==="mark"?String(item.mark||""):String(item.name||"");};
+    const otherOf=function(item){return field==="mark"?String(item.name||""):String(item.mark||"");};
+
+    let candidates=supplyEditorCatalogItems().filter(function(item){
+      const value=valueOf(item);
+      if(!value) return false;
+      if(q && !norm(value).includes(q)) return false;
+      if(!other) return true;
+
+      const candidateOther=norm(otherOf(item));
+      if(candidateOther===other) return true;
+
+      // Пока соседнее поле набрано частично, используем его как живой фильтр.
+      return candidateOther.includes(other) || other.includes(candidateOther);
     });
+
+    candidates.sort(function(a,b){
+      const av=valueOf(a),bv=valueOf(b);
+      const an=norm(av),bn=norm(bv);
+      const ao=norm(otherOf(a)),bo=norm(otherOf(b));
+
+      // Сначала полное совпадение с соседней ячейкой, затем частичное.
+      const ar=other ? (ao===other?0:(ao.startsWith(other)?1:2)) : 0;
+      const br=other ? (bo===other?0:(bo.startsWith(other)?1:2)) : 0;
+      if(ar!==br) return ar-br;
+
+      // Для вводимого значения сначала начало строки, затем остальные вхождения.
+      const aq=q ? (an.startsWith(q)?0:1) : 0;
+      const bq=q ? (bn.startsWith(q)?0:1) : 0;
+      if(aq!==bq) return aq-bq;
+
+      return av.localeCompare(bv,"ru",{numeric:true,sensitivity:"base"});
+    });
+
     const seen=new Set();
     const values=[];
     candidates.forEach(function(item){
-      const value=field==="mark"?item.mark:item.name;
+      const value=valueOf(item);
       const key=norm(value);
-      if(!seen.has(key)){seen.add(key);values.push({value:value,item:item});}
+      if(seen.has(key)) return;
+      seen.add(key);
+      values.push({value:value,item:item});
     });
+    return values;
+  }
+
+  function openTtnSuggestions(input,field,row,draftRows,rerender) {
+    closeTtnSuggestions();
+    const values=supplyEditorSuggestionValues(field,row,input.value||"");
     if(!values.length) return;
+
     const rect=input.getBoundingClientRect();
     const pop=document.createElement("div");
     pop.className="ttn-suggest-popup";
+    pop.dataset.ttnSuggestionField=field;
     pop.style.left=rect.left+"px";
     pop.style.top=(rect.bottom+2)+"px";
-    pop.style.width=Math.max(rect.width,220)+"px";
-    values.slice(0,30).forEach(function(x){
+    pop.style.width=Math.max(rect.width,field==="name"?300:180)+"px";
+
+    values.slice(0,60).forEach(function(x){
       const option=document.createElement("button");
       option.type="button";
       option.textContent=x.value;
+      option.title=x.value;
       option.onclick=function(e){
         e.preventDefault();
-        if(field==="mark") row.source_mark=x.value; else row.source_name=x.value;
+        e.stopPropagation();
+
+        if(field==="mark") row.source_mark=x.value;
+        else row.source_name=x.value;
+
         supplyEditorResolveRow(row);
         closeTtnSuggestions();
         rerender();
       };
       pop.appendChild(option);
     });
+
     document.body.appendChild(pop);
   }
 
@@ -5553,8 +5593,8 @@
         totalVat+=Number(c.vat||0);
         totalGross+=Number(c.gross||0);
         const state=supplyEditorRowStatus(row,type);
-        const common='<td class="ttn-source-input"><input data-ttn-mark="'+index+'" value="'+esc(row.source_mark||"")+'" autocomplete="off"></td>'+
-          '<td class="ttn-source-input ttn-name-input"><input data-ttn-name="'+index+'" value="'+esc(row.source_name||"")+'" autocomplete="off"></td>';
+        const common='<td class="ttn-source-input"><input data-ttn-mark="'+index+'" value="'+esc(row.source_mark||"")+'" placeholder="Марка" autocomplete="off"></td>'+
+          '<td class="ttn-source-input ttn-name-input"><input data-ttn-name="'+index+'" value="'+esc(row.source_name||"")+'" placeholder="Наименование" autocomplete="off"></td>';
 
         if(!green){
           return '<tr data-ttn-row="'+index+'">'+common+
@@ -5606,7 +5646,7 @@
           draftRows[index].unit_volume_snapshot_m3="";
           openTtnSuggestions(input,"mark",draftRows[index],draftRows,renderLines);
         };
-        input.onfocus=function(){if(input.value) openTtnSuggestions(input,"mark",draftRows[index],draftRows,renderLines);};
+        input.onfocus=function(){openTtnSuggestions(input,"mark",draftRows[index],draftRows,renderLines);};
         input.onblur=function(){setTimeout(closeTtnSuggestions,150);};
       });
       zone.querySelectorAll("[data-ttn-name]").forEach(function(input){
@@ -5618,7 +5658,7 @@
           draftRows[index].unit_volume_snapshot_m3="";
           openTtnSuggestions(input,"name",draftRows[index],draftRows,renderLines);
         };
-        input.onfocus=function(){if(input.value) openTtnSuggestions(input,"name",draftRows[index],draftRows,renderLines);};
+        input.onfocus=function(){openTtnSuggestions(input,"name",draftRows[index],draftRows,renderLines);};
         input.onblur=function(){setTimeout(closeTtnSuggestions,150);};
       });
       zone.querySelectorAll("[data-ttn-pieces]").forEach(function(input){
