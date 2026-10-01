@@ -5186,7 +5186,7 @@
     }
     row.catalog_item_id=null;
     row.supplier_item_id=null;
-    if(!Number(row.unit_volume_snapshot_m3)>0) row.unit_volume_snapshot_m3=null;
+    if(!(Number(row.unit_volume_snapshot_m3)>0)) row.unit_volume_snapshot_m3=null;
     return null;
   }
 
@@ -5309,7 +5309,7 @@
         unit_volume_snapshot_m3:l.unit_volume_snapshot_m3==null?"":String(l.unit_volume_snapshot_m3),
         unit_price:l.unit_price==null?"":String(l.unit_price),
         vat_percent:l.vat_percent==null?"":String(l.vat_percent)
-      }):[];
+      };}):[];
     function blankRow(){
       return {id:null,source_mark:"",source_name:"",catalog_item_id:null,supplier_item_id:null,qty_pieces:"",qty_m3:"",unit_volume_snapshot_m3:"",unit_price:"",vat_percent:""};
     }
@@ -5431,11 +5431,6 @@
         input.onfocus=function(){if(input.value) openTtnSuggestions(input,"name",draftRows[index],draftRows,renderLines);};
         input.onblur=function(){setTimeout(closeTtnSuggestions,150);};
       });
-      function bindNumeric(selector,key){
-        zone.querySelectorAll(selector).forEach(function(input){
-          const index=Number(input.getAttribute(selector.match(/data-([^\]]+)/)[1]));
-        });
-      }
       zone.querySelectorAll("[data-ttn-pieces]").forEach(function(input){
         const index=Number(input.dataset.ttnPieces);
         input.onchange=function(){draftRows[index].qty_pieces=input.value;renderLines();};
