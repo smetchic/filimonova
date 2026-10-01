@@ -49,7 +49,6 @@
     },
     accountingLinkFilter: localStorage.getItem("filimonova.accounting.linkFilter") || "unmatched",
     columnFilters: {},
-    columnSort: {},
     isAdmin: false
   };
 
@@ -645,9 +644,9 @@
   }
 
   function sortBucket() {
-    const key = currentViewKey();
-    if (!ui.columnSort) ui.columnSort = {};
-    return ui.columnSort[key] || null;
+    // Column sorting is intentionally disabled.
+    // Engineering tables preserve source / estimate / specification order.
+    return null;
   }
 
   function clearColumnFilter(field) {
@@ -749,7 +748,6 @@
     const viewFilters=(ui.columnFilters&&ui.columnFilters[viewKey])||{};
     const existing = viewFilters[field];
     let chosen = new Set(existing ? Array.from(existing) : values);
-    const currentSort=(ui.columnSort&&ui.columnSort[viewKey])||null;
 
     function valueRows(query) {
       const q = norm(query || "");
@@ -763,10 +761,7 @@
     }
 
     pop.innerHTML =
-      '<button class="filter-command" type="button" data-sort-dir="asc">Сортировать по возрастанию' + (currentSort && currentSort.field===field && currentSort.dir==="asc" ? ' ✓' : '') + '</button>' +
-      '<button class="filter-command" type="button" data-sort-dir="desc">Сортировать по убыванию' + (currentSort && currentSort.field===field && currentSort.dir==="desc" ? ' ✓' : '') + '</button>' +
-      '<button class="filter-command" type="button" data-sort-clear>Очистить сортировку</button>' +
-      '<div class="filter-sep"></div><div class="filter-title">Фильтр текущей колонки</div>' +
+      '<div class="filter-title">Фильтр текущей колонки</div>' +
       '<input class="filter-search" type="text" placeholder="Поиск по значениям" autocomplete="off">' +
       '<div class="filter-values">' + valueRows("") + '</div>' +
       '<div class="filter-footer"><button class="filter-clear" type="button">Очистить фильтр</button><span class="spacer"></span><button class="filter-btn" type="button" data-filter-cancel>Отмена</button><button class="filter-btn primary-small" type="button" data-filter-ok>ОК</button></div>';
@@ -801,21 +796,6 @@
     }
     bindValues();
     search.oninput=function(){ list.innerHTML=valueRows(search.value); bindValues(); };
-    pop.querySelectorAll("[data-sort-dir]").forEach(function(b){
-      b.onclick=function(){
-        if(!ui.columnSort) ui.columnSort={};
-        ui.columnSort[viewKey]={field:field,dir:b.dataset.sortDir};
-        pop.classList.remove("open");
-        rerenderContent();
-      };
-    });
-    pop.querySelector("[data-sort-clear]").onclick=function(){
-      if(ui.columnSort) delete ui.columnSort[viewKey];
-      pop.querySelectorAll("[data-sort-dir]").forEach(function(b){
-        b.textContent=b.dataset.sortDir==="asc" ? "Сортировать по возрастанию" : "Сортировать по убыванию";
-      });
-      rerenderContent();
-    };
     pop.querySelector("[data-filter-cancel]").onclick=function(){pop.classList.remove("open");};
     pop.querySelector(".filter-clear").onclick=function(){
       chosen=new Set(values);
