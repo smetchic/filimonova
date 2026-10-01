@@ -5451,7 +5451,7 @@
         qty_m3:c.m3==null?null:c.m3,
         unit_volume_snapshot_m3:c.volume==null?null:c.volume,
         unit_price:type==="green"?supplyEditorNumber(row.unit_price):null,
-        vat_percent:type==="green"?supplyEditorNumber(row.vat_percent):null
+        vat_percent:type==="green"?(supplyEditorNumber(row.vat_percent)==null?0:supplyEditorNumber(row.vat_percent)):null
       };
     }
 
@@ -5511,13 +5511,13 @@
       });
       zone.querySelectorAll("[data-ttn-mark]").forEach(function(input){
         const index=Number(input.dataset.ttnMark);
-        input.oninput=function(){draftRows[index].source_mark=input.value;draftRows[index].catalog_item_id=null;openTtnSuggestions(input,"mark",draftRows[index],draftRows,renderLines);};
+        input.oninput=function(){draftRows[index].source_mark=input.value;draftRows[index].catalog_item_id=null;draftRows[index].supplier_item_id=null;draftRows[index].unit_volume_snapshot_m3="";openTtnSuggestions(input,"mark",draftRows[index],draftRows,renderLines);};
         input.onfocus=function(){if(input.value) openTtnSuggestions(input,"mark",draftRows[index],draftRows,renderLines);};
         input.onblur=function(){setTimeout(closeTtnSuggestions,150);};
       });
       zone.querySelectorAll("[data-ttn-name]").forEach(function(input){
         const index=Number(input.dataset.ttnName);
-        input.oninput=function(){draftRows[index].source_name=input.value;draftRows[index].catalog_item_id=null;openTtnSuggestions(input,"name",draftRows[index],draftRows,renderLines);};
+        input.oninput=function(){draftRows[index].source_name=input.value;draftRows[index].catalog_item_id=null;draftRows[index].supplier_item_id=null;draftRows[index].unit_volume_snapshot_m3="";openTtnSuggestions(input,"name",draftRows[index],draftRows,renderLines);};
         input.onfocus=function(){if(input.value) openTtnSuggestions(input,"name",draftRows[index],draftRows,renderLines);};
         input.onblur=function(){setTimeout(closeTtnSuggestions,150);};
       });
