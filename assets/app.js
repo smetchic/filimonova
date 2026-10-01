@@ -1272,7 +1272,7 @@
     const suppliedQty=suppliedLines.reduce(function(a,x){return a+Number(x.qty_pieces||0);},0);
     const suppliedM3=suppliedLines.reduce(function(a,x){return a+Number(x.qty_m3||0);},0);
     const mountedEvents=(dataState.montageEvents||[]).filter(function(x){
-      return st.rows.some(function(sr){return sr.id===x.specification_row_id;}) && x.event_type==="mounted";
+      return st.rows.some(function(sr){return sr.id===x.specification_row_id;}) && x.event_type==="fact";
     });
     const mountedQty=mountedEvents.reduce(function(a,x){return a+Number(x.quantity||0);},0);
     const activeVersionByPeriod=new Map();
@@ -8236,6 +8236,7 @@
     wireGprControls();
     wireReconciliationControls();
     wireExecutionControls();
+    wireMontageControls();
 
     if (scrollState) {
       const nextScroller = document.querySelector("#workArea .engineering-scroll");
