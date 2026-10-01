@@ -47,6 +47,12 @@
     s29: {
       period: localStorage.getItem("filimonova.s29.period") || ""
     },
+    montage: {
+      s1: localStorage.getItem("filimonova.montage.s1") !== "0",
+      s2: localStorage.getItem("filimonova.montage.s2") !== "0",
+      level: localStorage.getItem("filimonova.montage.level") || "1",
+      period: localStorage.getItem("filimonova.montage.period") || ""
+    },
     accountingLinkFilter: localStorage.getItem("filimonova.accounting.linkFilter") || "unmatched",
     columnFilters: {},
     isAdmin: false
@@ -418,6 +424,7 @@
       case "supplierItems": return fetchAllRows("supplier_items","id,supplier_id,catalog_item_id,source_mark,source_name,source_section,source_key,unit_volume_m3,link_method,link_state,source_import_row_id",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("source_mark");});
       case "supplierPrices": return fetchAllRows("supplier_prices_current","id,supplier_item_id,effective_from,price_basis,unit_price_gross,unit_volume_snapshot_m3,source_import_row_id,source_imported_at",function(q){return q.eq("project_id",project.id).order("effective_from");});
       case "estimateWorkLinks": return fetchAllRows("estimate_work_links","id,material_row_id,work_row_id,link_method",function(q){return q.eq("project_id",project.id);});
+      case "montageEvents": return fetchAllRows("montage_events","id,specification_row_id,level_code,event_date,event_type,quantity,note,created_at,updated_at",function(q){return q.eq("project_id",project.id).order("event_date").order("created_at");});
       case "gprPlans": return fetchAllRows("gpr_plans","id,name,status,start_month,end_month,created_at,updated_at",function(q){return q.eq("project_id",project.id).order("created_at");});
       case "gprMonths": return fetchAllRows("gpr_months","id,plan_id,month,monthly_index,execution_index,is_in_period",function(q){return q.eq("project_id",project.id).order("month");});
       case "gprFloorAssignments": return fetchAllRows("gpr_floor_assignments","id,plan_id,month_id,building_section,level_code",function(q){return q.eq("project_id",project.id);});
@@ -3514,12 +3521,24 @@
       return buildEstimateContext(0);
     }
     if (pageKey === "montage") {
+      const montage=ui.montage||{s1:true,s2:true,level:"1",period:""};
+      const all=!!montage.s1&&!!montage.s2;
+      const levels=levelCodes();
+      if(!levels.includes(montage.level)) montage.level="1";
+      if(!montage.period){
+        const now=new Date();
+        montage.period=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+      }
       return '<span class="context-caption">Показывать:</span>' +
-        checkHtml("all","Все",true,"montage") +
-        checkHtml("s1","Секция 1",true,"montage") +
-        checkHtml("s2","Секция 2",true,"montage") +
-        '<button class="context-link" type="button">Уровень: 1 ▾</button>' +
-        '<button class="context-link" type="button">Сентябрь 2026 ▾</button>';
+        checkHtml("all","Все",all,"montage") +
+        checkHtml("s1","Секция 1",!!montage.s1,"montage") +
+        checkHtml("s2","Секция 2",!!montage.s2,"montage") +
+        '<span>·</span><span class="context-caption">Уровень:</span>'+
+        '<select class="execution-select execution-period-select montage-context-select" data-montage-level>'+
+          levels.map(function(code){return '<option value="'+esc(code)+'"'+(code===montage.level?' selected':'')+'>'+esc(code)+'</option>';}).join("")+
+        '</select>'+
+        '<span>·</span><span class="context-caption">Месяц:</span>'+
+        monthSelectHtml(montage.period,'data-montage-period',false);
     }
     if (pageKey === "avr") {
       if (tab === 0) {
@@ -5262,25 +5281,189 @@
       '<tr>'+priceSubheads+'<th>'+esc(headers.quantity)+'</th><th>'+esc(headers.total_volume)+'</th><th>'+esc(headers.total_amount)+'</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
 
+  function montageSequenceException(row) {
+    const name=norm(row&&row.section&&row.section.name||"");
+    return name==="ограждение лоджий" || name==="опорные вкладыши";
+  }
+
+  function montageSupplyFactMap() {
+    const docs=new Map((dataState.supplyDocuments||[]).map(function(d){return [d.id,d];}));
+    const greenIds=new Set((dataState.supplyLineAllocations||[]).map(function(a){return a.green_line_id;}).filter(Boolean));
+    const whiteIds=new Set((dataState.supplyLineAllocations||[]).map(function(a){return a.white_line_id;}).filter(Boolean));
+    const result=new Map();
+    (dataState.supplyDocumentLines||[]).forEach(function(line){
+      if(!line.catalog_item_id) return;
+      const doc=docs.get(line.document_id)||{};
+      const status=norm(doc.status||"posted");
+      const type=norm(doc.document_type||"");
+      if(/draft|чернов|cancel|отмен/.test(status)) return;
+      if(greenIds.has(line.id)) return;
+      if(!whiteIds.has(line.id) && /green|зелен/.test(type)) return;
+      result.set(line.catalog_item_id,Number(result.get(line.catalog_item_id)||0)+Number(line.qty_pieces||0));
+    });
+    return result;
+  }
+
+  function montageFactIndex(rows) {
+    const joinedById=new Map((rows||specJoinedRows()).map(function(r){return [r.id,r];}));
+    const byRowLevel=new Map(),byRowLevelDate=new Map(),byCatalog=new Map();
+    (dataState.montageEvents||[]).forEach(function(event){
+      if(event.event_type!=="fact") return;
+      const qty=Number(event.quantity||0);
+      const row=joinedById.get(event.specification_row_id) || specJoinedRows().find(function(r){return r.id===event.specification_row_id;});
+      const rl=event.specification_row_id+"|"+event.level_code;
+      const rld=rl+"|"+String(event.event_date).slice(0,10);
+      byRowLevel.set(rl,Number(byRowLevel.get(rl)||0)+qty);
+      byRowLevelDate.set(rld,Number(byRowLevelDate.get(rld)||0)+qty);
+      if(row&&row.catalog_item_id) byCatalog.set(row.catalog_item_id,Number(byCatalog.get(row.catalog_item_id)||0)+qty);
+    });
+    return {byRowLevel:byRowLevel,byRowLevelDate:byRowLevelDate,byCatalog:byCatalog};
+  }
+
+  function montagePreviousFloorState(row,level,index,allRows) {
+    if(montageSequenceException(row) || !/^\d+$/.test(String(level)) || Number(level)<=1) return {locked:false};
+    const prev=String(Number(level)-1);
+    const bs=row.section&&row.section.building_section;
+    const relevant=(allRows||specJoinedRows()).filter(function(r){
+      return r.section&&r.section.building_section===bs && !montageSequenceException(r) && qtyAt(r,prev)>0;
+    });
+    const plan=relevant.reduce(function(sum,r){return sum+qtyAt(r,prev);},0);
+    const mounted=relevant.reduce(function(sum,r){return sum+Number(index.byRowLevel.get(r.id+"|"+prev)||0);},0);
+    return {
+      locked:plan>0&&mounted+1e-9<plan,
+      previous:prev,
+      plan:plan,
+      mounted:mounted
+    };
+  }
+
+  function montageMonthDays(period) {
+    const parts=String(period||"").split("-");
+    const year=Number(parts[0]),month=Number(parts[1]);
+    if(!(year>2000&&month>=1&&month<=12)) return [];
+    const count=new Date(year,month,0).getDate();
+    return Array.from({length:count},function(_,i){return i+1;});
+  }
+
+  function montageDate(period,day) {
+    return String(period)+"-"+String(day).padStart(2,"0");
+  }
+
   function renderMontage(tab) {
     if (tab === 1) {
       $("workArea").className = "work-area content-work";
-      $("workArea").innerHTML = '<div class="review-panel"><div class="review-panel-title">3D модель</div><div class="review-note">Раздел зарезервирован. В актуальном ТЗ 3D остаётся placeholder до отдельного этапа.</div></div>';
+      $("workArea").innerHTML = '<div class="review-panel"><div class="review-panel-title">3D модель</div><div class="review-note">Требует разработки. Формат модели, камера, размещение и инструменты редактирования пока не определены.</div></div>';
       return;
     }
-    const days = Array.from({length:30},function(_,i){return i+1;});
-    const rows = specJoinedRows().filter(function(r){ return passesSearch([r.mark,r.name]) && rowPassesColumnFilters({mark:r.mark,name:r.name}); });
-    let body = rows.map(function(r) {
-      const floorQty = qtyAt(r,"1");
-      return '<tr class="data-row" data-material-id="'+esc(r.catalog_item_id||"")+'"><td class="sticky-1 center">'+esc(r.position_no)+'</td>'+filterCell("mark",r.mark,esc(r.mark),"sticky-2")+filterCell("name",r.name,esc(r.name),"sticky-3") +
-        '<td class="num">'+fmt0(floorQty)+'</td><td class="num">0</td><td class="num">'+fmt0(floorQty)+'</td><td class="num">0</td><td class="num">0</td>' +
-        days.map(function(){return '<td class="day-cell"></td>';}).join("") + '</tr>';
-    }).join("");
-    if (!body) body = tableMessage("Нет строк по текущему поиску.",8+days.length);
-    $("workArea").className = "work-area table-work";
-    $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table montage-table"><thead><tr>' +
-      '<th class="sticky-1">№</th><th class="sticky-2 filterable-head">'+filterHeader("Марка","mark")+'</th><th class="sticky-3 filterable-head">'+filterHeader("Наименование","name")+'</th><th>На этаж</th><th>Смонтировано</th><th>Остаток</th><th>Поставлено</th><th>Доступно для монтажа</th>' +
-      days.map(function(d){return '<th class="day-cell">'+d+'</th>';}).join("") + '</tr></thead><tbody>'+body+'</tbody></table></div></div>';
+
+    if(!ui.montage.period){
+      const now=new Date();
+      ui.montage.period=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+    }
+    const level=ui.montage.level||"1";
+    const period=ui.montage.period;
+    const days=montageMonthDays(period);
+    const allRows=specJoinedRows();
+    const fact=montageFactIndex(allRows);
+    const delivered=montageSupplyFactMap();
+
+    let rows=allRows.filter(function(r){
+      const bs=r.section&&r.section.building_section;
+      if(bs==="Секция 1"&&!ui.montage.s1) return false;
+      if(bs==="Секция 2"&&!ui.montage.s2) return false;
+      if(bs!=="Секция 1"&&bs!=="Секция 2") return false;
+      if(qtyAt(r,level)<=0) return false;
+      return passesSearch([r.position_no,r.mark,r.name,r.section&&r.section.name]) &&
+        rowPassesColumnFilters({mark:r.mark,name:r.name});
+    }).sort(function(a,b){return Number(a.position_no||0)-Number(b.position_no||0);});
+
+    let body="";
+    rows.forEach(function(r){
+      const plan=qtyAt(r,level);
+      const mounted=Number(fact.byRowLevel.get(r.id+"|"+level)||0);
+      const remaining=Math.max(0,plan-mounted);
+      const supplied=Number(delivered.get(r.catalog_item_id)||0);
+      const installedCatalog=Number(fact.byCatalog.get(r.catalog_item_id)||0);
+      const available=Math.max(0,supplied-installedCatalog);
+      const floorState=montagePreviousFloorState(r,level,fact,allRows);
+      const lockReason=floorState.locked
+        ?"Уровень "+level+" заблокирован: уровень "+floorState.previous+" секции ещё не завершён ("+exFmt0(floorState.mounted)+" из "+exFmt0(floorState.plan)+")."
+        : remaining<=0
+          ?"Проектное количество на уровне уже смонтировано."
+          : available<1
+            ?"Нет физически доступных поставленных изделий этой номенклатуры."
+            :"ЛКМ +1 · ПКМ −1";
+
+      body+='<tr class="data-row montage-data-row'+(floorState.locked?' montage-floor-locked':'')+'" data-material-id="'+esc(r.catalog_item_id||"")+'" data-spec-row-id="'+esc(r.id)+'">'+
+        '<td class="sticky-1 center">'+esc(r.position_no)+'</td>'+
+        filterCell("mark",r.mark,esc(r.mark),"sticky-2")+
+        filterCell("name",r.name,esc(r.name),"sticky-3")+
+        '<td class="num">'+exFmt0(plan)+'</td>'+
+        '<td class="num montage-mounted-cell">'+exFmt0(mounted)+'</td>'+
+        '<td class="num">'+exFmt0(remaining)+'</td>'+
+        '<td class="num">'+exFmt0(supplied)+'</td>'+
+        '<td class="num montage-available-cell '+(available>0?'has-stock':'no-stock')+'">'+exFmt0(available)+'</td>'+
+        days.map(function(day){
+          const date=montageDate(period,day);
+          const value=Number(fact.byRowLevelDate.get(r.id+"|"+level+"|"+date)||0);
+          const plusBlocked=floorState.locked||remaining<=0||available<1;
+          return '<td class="day-cell montage-day'+(value>0?' has-fact':'')+(plusBlocked?' plus-locked':'')+'"'+
+            ' data-montage-spec-row="'+esc(r.id)+'" data-montage-date="'+date+'" data-montage-value="'+value+'"'+
+            ' title="'+esc(lockReason)+'">'+(value?exFmt0(value):"")+'</td>';
+        }).join("")+
+      '</tr>';
+    });
+
+    if (!body) body=tableMessage("На выбранном уровне нет позиций по текущему фильтру.",8+days.length);
+
+    $("workArea").className="work-area table-work montage-work";
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table montage-table" data-table-key="montage-calendar-v2"><thead><tr>'+
+      '<th class="sticky-1">№</th>'+
+      '<th class="sticky-2 filterable-head">'+filterHeader("Марка","mark")+'</th>'+
+      '<th class="sticky-3 filterable-head">'+filterHeader("Наименование","name")+'</th>'+
+      '<th><span class="column-header-stack"><span>На</span><span>этаж</span></span></th>'+
+      '<th><span class="column-header-stack"><span>Смонти-</span><span>ровано</span></span></th>'+
+      '<th>Остаток</th>'+
+      '<th>Поставлено</th>'+
+      '<th><span class="column-header-stack"><span>Доступно для</span><span>монтажа</span></span></th>'+
+      days.map(function(d){return '<th class="day-cell">'+d+'</th>';}).join("")+
+      '</tr></thead><tbody>'+body+'</tbody></table></div></div>';
+  }
+
+  async function adjustMontageFact(specificationRowId,eventDate,delta) {
+    const result=await client.rpc("adjust_montage_fact",{
+      p_project_id:dataState.project.id,
+      p_specification_row_id:specificationRowId,
+      p_level_code:ui.montage.level,
+      p_event_date:eventDate,
+      p_delta:delta
+    });
+    if(result.error) throw result.error;
+    await refreshProjectDataSlices(["montageEvents"],dataState.project);
+  }
+
+  function wireMontageControls() {
+    if(ui.page!=="montage" || (ui.tabs.montage||0)!==0) return;
+    document.querySelectorAll("[data-montage-spec-row]").forEach(function(cell){
+      async function apply(delta){
+        if(cell.classList.contains("montage-busy")) return;
+        if(delta>0 && cell.classList.contains("plus-locked")){
+          alert(cell.title||"Монтаж сейчас недоступен.");
+          return;
+        }
+        if(delta<0 && Number(cell.dataset.montageValue||0)<=0) return;
+        cell.classList.add("montage-busy");
+        try{
+          await adjustMontageFact(cell.dataset.montageSpecRow,cell.dataset.montageDate,delta);
+          rerenderContent();
+        }catch(err){
+          alert("Монтаж не изменён:\n"+(err&&err.message?err.message:String(err)));
+          cell.classList.remove("montage-busy");
+        }
+      }
+      cell.onclick=function(e){e.preventDefault();e.stopPropagation();apply(1);};
+      cell.oncontextmenu=function(e){e.preventDefault();e.stopPropagation();apply(-1);};
+    });
   }
 
   function exFmt(value) { return numFmt.format(Number(value)||0); }
@@ -5316,6 +5499,7 @@
     (dataState.avrDocuments||[]).forEach(function(x){if(periodKey(x.period_month)) set.add(periodKey(x.period_month));});
     (dataState.accountingPeriodSources||[]).forEach(function(x){if(periodKey(x.period_month)) set.add(periodKey(x.period_month));});
     (dataState.s29Documents||[]).forEach(function(x){if(periodKey(x.period_month)) set.add(periodKey(x.period_month));});
+    (dataState.montageEvents||[]).forEach(function(x){if(periodKey(x.event_date)) set.add(periodKey(x.event_date));});
     (dataState.gprMonths||[]).forEach(function(x){if(periodKey(x.month)) set.add(periodKey(x.month));});
     const now=new Date();
     for(let i=0;i<12;i++) set.add(now.getFullYear()+"-"+String(i+1).padStart(2,"0"));
@@ -7449,6 +7633,38 @@
       const vals = dataState.estimates.map(function(e){return ui.estimates[e.number] !== false;});
       estMaster.indeterminate = vals.some(Boolean) && !vals.every(Boolean);
     }
+
+    document.querySelectorAll('#contextRow input[data-filter-group="montage"]').forEach(function(input){
+      input.addEventListener("change",function(){
+        const id=input.dataset.filterId;
+        if(id==="all"){
+          ui.montage.s1=input.checked;
+          ui.montage.s2=input.checked;
+        }else if(id==="s1"||id==="s2"){
+          ui.montage[id]=input.checked;
+        }
+        localStorage.setItem("filimonova.montage.s1",ui.montage.s1?"1":"0");
+        localStorage.setItem("filimonova.montage.s2",ui.montage.s2?"1":"0");
+        renderPage("montage",ui.tabs.montage||0);
+      });
+    });
+    const montageMaster=document.querySelector('#contextRow input[data-filter-group="montage"][data-filter-id="all"]');
+    if(montageMaster){
+      const vals=[!!ui.montage.s1,!!ui.montage.s2];
+      montageMaster.indeterminate=vals.some(Boolean)&&!vals.every(Boolean);
+    }
+    const montageLevel=document.querySelector("[data-montage-level]");
+    if(montageLevel) montageLevel.onchange=function(){
+      ui.montage.level=montageLevel.value;
+      localStorage.setItem("filimonova.montage.level",ui.montage.level);
+      renderPage("montage",ui.tabs.montage||0);
+    };
+    const montagePeriod=document.querySelector("[data-montage-period]");
+    if(montagePeriod) montagePeriod.onchange=function(){
+      ui.montage.period=montagePeriod.value;
+      localStorage.setItem("filimonova.montage.period",ui.montage.period);
+      renderPage("montage",ui.tabs.montage||0);
+    };
   }
 
   function executionConfirm(title,text,actionLabel) {
@@ -8131,6 +8347,7 @@
     wireGprControls();
     wireReconciliationControls();
     wireExecutionControls();
+    wireMontageControls();
 
     if (previousScroll && previousPage === pageKey && previousTab === tab) {
       const nextScroller = document.querySelector("#workArea .engineering-scroll");
