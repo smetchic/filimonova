@@ -2427,3 +2427,90 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 .work-link-material-name[data-material-card-open]{cursor:pointer}
 .work-link-material-name[data-material-card-open]:hover{text-decoration:underline;text-underline-offset:2px}
 
+
+
+/* AVR calculation — compact three-row composition matching the approved sample. */
+.avr-context-row{
+  height:30px;
+  gap:8px;
+  padding:0 2px;
+}
+.avr-context-row .context-caption{font-size:11px}
+.avr-context-row strong{font-size:11px;font-weight:600;color:#30313A}
+.execution-version-select{
+  width:auto;
+  min-width:78px;
+  max-width:110px;
+  height:24px;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  padding:0 16px 0 0;
+  font-size:11px;
+  font-weight:600;
+  color:#30313A;
+  box-shadow:none;
+}
+.execution-version-select:focus{outline:none}
+.avr-context-row .execution-status{
+  height:18px;
+  padding:0 6px;
+  border-radius:3px;
+  font-size:9.5px;
+}
+.avr-context-row .execution-status.in_use{
+  background:#F1F2F3;
+  color:#7A7D82;
+}
+.avr-execution-work{
+  padding:7px 8px 0!important;
+  gap:7px!important;
+  background:#F3F4F5!important;
+}
+.avr-execution-work .execution-metrics{
+  gap:7px;
+}
+.avr-execution-work .execution-metric{
+  min-height:72px;
+  padding:10px 10px 8px;
+  border-color:#DEDFE2;
+  border-radius:8px;
+}
+.avr-execution-work .execution-metric span{
+  font-size:10.5px;
+}
+.avr-execution-work .execution-metric strong{
+  margin-top:2px;
+  font-size:18px;
+  line-height:22px;
+}
+.avr-execution-work .execution-metric small{
+  margin-top:2px;
+  font-size:9.5px;
+}
+.avr-execution-work .execution-table{
+  border-top:1px solid #D9DBDE;
+}
+.avr-execution-title{
+  height:31px;
+  min-height:31px;
+  padding:0 8px;
+  border-bottom:1px solid #E1E2E4;
+  background:#fff;
+}
+.avr-execution-title .avr-execution-caption{
+  color:#3F4147;
+  font-size:10.5px;
+  font-weight:500;
+  white-space:nowrap;
+}
+.avr-execution-title .service-action{
+  height:24px;
+  padding:0 4px;
+  font-size:10.5px;
+  color:#7A7D82;
+}
+.avr-execution-title .service-action:hover{
+  background:transparent;
+  color:#2563EB;
+}
