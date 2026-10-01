@@ -504,8 +504,39 @@
     return out;
   }
 
+  function supplierExactVolumeMap() {
+    if(derivedDataCache.state===dataState && derivedDataCache.supplierExactVolumeMap) return derivedDataCache.supplierExactVolumeMap;
+    function key(mark,name){
+      const clean=function(value){
+        return importNorm(value).replace(/[^a-zA-Zа-яА-ЯёЁ0-9]/g,"");
+      };
+      return clean(mark)+"|"+clean(name);
+    }
+    const buckets=new Map();
+    (dataState.supplierItems||[]).forEach(function(x){
+      const volume=Number(x.unit_volume_m3||0);
+      if(!(volume>0)) return;
+      const k=key(x.source_mark,x.source_name);
+      if(k==="|") return;
+      if(!buckets.has(k)) buckets.set(k,new Set());
+      buckets.get(k).add(volume.toFixed(6));
+    });
+    const out=new Map();
+    buckets.forEach(function(values,k){
+      if(values.size===1) out.set(k,Number(Array.from(values)[0]));
+    });
+    derivedDataCache.state=dataState;
+    derivedDataCache.supplierExactVolumeMap={values:out,key:key};
+    return derivedDataCache.supplierExactVolumeMap;
+  }
+
   function catalogUnitVolumeFallback(catalogItemId) {
-    return Number(supplierVolumeMap().get(catalogItemId)||0);
+    const matched=Number(supplierVolumeMap().get(catalogItemId)||0);
+    if(matched>0) return matched;
+    const item=maps().catalog.get(catalogItemId);
+    if(!item) return 0;
+    const exact=supplierExactVolumeMap();
+    return Number(exact.values.get(exact.key(item.mark,item.name))||0);
   }
 
   function specJoinedRows() {
