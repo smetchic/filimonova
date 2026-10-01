@@ -7573,6 +7573,54 @@
     return result;
   }
 
+  async function autoMatchAccountingLinks() {
+    const rows=dataState.accountingRows||[];
+    if(!rows.length) return;
+
+    const manualCodes=new Set((dataState.accountingCodeLinks||[])
+      .filter(function(x){return x.link_method==="manual";})
+      .map(function(x){return String(x.accounting_code||"");}));
+
+    const autoLinks=accountingAutoLinkMap(rows);
+    const payload=[];
+    autoLinks.forEach(function(match,code){
+      if(manualCodes.has(String(code))) return;
+      if(!match||!match.catalog_item_id) return;
+      payload.push({
+        accounting_code:String(code),
+        catalog_item_id:match.catalog_item_id,
+        note:match.reason||"Автоматическое строгое сопоставление"
+      });
+    });
+
+    const allCodes=new Set(rows.map(function(x){return String(x.material_code||"").trim();}).filter(Boolean));
+    const unresolved=Math.max(0,allCodes.size-manualCodes.size-payload.length);
+    const ok=await executionConfirm(
+      "Автосопоставление бухгалтерии",
+      "Будут пересчитаны только автоматические связи. Ручные связи сохранятся. Найдено "+payload.length+" уверенных автосвязей; без уверенного соответствия: "+unresolved+".",
+      "Автосопоставить"
+    );
+    if(!ok) return;
+
+    const btn=document.querySelector("[data-accounting-link-auto]");
+    if(btn) btn.disabled=true;
+    try{
+      const result=await client.rpc("apply_accounting_auto_links",{
+        p_project_id:dataState.project.id,
+        p_links:payload
+      });
+      if(result.error) throw result.error;
+      await refreshProjectDataSlices(["accountingCodeLinks"],dataState.project);
+      ui.accountingLinkLastAuto={matched:payload.length,unresolved:unresolved,manual:manualCodes.size};
+      ui.accountingLinkFilter="unmatched";
+      localStorage.setItem("filimonova.accounting.linkFilter","unmatched");
+      renderPage("s29",2);
+    }catch(err){
+      alert("Автосопоставление бухгалтерии не выполнено:\n"+(err&&err.message?err.message:String(err)));
+      if(btn) btn.disabled=false;
+    }
+  }
+
   async function parseAccountingWorkbook(file,expectedKey) {
     await ensureXlsxLoaded();
     if(!window.XLSX) throw new Error("Модуль чтения Excel не загрузился.");
@@ -7744,6 +7792,10 @@
   function wireServiceControls() {
     const collapse = document.querySelector('[data-service="collapse"]');
     const expand = document.querySelector('[data-service="expand"]');
+    const accountingLinkAuto=document.querySelector("[data-accounting-link-auto]");
+    if(accountingLinkAuto) accountingLinkAuto.addEventListener("click",function(){
+      autoMatchAccountingLinks();
+    });
     const workLinkAuto=document.querySelector("[data-work-link-auto]");
     if(workLinkAuto) workLinkAuto.addEventListener("click",function(){
       autoMatchWorkLinks();
@@ -7850,7 +7902,12 @@
       $("serviceRight").innerHTML =
         '<button class="service-action" data-recon-journal-export type="button">Экспорт в Excel</button>';
     } else if(pageKey==="s29" && tab===2){
+      const autoSummary=ui.accountingLinkLastAuto
+        ? '<span class="context-muted">'+ui.accountingLinkLastAuto.matched+' авто · '+ui.accountingLinkLastAuto.unresolved+' без связи</span>'
+        : '';
       $("serviceRight").innerHTML =
+        '<button class="service-action" data-accounting-link-auto type="button">Автосопоставить</button>'+
+        autoSummary+
         '<span class="context-muted">Показать:</span>'+
         '<select class="service-select" data-accounting-link-filter aria-label="Фильтр связей бухгалтерии">'+
           '<option value="unmatched"'+(ui.accountingLinkFilter==="unmatched"?' selected':'')+'>Не сопоставлено</option>'+
