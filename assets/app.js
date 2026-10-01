@@ -5630,6 +5630,57 @@
     return {catalog:catalog,markCounts:markCounts};
   }
 
+  function accountingProjectFamilySet() {
+    const families=new Set();
+    const specIds=new Set((dataState.specRows||[]).map(function(x){return x.catalog_item_id;}));
+    (dataState.catalogItems||[]).forEach(function(item){
+      if(!specIds.has(item.id)) return;
+      const markTokens=accountingTokens(item.mark,true);
+      markTokens.forEach(function(token){
+        if(/^[a-zа-я]{2,6}$/i.test(token)) families.add(token);
+      });
+      const nameTokens=accountingTokens(item.name,true);
+      // From project names keep only compact code-like tokens, not descriptive words.
+      nameTokens.slice(0,3).forEach(function(token){
+        if(/^[a-zа-я]{2,6}$/i.test(token) && token.length<=5) families.add(token);
+      });
+    });
+    return families;
+  }
+
+  function accountingRelevantCodeSet() {
+    const relevant=new Set();
+    const linked=new Set((dataState.accountingCodeLinks||[]).map(function(x){return String(x.accounting_code||"");}));
+    linked.forEach(function(code){if(code) relevant.add(code);});
+
+    const families=accountingProjectFamilySet();
+    const sourceByCode=new Map();
+    (dataState.accountingRows||[]).forEach(function(row){
+      const code=String(row.material_code||"").trim();
+      if(!code) return;
+      if(!sourceByCode.has(code)) sourceByCode.set(code,[]);
+      sourceByCode.get(code).push(String(row.name||""));
+    });
+
+    sourceByCode.forEach(function(names,code){
+      if(relevant.has(code)) return;
+      const isProjectLike=names.some(function(name){
+        const numberCount=(accountingNumbers(name).match(/[0-9]+/g)||[]).length;
+        if(numberCount<2) return false;
+        const tokens=accountingTokens(name,true);
+        return tokens.some(function(token){
+          if(families.has(token)) return true;
+          // Common bookkeeping variants add "э" to a project family (ППэ, ВСэ, ЗНСэ).
+          if(token.endsWith("э") && families.has(token.slice(0,-1))) return true;
+          return false;
+        });
+      });
+      if(isProjectLike) relevant.add(code);
+    });
+
+    return relevant;
+  }
+
   function accountingManualNameMemory() {
     const manualByCode=new Map();
     (dataState.accountingCodeLinks||[]).forEach(function(link){
@@ -5867,10 +5918,11 @@
 
   function renderAccountingLinks() {
     const catalog=new Map((dataState.catalogItems||[]).map(function(x){return [x.id,x];}));
+    const relevantCodes=accountingRelevantCodeSet();
     const byCode=new Map();
     (dataState.accountingRows||[]).forEach(function(row){
       const code=String(row.material_code||"").trim();
-      if(!code) return;
+      if(!code||!relevantCodes.has(code)) return;
       if(!byCode.has(code)) byCode.set(code,[]);
       byCode.get(code).push(row);
     });
@@ -5902,7 +5954,7 @@
         '<td title="'+esc(x.link&&x.link.note||"")+'"><span class="accounting-link-kind '+(!x.link?'unmatched':x.link.link_method)+'">'+esc(linkLabel)+'</span><span> · </span><button class="table-text-action" type="button" data-accounting-link-edit="'+esc(x.code)+'">'+action+'</button></td>'+
       '</tr>';
     }).join("");
-    if(!body) body=tableMessage(filter==="all"?"После импорта бухгалтерии здесь появятся коды для сопоставления.":"По выбранному фильтру строк нет.",5);
+    if(!body) body=tableMessage(filter==="all"?"Проектных позиций для сопоставления нет. Непроектные материалы бухгалтерии здесь не показываются.":"По выбранному фильтру строк нет.",5);
     $("workArea").className="work-area table-work";
     $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table accounting-links-table"><thead><tr><th>Код материала</th><th>Наименование бухгалтерии</th><th>Марка проекта</th><th>Номенклатура проекта</th><th>Связь</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
@@ -7574,7 +7626,10 @@
   }
 
   async function autoMatchAccountingLinks() {
-    const rows=dataState.accountingRows||[];
+    const relevantCodes=accountingRelevantCodeSet();
+    const rows=(dataState.accountingRows||[]).filter(function(row){
+      return relevantCodes.has(String(row.material_code||"").trim());
+    });
     if(!rows.length) return;
 
     const manualCodes=new Set((dataState.accountingCodeLinks||[])
