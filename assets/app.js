@@ -6732,6 +6732,54 @@
     return detected;
   }
 
+  function detectAccountingPeriod(rows,expectedKey,fileName) {
+    const avrPeriod=detectWorkbookPeriod(rows,expectedKey);
+    if(avrPeriod) return avrPeriod;
+
+    const monthNames={
+      "январь":"01","января":"01","февраль":"02","февраля":"02","март":"03","марта":"03",
+      "апрель":"04","апреля":"04","май":"05","мая":"05","июнь":"06","июня":"06",
+      "июль":"07","июля":"07","август":"08","августа":"08","сентябрь":"09","сентября":"09",
+      "октябрь":"10","октября":"10","ноябрь":"11","ноября":"11","декабрь":"12","декабря":"12"
+    };
+    const found=[];
+    function add(year,month,day,score){
+      year=Number(year);month=Number(month);day=Number(day||1);
+      if(!(year>=2000&&year<=2100&&month>=1&&month<=12&&day>=1&&day<=31)) return;
+      const last=new Date(Date.UTC(year,month,0)).getUTCDate();
+      if(day>last) return;
+      found.push({key:String(year)+"-"+String(month).padStart(2,"0"),score:score+(day===last?5:0)});
+    }
+    function scan(value,score){
+      if(value instanceof Date && !isNaN(value.getTime())){
+        add(value.getFullYear(),value.getMonth()+1,value.getDate(),score+6);
+      }
+      const text=String(value==null?"":value).replace(/\s+/g," ").trim();
+      let m;
+      const dmy=/(0?[1-9]|[12][0-9]|3[01])[.\/-](0?[1-9]|1[0-2])[.\/-](20[0-9]{2})/g;
+      while((m=dmy.exec(text))) add(m[3],m[2],m[1],score+6);
+      const ymd=/(20[0-9]{2})[.\/-](0?[1-9]|1[0-2])[.\/-](0?[1-9]|[12][0-9]|3[01])/g;
+      while((m=ymd.exec(text))) add(m[1],m[2],m[3],score+6);
+      const named=/(январь|января|февраль|февраля|март|марта|апрель|апреля|май|мая|июнь|июня|июль|июля|август|августа|сентябрь|сентября|октябрь|октября|ноябрь|ноября|декабрь|декабря)\s+(20[0-9]{2})/ig;
+      while((m=named.exec(text))) add(m[2],monthNames[m[1].toLowerCase()],1,score+3);
+    }
+    (rows||[]).forEach(function(entry){
+      const score=entry.rowNo<=40?4:0;
+      (entry.values||[]).forEach(function(v){scan(v,score);});
+      (entry.displayValues||[]).forEach(function(v){scan(v,score);});
+    });
+    scan(fileName||"",2);
+    if(!found.length) return "";
+    const bestByKey=new Map();
+    found.forEach(function(x){if(!bestByKey.has(x.key)||bestByKey.get(x.key)<x.score) bestByKey.set(x.key,x.score);});
+    const ranked=Array.from(bestByKey.entries()).sort(function(a,b){return b[1]-a[1]||String(b[0]).localeCompare(String(a[0]));});
+    const topScore=ranked[0][1];
+    const top=ranked.filter(function(x){return x[1]===topScore;});
+    if(top.length===1) return top[0][0];
+    if(expectedKey && top.some(function(x){return x[0]===expectedKey;})) return expectedKey;
+    return "";
+  }
+
   function headerScore(rows,rowIndex,columnIndex) {
     let text="";
     for(let i=Math.max(0,rowIndex-7);i<rowIndex;i++) text+=" "+String(rows[i].values[columnIndex]||"").toLowerCase();
