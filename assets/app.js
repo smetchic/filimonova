@@ -3367,7 +3367,11 @@
         const doc=selectedAvrDocument();
         const version=selectedAvrVersion();
         const versions=doc?versionsForDocument(doc.id):[];
-        return '<span class="context-caption">Месяц:</span>'+monthSelectHtml(ui.avr.period,'data-avr-period',false)+'<span>·</span><span class="context-caption">АВР:</span><strong>'+esc(doc&&doc.display_number||"нет")+'</strong><span>·</span><span class="context-caption">Версия:</span><select class="execution-select" data-avr-version '+(!versions.length?'disabled':'')+'>'+(!versions.length?'<option>—</option>':versions.map(function(v){return '<option value="'+v.id+'"'+(version&&v.id===version.id?' selected':'')+'>v'+v.version_no+'</option>';}).join(""))+'</select><span>·</span><span class="execution-status '+(version?version.state:'draft')+'">'+esc(avrStatus(version))+'</span>';
+        return '<span class="context-caption">Месяц:</span>'+monthSelectHtml(ui.avr.period,'data-avr-period',false)+
+          '<span>·</span><strong>АВР №'+esc(doc&&doc.display_number||"—")+'</strong>'+
+          '<span>·</span><select class="execution-select execution-version-select" data-avr-version '+(!versions.length?'disabled':'')+' aria-label="Версия АВР">'+
+          (!versions.length?'<option>версия —</option>':versions.map(function(v){return '<option value="'+v.id+'"'+(version&&v.id===version.id?' selected':'')+'>версия №'+v.version_no+'</option>';}).join(""))+
+          '</select><span class="execution-status '+(version?version.state:'draft')+'">'+esc(avrStatus(version).toLowerCase())+'</span>';
       }
       if (tab === 1) {
         const filter=ui.avr.registryPeriod||"all";
@@ -5241,13 +5245,22 @@
       });
     }
     if(!body) body=tableMessage(doc?"В выбранной версии нет строк АВР.":"Для выбранного месяца АВР ещё не импортирован.",9);
-    $("workArea").className="work-area execution-work";
+    const requiresCheck=materialRows.filter(function(x){
+      const r=estimateRowMap.get(x.estimate_row_id);
+      return !r || !linkedSpecRowsForEstimateRow(r).length || !Number.isFinite(Number(x.quantity_m3));
+    }).length;
+    const avrTitle='АВР №'+esc(doc&&doc.display_number||"—")+' · '+esc(periodLabel(doc&&doc.period_month||ui.avr.period,false))+' · импорт №'+esc(version&&version.version_no||"—");
+    $("workArea").className="work-area execution-work avr-execution-work";
     $("workArea").innerHTML=renderExecutionMetrics([
-      {label:"Панелей в акте",value:exFmt0(qty)+" шт.",note:materialRows.length+" позиций"},
-      {label:"Объём панелей",value:exFmt(m3)+" м³",note:"по проектным объёмам"},
-      {label:"Стоимость по акту",value:exMoney(amount)+" BYN",note:"материалы и связанные работы"},
-      {label:"Версия",value:version?"v"+version.version_no:"—",note:avrStatus(version),tone:version&&version.state==="signed"?"ok":""}
-    ])+'<div class="engineering-shell execution-table"><div class="engineering-scroll"><table class="eng-table avr-table" data-table-key="avr"><thead><tr><th>Тип</th><th>Поз. сметы</th><th>Обоснование</th><th>Марка</th><th>Наименование</th><th>Ед. изм.</th><th>Кол-во в акте</th><th>Кол-во, м³</th><th>Стоимость по акту</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+      {label:"Панелей в акте",value:exFmt0(qty)+" шт.",note:"принятые строки М"},
+      {label:"Объём панелей",value:exFmt(m3)+" м³",note:"по доверенным объёмам"},
+      {label:"Стоимость по акту",value:exMoney(amount)+" BYN",note:"запроцентовано Р/М"},
+      {label:"Требует проверки",value:exFmt0(requiresCheck),note:"несопоставленные строки",tone:requiresCheck>0?"warn":""}
+    ])+'<div class="engineering-shell execution-table">'+
+      '<div class="execution-table-title avr-execution-title"><span class="avr-execution-caption">'+avrTitle+'</span><span class="spacer"></span>'+
+      '<button class="service-action" data-service="collapse" type="button">Свернуть всё</button>'+
+      '<button class="service-action" data-service="expand" type="button">Развернуть всё</button></div>'+
+      '<div class="engineering-scroll"><table class="eng-table avr-table" data-table-key="avr"><thead><tr><th>Тип</th><th>Поз. сметы</th><th>Обоснование</th><th>Марка</th><th>Наименование</th><th>Ед. изм.</th><th>Кол-во в акте</th><th>Кол-во, м³</th><th>Стоимость по акту</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
 
   function renderAvrRegistry() {
@@ -7259,8 +7272,9 @@
     $("globalSearch").classList.toggle("has-value",!!$("searchInput").value);
 
     $("contextRow").innerHTML = buildContext(pageKey,tab);
+    $("contextRow").classList.toggle("avr-context-row",pageKey==="avr" && tab===0);
     $("serviceLeft").innerHTML = buildServiceLeft(pageKey,tab);
-    $("serviceRow").classList.toggle("hidden",pageKey==="estimates" && (tab===1 || tab===2));
+    $("serviceRow").classList.toggle("hidden",(pageKey==="estimates" && (tab===1 || tab===2)) || (pageKey==="avr" && tab===0));
     // Project UI rule: page-level controls belong in the existing service row;
     // do not add local button bars above working tables.
     if(pageKey==="recon" && tab===0){
