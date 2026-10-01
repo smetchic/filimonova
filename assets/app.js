@@ -6946,7 +6946,6 @@
     });
     const detected=detectAccountingPeriod(all,expectedKey,file&&file.name||"");
     if(!detected) throw new Error("Не удалось однозначно определить месяц бухгалтерского отчёта по дате отчёта.");
-    if(detected!==expectedKey) throw new Error("В отчёте определён "+periodLabel(detected,false)+", а выбран "+periodLabel(expectedKey,false)+".");
     let headerAt=-1,columns=null,dataAt=-1;
     for(let i=0;i<all.length;i++){
       const cells=all[i].values;
@@ -6986,15 +6985,18 @@
       rows.push({source_row_no:entry.rowNo,account_code:columns.account>=0?String(entry.values[columns.account]||"").trim():null,material_code:code,name:name,unit:columns.unit>=0?String(entry.values[columns.unit]||"").trim():null,quantity:qty,unit_price:numberAt(columns.price),amount:numberAt(columns.amount),raw_data:{sheet:entry.sheet,row:entry.values}});
     }
     if(!rows.length) throw new Error("После проверки в бухгалтерском отчёте не осталось строк материалов.");
-    return {buffer:buffer,rows:rows};
+    return {buffer:buffer,rows:rows,period:detected};
   }
 
   async function importAccountingFile(file,period) {
     const button=document.querySelector("[data-accounting-import]");if(button)button.disabled=true;
     try{
       const parsed=await parseAccountingWorkbook(file,period);const hash=await sha256Hex(parsed.buffer);
-      const result=await client.rpc("apply_accounting_import",{p_project_id:dataState.project.id,p_period_month:periodDate(period),p_source_name:file.name,p_source_sha256:hash,p_rows:parsed.rows});
+      const importPeriod=parsed.period||period;
+      const result=await client.rpc("apply_accounting_import",{p_project_id:dataState.project.id,p_period_month:periodDate(importPeriod),p_source_name:file.name,p_source_sha256:hash,p_rows:parsed.rows});
       if(result.error) throw result.error;
+      ui.s29.period=importPeriod;
+      localStorage.setItem("filimonova.s29.period",importPeriod);
       await refreshProjectDataSlices(["accountingRows","accountingCodeLinks","accountingPeriodSources","imports"],dataState.project);renderPage("s29",1);
     }catch(err){alert("Импорт бухгалтерии остановлен:\n"+(err&&err.message?err.message:String(err)));if(button)button.disabled=false;}
   }
