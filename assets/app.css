@@ -2773,3 +2773,77 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 #materialCardModal .mv-overview-qty .mv-qty strong{
   white-space:nowrap;
 }
+
+
+/* Montage calendar — factual floor/date entry. */
+.montage-context-select{
+  min-width:34px!important;
+  max-width:72px!important;
+}
+.montage-work{
+  padding:0!important;
+  display:block!important;
+  overflow:hidden;
+}
+.montage-work .engineering-shell{
+  width:100%;
+  height:100%;
+  border-left:0;
+  border-right:0;
+}
+.montage-work .engineering-scroll{
+  width:100%;
+  max-width:100%;
+  height:100%;
+  overflow:auto;
+}
+.montage-table{
+  width:max-content!important;
+  min-width:100%;
+}
+.montage-table .day-cell{
+  width:32px!important;
+  min-width:32px!important;
+  max-width:32px!important;
+  text-align:center!important;
+  padding:0 3px!important;
+  font-variant-numeric:tabular-nums;
+}
+.montage-table tbody .montage-day{
+  cursor:pointer;
+  user-select:none;
+  background:#fff;
+}
+.montage-table tbody .montage-day:hover{
+  box-shadow:inset 0 0 0 1px #9AAEC6;
+}
+.montage-table tbody .montage-day.has-fact{
+  background:#EEF7F0!important;
+  color:#356244;
+  font-weight:600;
+}
+.montage-table tbody .montage-day.plus-locked:not(.has-fact){
+  cursor:not-allowed;
+  background:#F7F7F8!important;
+  color:#A1A1AA;
+}
+.montage-table tbody .montage-day.montage-busy{
+  cursor:wait!important;
+  opacity:.55;
+}
+.montage-table .montage-mounted-cell{
+  background:#F2F8F3;
+  color:#356244;
+  font-weight:600;
+}
+.montage-table .montage-available-cell.has-stock{
+  background:#FFF8E8;
+  color:#7A5B22;
+  font-weight:600;
+}
+.montage-table .montage-available-cell.no-stock{
+  color:#8B8D92;
+}
+.montage-table .montage-floor-locked td:not(.has-fact){
+  color:#8B8D92;
+}
