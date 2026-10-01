@@ -3563,7 +3563,7 @@
       return '<span class="context-caption">FIFO: сначала погашается экономия предыдущих месяцев</span>';
     }
     if (pageKey === "supply") {
-      if (tab === 1) return '<span class="context-caption">Документы поставки</span><span class="context-muted">Белая ТТН — факт поступления · зелёная ТТН — документальное подтверждение</span><span class="spacer"></span><button class="context-link" data-supply-doc-add type="button">+ Добавить накладную</button>';
+      if (tab === 1) return '<span class="context-caption">Документы поставки</span><span class="context-muted supply-doc-context-note">Белые ТТН фиксируют фактическое поступление сразу; зелёные ТТН документально подтверждают его.</span><span class="spacer"></span><button class="context-link supply-doc-add-link" data-supply-doc-add type="button">+ Добавить накладную</button><span class="context-muted supply-doc-edit-hint">Двойной клик по строке — редактировать</span>';
       if (tab === 2) return '<span class="context-caption">Прайс поставщика</span><span>Исходный порядок и данные поставщика · сверка с Рабочей сводкой</span><span class="spacer"></span><button class="context-link" data-supplier-check-open type="button">Проверить прайс</button><button class="context-link" data-supplier-import-open type="button">Импорт прайса поставщика</button>';
       return '<span class="context-muted">Данные по всему объекту</span>';
     }
@@ -5174,65 +5174,135 @@
     return type==="green" ? "Зелёная ТТН" : "Белая ТТН";
   }
 
-  function supplyDocumentStateLabel(doc) {
-    if(doc.status==="cancelled") return "Отменена";
-    if(doc.status==="draft") return "Черновик";
-    return doc.document_type==="green" ? "Подтверждение" : "Факт поступления";
+  function supplyDocumentRegistryState(doc,lines) {
+    const lineIds=new Set((lines||[]).map(function(l){return l.id;}));
+    const allocations=dataState.supplyLineAllocations||[];
+    const review=(lines||[]).some(function(l){return l.match_state==="review"||l.match_state==="unmatched";});
+    if(doc.status==="cancelled") return {label:"Отменена",tone:"cancelled"};
+    if(doc.status==="draft") return {label:"Черновик",tone:"draft"};
+
+    const totalPieces=(lines||[]).reduce(function(s,l){return s+Number(l.qty_pieces||0);},0);
+    const totalM3=(lines||[]).reduce(function(s,l){return s+Number(l.qty_m3||0);},0);
+    const eps=0.000001;
+
+    if(doc.document_type==="white"){
+      if(review) return {label:"Требует проверки",tone:"issue"};
+      const confirmed=allocations.filter(function(a){return lineIds.has(a.white_line_id);}).reduce(function(acc,a){
+        acc.pieces+=Number(a.allocated_pieces||0);
+        acc.m3+=Number(a.allocated_m3||0);
+        return acc;
+      },{pieces:0,m3:0});
+      const usePieces=totalPieces>eps;
+      const total=usePieces?totalPieces:totalM3;
+      const done=usePieces?confirmed.pieces:confirmed.m3;
+      if(done<=eps) return {label:"Ожидает ТТН",tone:"waiting"};
+      if(done+eps<total) return {label:"Частично подтверждена",tone:"partial"};
+      return {label:"Подтверждена",tone:"ok"};
+    }
+
+    if(review) return {label:"Есть расхождение",tone:"issue"};
+    const linked=allocations.filter(function(a){return lineIds.has(a.green_line_id);}).reduce(function(acc,a){
+      acc.pieces+=Number(a.allocated_pieces||0);
+      acc.m3+=Number(a.allocated_m3||0);
+      return acc;
+    },{pieces:0,m3:0});
+    const usePieces=totalPieces>eps;
+    const total=usePieces?totalPieces:totalM3;
+    const done=usePieces?linked.pieces:linked.m3;
+    if(done<=eps) return {label:"Без белой ТТН",tone:"waiting"};
+    if(done+eps<total) return {label:"Частично сопоставлена",tone:"partial"};
+    return {label:"Сопоставлена",tone:"ok"};
+  }
+
+  async function openSupplyDocumentFile(documentId) {
+    const doc=(dataState.supplyDocuments||[]).find(function(d){return d.id===documentId;});
+    if(!doc||!doc.source_file_path) return;
+    const popup=window.open("","_blank");
+    try{
+      const result=await client.storage.from("supply-documents").createSignedUrl(doc.source_file_path,60);
+      if(result.error) throw result.error;
+      if(popup) popup.location.href=result.data.signedUrl;
+      else window.open(result.data.signedUrl,"_blank","noopener");
+    }catch(err){
+      if(popup) popup.close();
+      alert("Не удалось открыть файл накладной:\n"+(err&&err.message?err.message:String(err)));
+    }
   }
 
   function renderSupplyDocuments() {
-    $("workArea").className = "work-area table-work";
     let docs=(dataState.supplyDocuments||[]).slice().sort(function(a,b){
       return String(b.receipt_date||"").localeCompare(String(a.receipt_date||"")) ||
         String(b.created_at||"").localeCompare(String(a.created_at||""));
-    }).filter(function(d){
-      return passesSearch([d.receipt_date,supplyDocumentTypeLabel(d.document_type),d.ttn_number,d.source_file_name,supplyDocumentStateLabel(d)]);
-    }).filter(function(d){
+    });
+    docs=docs.filter(function(doc){
+      const lines=(dataState.supplyDocumentLines||[]).filter(function(l){return l.document_id===doc.id;});
+      const state=supplyDocumentRegistryState(doc,lines);
+      return passesSearch([doc.receipt_date,supplyDocumentTypeLabel(doc.document_type),doc.ttn_number,doc.source_file_name,state.label]);
+    }).filter(function(doc){
       return rowPassesColumnFilters({
-        date:supplyDateLabel(d.receipt_date),
-        type:supplyDocumentTypeLabel(d.document_type),
-        ttn:d.ttn_number||""
+        date:supplyDateLabel(doc.receipt_date),
+        type:supplyDocumentTypeLabel(doc.document_type),
+        ttn:doc.ttn_number||""
       });
     });
 
-    let body=docs.map(function(d){
-      const lines=(dataState.supplyDocumentLines||[]).filter(function(x){return x.document_id===d.id;});
-      const pcs=lines.reduce(function(a,x){return a+Number(x.qty_pieces||0);},0);
-      const m3=lines.reduce(function(a,x){return a+Number(x.qty_m3||0);},0);
-      const net=lines.reduce(function(a,x){return a+Number(x.amount_net||0);},0);
-      const vat=lines.reduce(function(a,x){return a+Number(x.vat_amount||0);},0);
-      const gross=lines.reduce(function(a,x){return a+Number(x.amount_gross||0);},0);
-      const review=lines.filter(function(x){return x.match_state==="review"||x.match_state==="unmatched";}).length;
-      const state=supplyDocumentStateLabel(d)+(review?" · проверить "+review:"");
-      return '<tr class="data-row supply-document-row" data-supply-doc-id="'+esc(d.id)+'">'+
-        filterCell("date",supplyDateLabel(d.receipt_date),esc(supplyDateLabel(d.receipt_date)),"")+
-        filterCell("type",supplyDocumentTypeLabel(d.document_type),esc(supplyDocumentTypeLabel(d.document_type)),"")+
-        filterCell("ttn",d.ttn_number||"",esc(d.ttn_number||"—"),"")+
-        '<td class="supply-file-cell">'+esc(d.source_file_name||"—")+'</td>'+
-        '<td class="num">'+exFmt0(lines.length)+'</td>'+
-        '<td class="num">'+(pcs?exFmt(pcs):"")+'</td>'+
+    let body=docs.map(function(doc){
+      const lines=(dataState.supplyDocumentLines||[]).filter(function(l){return l.document_id===doc.id;});
+      const positions=lines.length;
+      const pieces=lines.reduce(function(s,l){return s+Number(l.qty_pieces||0);},0);
+      const m3=lines.reduce(function(s,l){return s+Number(l.qty_m3||0);},0);
+      const net=lines.reduce(function(s,l){return s+Number(l.amount_net||0);},0);
+      const vat=lines.reduce(function(s,l){return s+Number(l.vat_amount||0);},0);
+      const gross=lines.reduce(function(s,l){return s+Number(l.amount_gross||0);},0);
+      const state=supplyDocumentRegistryState(doc,lines);
+      const typeLabel=supplyDocumentTypeLabel(doc.document_type);
+      const fileCell=doc.source_file_name
+        ? (doc.source_file_path
+          ? '<button class="table-text-action supply-file-link" data-supply-file-open="'+doc.id+'" type="button" title="'+esc(doc.source_file_name)+'">'+esc(doc.source_file_name)+'</button>'
+          : esc(doc.source_file_name))
+        : "—";
+      return '<tr class="data-row supply-doc-row" data-supply-document-id="'+doc.id+'">'+
+        filterCell("date",supplyDateLabel(doc.receipt_date),esc(supplyDateLabel(doc.receipt_date)))+
+        filterCell("type",typeLabel,esc(typeLabel))+
+        filterCell("ttn",doc.ttn_number||"",esc(doc.ttn_number||"—"))+
+        '<td class="supply-file-cell">'+fileCell+'</td>'+
+        '<td class="num">'+exFmt0(positions)+'</td>'+
+        '<td class="num">'+(pieces?exFmt(pieces):"")+'</td>'+
         '<td class="num">'+(m3?exFmt(m3):"")+'</td>'+
         '<td class="num">'+(net?exMoney(net):"")+'</td>'+
         '<td class="num">'+(vat?exMoney(vat):"")+'</td>'+
         '<td class="num">'+(gross?exMoney(gross):"")+'</td>'+
-        '<td class="status-cell"><span class="supply-doc-state '+esc(d.document_type)+'">'+esc(state)+'</span></td></tr>';
+        '<td><span class="supply-doc-state '+state.tone+'">'+esc(state.label)+'</span></td>'+
+      '</tr>';
     }).join("");
 
-    if(!body) body=tableMessage("Накладных пока нет. Добавьте фактический документ поставки.",11);
-    const head='<thead><tr>'+
-      '<th class="filterable-head">'+filterHeader("Дата поступления","date")+'</th>'+
-      '<th class="filterable-head">'+filterHeader("Тип","type")+'</th>'+
-      '<th class="filterable-head">'+filterHeader("№ ТТН","ttn")+'</th>'+
-      '<th>Файл</th><th>Позиций</th><th>Шт.</th><th>м³</th><th>Без НДС</th><th>НДС</th><th>С НДС</th><th>Состояние</th></tr></thead>';
-    $("workArea").innerHTML =
-      '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table supply-doc-table" data-table-key="supply-documents">'+head+
-      '<tbody>'+body+'</tbody></table></div></div>';
+    if(!body) body=tableMessage('Накладных пока нет. Добавьте фактическую поставку через «+ Добавить накладную».',11);
 
-    document.querySelectorAll("[data-supply-doc-id]").forEach(function(row){
+    $("workArea").className="work-area table-work supply-doc-work";
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table supply-doc-table" data-table-key="supply-documents-v2">'+
+      '<thead><tr>'+
+        '<th class="filterable-head">'+filterHeader("Дата поступления","date")+'</th>'+
+        '<th class="filterable-head">'+filterHeader("Тип","type")+'</th>'+
+        '<th class="filterable-head">'+filterHeader("№ ТТН","ttn")+'</th>'+
+        '<th>Файл</th><th>Позиций</th><th>Шт.</th><th>м³</th><th>Без НДС</th><th>НДС</th><th>С НДС</th><th>Состояние</th>'+
+      '</tr></thead><tbody>'+body+'</tbody></table></div></div>';
+
+    document.querySelectorAll(".supply-doc-row").forEach(function(row){
+      row.onclick=function(){
+        document.querySelectorAll(".supply-doc-row.active-row").forEach(function(x){x.classList.remove("active-row");});
+        row.classList.add("active-row");
+      };
       row.ondblclick=function(e){
-        e.preventDefault();
-        const doc=(dataState.supplyDocuments||[]).find(function(x){return x.id===row.dataset.supplyDocId;});
+        if(e.target.closest("button,a,input,select")) return;
+        const doc=(dataState.supplyDocuments||[]).find(function(d){return d.id===row.dataset.supplyDocumentId;});
         if(doc) openSupplyDocumentEditor(doc);
+      };
+    });
+    document.querySelectorAll("[data-supply-file-open]").forEach(function(btn){
+      btn.onclick=function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        openSupplyDocumentFile(btn.dataset.supplyFileOpen);
       };
     });
   }
@@ -8793,6 +8863,7 @@
 
     $("contextRow").innerHTML = buildContext(pageKey,tab);
     $("contextRow").classList.toggle("avr-context-row",(pageKey==="avr" && tab===0) || (pageKey==="s29" && tab===0));
+    $("contextRow").classList.toggle("supply-doc-context-row",pageKey==="supply" && tab===1);
     $("serviceLeft").innerHTML = buildServiceLeft(pageKey,tab);
     $("serviceRow").classList.toggle("hidden",
       (pageKey==="estimates" && (tab===1 || tab===2)) ||
