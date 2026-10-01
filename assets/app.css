@@ -2730,3 +2730,20 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   font-weight:400;
   text-decoration:none;
 }
+
+
+/* Type cells must never ellipsize the Р/М marker. */
+.ks-table td:first-child,
+.avr-table td:first-child{
+  padding-left:5px!important;
+  padding-right:5px!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+}
+.ks-table .type-mark,
+.avr-table .type-mark{
+  box-sizing:border-box;
+  min-width:27px;
+  max-width:27px;
+  padding:0;
+}
