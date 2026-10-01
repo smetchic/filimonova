@@ -5910,15 +5910,35 @@
     } else if(row.id) {
       item=maps().catalog.get(row.id)||null;
     }
-    if(!item) return null;
-    const lengthMm=Number(item.length_mm||0);
-    const heightMm=Number(item.height_mm||0);
-    const thicknessMm=Number(item.thickness_mm||0);
-    if(!(lengthMm>0&&heightMm>0&&thicknessMm>0)) return null;
-    const areaValue=Number(item.area_m2||0);
+
+    let lengthMm=item?Number(item.length_mm||0):0;
+    let heightMm=item?Number(item.height_mm||0):0;
+    let thicknessMm=item?Number(item.thickness_mm||0):0;
+    let source=item&&item.geometry_source?item.geometry_source:"";
+    let sourcePage=item&&item.geometry_source_page?item.geometry_source_page:null;
+
+    if(!(lengthMm>0&&heightMm>0&&thicknessMm>0)) {
+      const text=String(
+        (item&&item.name) ||
+        (row&&estimateDisplayName(row)) ||
+        (row&&row.name) || ""
+      ).replace(/,/g,".");
+      const match=text.match(/(\d{1,3})\.(\d{1,2})\.(\d{1,2})/);
+      if(!match) return null;
+      lengthMm=Number(match[1])*100;
+      heightMm=Number(match[2])*100;
+      thicknessMm=Number(match[3])*10;
+      if(!(lengthMm>0&&heightMm>0&&thicknessMm>0)) return null;
+      source="designation-fallback";
+      sourcePage=null;
+    }
+
     const length=lengthMm/1000;
     const height=heightMm/1000;
     const thickness=thicknessMm/1000;
+    const storedArea=item?Number(item.area_m2||0):0;
+    const area=storedArea>0?storedArea:(length*height);
+
     return {
       length:length,
       height:height,
@@ -5926,9 +5946,9 @@
       lengthMm:lengthMm,
       heightMm:heightMm,
       thicknessMm:thicknessMm,
-      area:areaValue>0?areaValue:null,
-      source:item.geometry_source||"",
-      sourcePage:item.geometry_source_page||null,
+      area:area,
+      source:source,
+      sourcePage:sourcePage,
       label:numFmt.format(length)+" × "+numFmt.format(height)+" × "+numFmt.format(thickness)+" м"
     };
   }
