@@ -266,7 +266,7 @@
 
   async function loadProjectDataFresh(project) {
     const requests = [
-      fetchAllRows("catalog_items","id,mark,name,normalized_key",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("mark");}),
+      fetchAllRows("catalog_items","id,mark,name,normalized_key,length_mm,height_mm,thickness_mm,area_m2,geometry_source,geometry_source_page,geometry_confidence",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("mark");}),
       fetchAllRows("specification_sections","id,building_section,zone,name,sort_order,is_stairs",function(q){return q.eq("project_id",project.id).order("sort_order");}),
       fetchAllRows("specification_rows","id,section_id,catalog_item_id,position_no,designation,project_volume_m3,sort_order",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("position_no");}),
       fetchAllRows("specification_quantities","specification_row_id,level_code,level_order,quantity",function(q){return q.eq("project_id",project.id).order("level_order").order("specification_row_id");}),
@@ -383,7 +383,7 @@
 
   async function projectDataSliceRequest(key,project) {
     switch(key) {
-      case "catalogItems": return fetchAllRows("catalog_items","id,mark,name,normalized_key",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("mark");});
+      case "catalogItems": return fetchAllRows("catalog_items","id,mark,name,normalized_key,length_mm,height_mm,thickness_mm,area_m2,geometry_source,geometry_source_page,geometry_confidence",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("mark");});
       case "specSections": return fetchAllRows("specification_sections","id,building_section,zone,name,sort_order,is_stairs",function(q){return q.eq("project_id",project.id).order("sort_order");});
       case "specRows": return fetchAllRows("specification_rows","id,section_id,catalog_item_id,position_no,designation,project_volume_m3,sort_order",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("position_no");});
       case "specQuantities": return fetchAllRows("specification_quantities","specification_row_id,level_code,level_order,quantity",function(q){return q.eq("project_id",project.id).order("level_order").order("specification_row_id");});
@@ -1195,7 +1195,7 @@
     const supplierModel=item.id?supplierPriceModel(item.id,volumePerPiece):null;
     const supplierUnit=supplierModel && supplierModel.singlePrice!=null && supplierModel.state!=="Проверить"
       ?Number(supplierModel.singlePrice):null;
-    const cardGeometry=workLinkMaterialGeometry(linkedEstimateRows[0]||{name:item.name});
+    const cardGeometry=workLinkMaterialGeometry(item)||workLinkMaterialGeometry(linkedEstimateRows[0]||null);
     function unitMoney(value){return value!=null && Number.isFinite(value) && value>0?money(value)+" BYN":"—";}
     const sectionLabel=st.rows.length&&st.rows[0].section?st.rows[0].section.name:"Раздел";
     const allNames=Array.from(new Set(dataState.catalogItems.map(function(x){return x.name;}).filter(Boolean))).sort(function(a,b){return a.localeCompare(b,"ru",{numeric:true});});
@@ -5901,19 +5901,34 @@
 
 
   function workLinkMaterialGeometry(row) {
-    const text=String((row&&estimateDisplayName(row))||(row&&row.name)||"").replace(/,/g,".");
-    const matches=Array.from(text.matchAll(/(\d{1,3})\.(\d{1,2})\.(\d{1,2})/g));
-    if(!matches.length) return null;
-    const m=matches[matches.length-1];
-    const length=Number(m[1])/10;
-    const height=Number(m[2])/10;
-    const thickness=Number(m[3])/100;
-    if(!(length>0&&height>0&&thickness>0)) return null;
+    if(!row) return null;
+    let item=null;
+    if(row.length_mm!=null || row.height_mm!=null || row.thickness_mm!=null) {
+      item=row;
+    } else if(row.catalog_item_id) {
+      item=maps().catalog.get(row.catalog_item_id)||null;
+    } else if(row.id) {
+      item=maps().catalog.get(row.id)||null;
+    }
+    if(!item) return null;
+    const lengthMm=Number(item.length_mm||0);
+    const heightMm=Number(item.height_mm||0);
+    const thicknessMm=Number(item.thickness_mm||0);
+    if(!(lengthMm>0&&heightMm>0&&thicknessMm>0)) return null;
+    const areaValue=Number(item.area_m2||0);
+    const length=lengthMm/1000;
+    const height=heightMm/1000;
+    const thickness=thicknessMm/1000;
     return {
       length:length,
       height:height,
       thickness:thickness,
-      area:length*height,
+      lengthMm:lengthMm,
+      heightMm:heightMm,
+      thicknessMm:thicknessMm,
+      area:areaValue>0?areaValue:null,
+      source:item.geometry_source||"",
+      sourcePage:item.geometry_source_page||null,
       label:numFmt.format(length)+" × "+numFmt.format(height)+" × "+numFmt.format(thickness)+" м"
     };
   }
