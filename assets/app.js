@@ -5361,16 +5361,17 @@
     const volume=supplyEditorNumber(row.unit_volume_snapshot_m3);
     let pcs=supplyEditorNumber(row.qty_pieces);
     let m3=supplyEditorNumber(row.qty_m3);
-    let price=supplyEditorNumber(row.unit_price);
+    const price=supplyEditorNumber(row.unit_price);
     let vatPercent=supplyEditorNumber(row.vat_percent);
     if(type==="white"){
       m3=pcs!=null&&volume!=null?pcs*volume:null;
       return {pcs:pcs,m3:m3,volume:volume,net:null,vat:null,gross:null};
     }
+    if(vatPercent==null) vatPercent=20;
     pcs=m3!=null&&volume!=null&&volume>0?m3/volume:null;
     const net=m3!=null&&price!=null?m3*price:null;
-    const vat=net!=null&&vatPercent!=null?net*vatPercent/100:null;
-    const gross=net!=null?(net+(vat||0)):null;
+    const vat=net!=null?net*vatPercent/100:null;
+    const gross=net!=null?net+(vat||0):null;
     return {pcs:pcs,m3:m3,volume:volume,net:net,vat:vat,gross:gross};
   }
 
@@ -5435,19 +5436,32 @@
     if(!doc || doc.document_type!=="green") return "";
     const greenLines=(dataState.supplyDocumentLines||[]).filter(function(l){return l.document_id===doc.id;});
     const greenIds=new Set(greenLines.map(function(l){return l.id;}));
-    const allocations=(dataState.supplyLineAllocations||[]).filter(function(a){return greenIds.has(a.green_line_id);});
-    if(!allocations.length){
-      return '<div class="ttn-recon"><div class="ttn-recon-title">Сверка с белыми ТТН</div><div class="ttn-recon-empty">Связанных количеств пока нет.</div></div>';
+    const currentAllocations=(dataState.supplyLineAllocations||[]).filter(function(a){return greenIds.has(a.green_line_id);});
+    if(!currentAllocations.length){
+      return '<div class="ttn-recon"><div class="ttn-recon-title">Сверка с белыми ТТН</div><div class="ttn-recon-empty">Для этой зелёной ТТН подтверждаемые количества белых ТТН пока не определены.</div></div>';
     }
     const lineById=new Map((dataState.supplyDocumentLines||[]).map(function(l){return [l.id,l];}));
     const docById=new Map((dataState.supplyDocuments||[]).map(function(d){return [d.id,d];}));
-    const rows=allocations.map(function(a){
-      const white=lineById.get(a.white_line_id)||{};
-      const green=lineById.get(a.green_line_id)||{};
+    const whiteIds=Array.from(new Set(currentAllocations.map(function(x){return x.white_line_id;})));
+    const rows=whiteIds.map(function(whiteId){
+      const white=lineById.get(whiteId)||{};
       const whiteDoc=docById.get(white.document_id)||{};
-      return '<tr><td>'+esc(supplyDateLabel(whiteDoc.receipt_date))+'</td><td>'+esc(whiteDoc.ttn_number||"Белая ТТН")+'</td><td>'+esc(green.source_mark||white.source_mark||"—")+'</td><td class="num">'+(a.allocated_pieces?exFmt(a.allocated_pieces):"")+'</td><td class="num">'+(a.allocated_m3?exFmt(a.allocated_m3):"")+'</td><td>Подтверждено</td></tr>';
+      const confirmed=(dataState.supplyLineAllocations||[]).filter(function(x){return x.white_line_id===whiteId;})
+        .reduce(function(s,x){return s+Number(x.allocated_pieces||0);},0);
+      const total=Number(white.qty_pieces||0);
+      const remain=Math.max(0,total-confirmed);
+      return '<tr>'+
+        '<td>'+esc(supplyDateLabel(whiteDoc.receipt_date))+(whiteDoc.ttn_number?' · №'+esc(whiteDoc.ttn_number):"")+'</td>'+
+        '<td>'+esc(white.source_mark||white.source_name||"—")+'</td>'+
+        '<td class="num">'+(total?exFmt(total):"")+'</td>'+
+        '<td class="num">'+(confirmed?exFmt(confirmed):"")+'</td>'+
+        '<td class="num">'+(remain?exFmt(remain):"0")+'</td>'+
+        '<td>'+(remain<=0.000001?"Закрыта":"Частично")+'</td>'+
+      '</tr>';
     }).join("");
-    return '<div class="ttn-recon"><div class="ttn-recon-title">Сверка с белыми ТТН</div><div class="ttn-recon-scroll"><table><thead><tr><th>Дата факта</th><th>Белая ТТН</th><th>Марка</th><th>шт.</th><th>м³</th><th>Статус</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+    return '<div class="ttn-recon"><div class="ttn-recon-title">Сверка с белыми ТТН</div><div class="ttn-recon-scroll"><table>'+
+      '<thead><tr><th>Белая ТТН</th><th>Позиция</th><th>По белой, шт.</th><th>Подтверждено, шт.</th><th>Осталось, шт.</th><th>Состояние</th></tr></thead>'+
+      '<tbody>'+rows+'</tbody></table></div></div>';
   }
 
   function openSupplyDocumentEditor(documentRow) {
@@ -5521,35 +5535,39 @@
         qty_m3:c.m3==null?null:c.m3,
         unit_volume_snapshot_m3:c.volume==null?null:c.volume,
         unit_price:type==="green"?supplyEditorNumber(row.unit_price):null,
-        vat_percent:type==="green"?(supplyEditorNumber(row.vat_percent)==null?0:supplyEditorNumber(row.vat_percent)):null
+        vat_percent:type==="green"?supplyEditorNumber(row.vat_percent):null
       };
     }
 
     function renderLines(){
       closeTtnSuggestions();
       const green=type==="green";
-      const cols=green?12:7;
+      const cols=green?10:6;
       let totalPcs=0,totalM3=0,totalNet=0,totalVat=0,totalGross=0;
+
       const body=draftRows.map(function(row,index){
         const c=supplyEditorComputed(row,type);
-        totalPcs+=Number(c.pcs||0);totalM3+=Number(c.m3||0);totalNet+=Number(c.net||0);totalVat+=Number(c.vat||0);totalGross+=Number(c.gross||0);
+        totalPcs+=Number(c.pcs||0);
+        totalM3+=Number(c.m3||0);
+        totalNet+=Number(c.net||0);
+        totalVat+=Number(c.vat||0);
+        totalGross+=Number(c.gross||0);
         const state=supplyEditorRowStatus(row,type);
         const common='<td class="ttn-source-input"><input data-ttn-mark="'+index+'" value="'+esc(row.source_mark||"")+'" autocomplete="off"></td>'+
           '<td class="ttn-source-input ttn-name-input"><input data-ttn-name="'+index+'" value="'+esc(row.source_name||"")+'" autocomplete="off"></td>';
+
         if(!green){
           return '<tr data-ttn-row="'+index+'">'+common+
             '<td class="num-input"><input data-ttn-pieces="'+index+'" inputmode="decimal" value="'+esc(row.qty_pieces||"")+'"></td>'+
-            '<td class="num computed">'+(c.volume!=null?exFmt(c.volume):"—")+'</td>'+
             '<td class="num computed">'+(c.m3!=null?exFmt(c.m3):"—")+'</td>'+
             '<td class="ttn-link-state '+(state==="Сопоставлено"?"ok":"review")+'">'+esc(state)+'</td>'+
             '<td class="center"><button class="table-text-action" data-ttn-remove="'+index+'" type="button">удалить</button></td></tr>';
         }
+
         return '<tr data-ttn-row="'+index+'">'+common+
           '<td class="num-input"><input data-ttn-m3="'+index+'" inputmode="decimal" value="'+esc(row.qty_m3||"")+'"></td>'+
-          '<td class="num computed">'+(c.volume!=null?exFmt(c.volume):"—")+'</td>'+
           '<td class="num computed">'+(c.pcs!=null?exFmt(c.pcs):"—")+'</td>'+
           '<td class="num-input"><input data-ttn-price="'+index+'" inputmode="decimal" value="'+esc(row.unit_price||"")+'"></td>'+
-          '<td class="num-input vat-input"><input data-ttn-vat="'+index+'" inputmode="decimal" value="'+esc(row.vat_percent||"")+'"></td>'+
           '<td class="num computed">'+(c.net!=null?exMoney(c.net):"—")+'</td>'+
           '<td class="num computed">'+(c.vat!=null?exMoney(c.vat):"—")+'</td>'+
           '<td class="num computed">'+(c.gross!=null?exMoney(c.gross):"—")+'</td>'+
@@ -5558,17 +5576,17 @@
       }).join("");
 
       const head=green
-        ? '<thead><tr><th>Марка</th><th>Наименование</th><th>м³</th><th>Объём 1 шт., м³</th><th>шт.</th><th>Цена 1 м³ без НДС</th><th>НДС, %</th><th>Без НДС</th><th>НДС</th><th>С НДС</th><th>Связь</th><th></th></tr></thead>'
-        : '<thead><tr><th>Марка</th><th>Наименование</th><th>Кол-во, шт.</th><th>Объём 1 шт., м³</th><th>Всего, м³</th><th>Связь</th><th></th></tr></thead>';
+        ? '<thead><tr><th>Марка</th><th>Наименование</th><th>Кол-во по ТТН, м³</th><th>Расчёт, шт.</th><th>Цена за 1 м³</th><th>Сумма без НДС</th><th>НДС</th><th>Сумма с НДС</th><th>Сопоставление</th><th></th></tr></thead>'
+        : '<thead><tr><th>Марка</th><th>Наименование</th><th>Кол-во, шт.</th><th>Объём, м³</th><th>Сопоставление</th><th></th></tr></thead>';
 
       const foot=green
-        ? '<tfoot><tr class="ttn-total-row"><td colspan="2">ИТОГО</td><td class="num">'+(totalM3?exFmt(totalM3):"")+'</td><td></td><td class="num">'+(totalPcs?exFmt(totalPcs):"")+'</td><td></td><td></td><td class="num">'+(totalNet?exMoney(totalNet):"")+'</td><td class="num">'+(totalVat?exMoney(totalVat):"")+'</td><td class="num">'+(totalGross?exMoney(totalGross):"")+'</td><td></td><td></td></tr>'+
+        ? '<tfoot><tr class="ttn-total-row"><td colspan="2">ИТОГО</td><td class="num">'+(totalM3?exFmt(totalM3):"")+'</td><td class="num">'+(totalPcs?exFmt(totalPcs):"")+'</td><td></td><td class="num">'+(totalNet?exMoney(totalNet):"")+'</td><td class="num">'+(totalVat?exMoney(totalVat):"")+'</td><td class="num">'+(totalGross?exMoney(totalGross):"")+'</td><td></td><td></td></tr>'+
           '<tr class="ttn-add-row"><td colspan="'+cols+'"><button class="table-text-action" data-ttn-add-row type="button">+ Добавить строку</button></td></tr></tfoot>'
-        : '<tfoot><tr class="ttn-total-row"><td colspan="2">ИТОГО</td><td class="num">'+(totalPcs?exFmt(totalPcs):"")+'</td><td></td><td class="num">'+(totalM3?exFmt(totalM3):"")+'</td><td></td><td></td></tr>'+
+        : '<tfoot><tr class="ttn-total-row"><td colspan="2">ИТОГО</td><td class="num">'+(totalPcs?exFmt(totalPcs):"")+'</td><td class="num">'+(totalM3?exFmt(totalM3):"")+'</td><td></td><td></td></tr>'+
           '<tr class="ttn-add-row"><td colspan="'+cols+'"><button class="table-text-action" data-ttn-add-row type="button">+ Добавить строку</button></td></tr></tfoot>';
 
       zone.innerHTML='<div class="ttn-grid-scroll"><table class="ttn-grid">'+head+'<tbody>'+body+'</tbody>'+foot+'</table></div>'+
-        (green?supplyReconciliationHtml(existing):"");
+        (green?supplyReconciliationHtml(existing):'<div class="ttn-inline-note">Белая ТТН фиксирует фактическое поступление в штуках; м³ рассчитываются по спецификации поставщика.</div>');
 
       zone.querySelector("[data-ttn-add-row]").onclick=function(){draftRows.push(blankRow());renderLines();};
       zone.querySelectorAll("[data-ttn-remove]").forEach(function(btn){
@@ -5581,13 +5599,25 @@
       });
       zone.querySelectorAll("[data-ttn-mark]").forEach(function(input){
         const index=Number(input.dataset.ttnMark);
-        input.oninput=function(){draftRows[index].source_mark=input.value;draftRows[index].catalog_item_id=null;draftRows[index].supplier_item_id=null;draftRows[index].unit_volume_snapshot_m3="";openTtnSuggestions(input,"mark",draftRows[index],draftRows,renderLines);};
+        input.oninput=function(){
+          draftRows[index].source_mark=input.value;
+          draftRows[index].catalog_item_id=null;
+          draftRows[index].supplier_item_id=null;
+          draftRows[index].unit_volume_snapshot_m3="";
+          openTtnSuggestions(input,"mark",draftRows[index],draftRows,renderLines);
+        };
         input.onfocus=function(){if(input.value) openTtnSuggestions(input,"mark",draftRows[index],draftRows,renderLines);};
         input.onblur=function(){setTimeout(closeTtnSuggestions,150);};
       });
       zone.querySelectorAll("[data-ttn-name]").forEach(function(input){
         const index=Number(input.dataset.ttnName);
-        input.oninput=function(){draftRows[index].source_name=input.value;draftRows[index].catalog_item_id=null;draftRows[index].supplier_item_id=null;draftRows[index].unit_volume_snapshot_m3="";openTtnSuggestions(input,"name",draftRows[index],draftRows,renderLines);};
+        input.oninput=function(){
+          draftRows[index].source_name=input.value;
+          draftRows[index].catalog_item_id=null;
+          draftRows[index].supplier_item_id=null;
+          draftRows[index].unit_volume_snapshot_m3="";
+          openTtnSuggestions(input,"name",draftRows[index],draftRows,renderLines);
+        };
         input.onfocus=function(){if(input.value) openTtnSuggestions(input,"name",draftRows[index],draftRows,renderLines);};
         input.onblur=function(){setTimeout(closeTtnSuggestions,150);};
       });
@@ -5602,10 +5632,6 @@
       zone.querySelectorAll("[data-ttn-price]").forEach(function(input){
         const index=Number(input.dataset.ttnPrice);
         input.onchange=function(){draftRows[index].unit_price=input.value;renderLines();};
-      });
-      zone.querySelectorAll("[data-ttn-vat]").forEach(function(input){
-        const index=Number(input.dataset.ttnVat);
-        input.onchange=function(){draftRows[index].vat_percent=input.value;renderLines();};
       });
     }
 
@@ -5646,11 +5672,6 @@
           }).eq("id",documentId).eq("project_id",dataState.project.id);
           if(upd.error) throw upd.error;
           if(filePath&&filePath!==path) client.storage.from("supply-documents").remove([filePath]).catch(function(){});
-        }
-
-        if(type==="green"){
-          const rec=await client.rpc("rebuild_green_supply_allocations",{p_project_id:dataState.project.id,p_document_id:documentId});
-          if(rec.error) throw rec.error;
         }
 
         await refreshProjectDataSlices(["supplyDocuments","supplyDocumentLines","supplyLineAllocations"],dataState.project);
