@@ -1245,24 +1245,79 @@
     )).map(Number);
     const volumePerPiece=supplierVolumes.length===1?supplierVolumes[0]:0;
     const projectM3=st.qty*volumePerPiece;
-    const suppliedLines=(dataState.supplyDocumentLines||[]).filter(function(x){return item.id && x.catalog_item_id===item.id;});
+    const supplyDocsById=new Map((dataState.supplyDocuments||[]).map(function(d){return [d.id,d];}));
+    const greenLineIds=new Set((dataState.supplyLineAllocations||[]).map(function(a){return a.green_line_id;}).filter(Boolean));
+    const whiteLineIds=new Set((dataState.supplyLineAllocations||[]).map(function(a){return a.white_line_id;}).filter(Boolean));
+    function isSupplyFactLine(line){
+      if(!line || !item.id || line.catalog_item_id!==item.id) return false;
+      if(greenLineIds.has(line.id)) return false;
+      if(whiteLineIds.has(line.id)) return true;
+      const doc=supplyDocsById.get(line.document_id)||{};
+      const type=importNorm(doc.document_type||"");
+      const status=importNorm(doc.status||"posted");
+      if(/чернов|draft|отмен|cancel/.test(status)) return false;
+      if(/зелен|green/.test(type)) return false;
+      // Белая ТТН фиксирует поступление. Для старых документов без явного типа
+      // считаем фактом любой проведённый документ, который не является зелёным подтверждением.
+      return true;
+    }
+    const suppliedLines=(dataState.supplyDocumentLines||[]).filter(isSupplyFactLine);
     const suppliedQty=suppliedLines.reduce(function(a,x){return a+Number(x.qty_pieces||0);},0);
     const suppliedM3=suppliedLines.reduce(function(a,x){return a+Number(x.qty_m3||0);},0);
     const mountedEvents=(dataState.montageEvents||[]).filter(function(x){
       return st.rows.some(function(sr){return sr.id===x.specification_row_id;}) && x.event_type==="mounted";
     });
     const mountedQty=mountedEvents.reduce(function(a,x){return a+Number(x.quantity||0);},0);
-    const avrRows=(dataState.avrRows||[]).filter(function(x){return linkedEstimateRows.some(function(r){return r.id===x.estimate_row_id;});});
+    const activeVersionByPeriod=new Map();
+    (dataState.avrDocuments||[]).forEach(function(doc){
+      const versions=versionsForDocument(doc.id);
+      const active=versions.find(function(v){return v.state==="signed" || !!v.signed_at;})
+        || versions.find(function(v){return v.state==="in_use";})
+        || null;
+      if(active) activeVersionByPeriod.set(periodKey(doc.period_month),active);
+    });
+    const activeVersionIds=new Set(Array.from(activeVersionByPeriod.values()).map(function(v){return v.id;}));
+    const linkedEstimateRowIds=new Set(linkedEstimateRows.map(function(r){return r.id;}));
+    const avrRows=(dataState.avrRows||[]).filter(function(x){
+      return activeVersionIds.has(x.version_id) && linkedEstimateRowIds.has(x.estimate_row_id);
+    });
     const avrQty=avrRows.reduce(function(a,x){return a+Number(x.quantity||0);},0);
     const avrM3=avrRows.reduce(function(a,x){return a+Number(x.quantity_m3||0);},0);
     const avrAmount=avrRows.reduce(function(a,x){return a+Number(x.amount||0);},0);
-    const s29Rows=(dataState.s29Rows||[]).filter(function(x){return item.id && x.catalog_item_id===item.id;});
-    const writtenM3=s29Rows.reduce(function(a,x){return a+Number(x.written_off_m3||0);},0);
+
+    const s29DocsById=new Map((dataState.s29Documents||[]).map(function(d){return [d.id,d];}));
+    const effectiveS29Rows=(dataState.s29Rows||[]).filter(function(x){
+      if(!item.id || x.catalog_item_id!==item.id) return false;
+      const doc=s29DocsById.get(x.document_id);
+      return !!(doc && (doc.fixed_at || doc.status==="fixed"));
+    });
+    const allS29Rows=(dataState.s29Rows||[]).filter(function(x){return item.id && x.catalog_item_id===item.id;});
+    const writtenM3=effectiveS29Rows.reduce(function(a,x){return a+Number(x.written_off_m3||0);},0);
     const estimateAmount=linkedEstimateRows.reduce(function(sum,r){
       const c=(dataState.estimateCosts||[]).find(function(x){return x.estimate_row_id===r.id;});
       return sum+Number(c&&c.total_amount||0);
     },0);
     const estimateQty=linkedEstimateRows.reduce(function(sum,r){return sum+Number(r.quantity||0);},0);
+    const materialRowIds=new Set(linkedEstimateRows.map(function(r){return r.id;}));
+    const linkedWorkIds=new Set((dataState.estimateWorkLinks||[])
+      .filter(function(l){return materialRowIds.has(l.material_row_id);})
+      .map(function(l){return l.work_row_id;}));
+    const linkedWorkRows=(dataState.estimateRows||[]).filter(function(r){return linkedWorkIds.has(r.id);});
+    const linkedWorkCosts=linkedWorkRows.map(function(r){
+      const cost=(dataState.estimateCosts||[]).find(function(c){return c.estimate_row_id===r.id;})||null;
+      const progress=workLinkProgress(r.id);
+      const expectedPieces=Number(progress.expected||0);
+      const totalAmount=Number(cost&&cost.total_amount||0);
+      return {
+        row:r,
+        cost:cost,
+        expectedPieces:expectedPieces,
+        unitPerPiece:expectedPieces>0&&totalAmount>0?totalAmount/expectedPieces:null
+      };
+    });
+    const installationUnit=linkedWorkCosts.length && linkedWorkCosts.every(function(x){return x.unitPerPiece!=null;})
+      ? linkedWorkCosts.reduce(function(sum,x){return sum+Number(x.unitPerPiece||0);},0)
+      : null;
     // Unit figures are shown only when the source has one unambiguous price per piece.
     const unitCosts=linkedEstimateRows.map(function(r){
       return (dataState.estimateCosts||[]).find(function(c){return c.estimate_row_id===r.id;});
