@@ -881,6 +881,28 @@
     return Math.ceil(ctx.measureText(String(text==null?"":text)).width)+18+Number(extra||0);
   }
 
+  function valueSamplesIntrinsicWidth(samples,minWidth) {
+    let max=0;
+    (samples||[]).forEach(function(value){
+      const text=String(value==null?"":value).trim();
+      if(!text) return;
+      max=Math.max(max,measureEngineeringText(text));
+    });
+    return Math.max(Number(minWidth||0),max);
+  }
+
+  function ksIntrinsicColumnWidth(table,index) {
+    if(!table.classList.contains("ks-table")) return null;
+    const samples=(ui.ks6WidthSamples&&ui.ks6WidthSamples[index])||[];
+    return valueSamplesIntrinsicWidth(samples,tableColumnMinimum(table,index));
+  }
+
+  function avrIntrinsicColumnWidth(table,index) {
+    if(!table.classList.contains("avr-table")) return null;
+    const samples=(ui.avrWidthSamples&&ui.avrWidthSamples[index])||[];
+    return valueSamplesIntrinsicWidth(samples,tableColumnMinimum(table,index));
+  }
+
   function estimateIntrinsicColumnWidth(table,index) {
     if(!table.classList.contains("est-table")) return null;
     const rows=(dataState.estimateRows||[]).filter(function(r){return !r.archived_at;});
@@ -943,6 +965,10 @@
         return 42;
       }
     }
+    const ksWidth=ksIntrinsicColumnWidth(table,index);
+    if(ksWidth!=null) return ksWidth;
+    const avrWidth=avrIntrinsicColumnWidth(table,index);
+    if(avrWidth!=null) return avrWidth;
     const estimateWidth=estimateIntrinsicColumnWidth(table,index);
     if(estimateWidth!=null) return estimateWidth;
     let max=40;
@@ -1036,7 +1062,27 @@
   }
 
   function tableColumnMinimum(table,index) {
-    // One width policy for every estimate-derived grid (estimate, KS and GPR).
+    // Estimate-derived grids use content, not header text, as the sizing source.
+    if(table.classList.contains("ks-table")) {
+      if(index===0) return 32;  // Р/М
+      if(index===1) return 48;  // Поз. см.
+      if(index===2) return 96;  // Обоснование
+      if(index===3) return 140; // Наименование
+      if(index===4) return 56;  // Ед. изм.
+      if(index===5) return 48;  // По смете
+      if(index===6) return 48;  // Запроцентовано
+      if(index===7) return 48;  // Остаток
+      return 42;                // месяцы
+    }
+    if(table.classList.contains("avr-table")) {
+      if(index===0) return 32;
+      if(index===1) return 48;
+      if(index===2) return 96;
+      if(index===3) return 72;
+      if(index===4) return 140;
+      if(index===5) return 56;
+      return 64;
+    }
     if(table.classList.contains("est-table")) {
       if(index===0) return 32;   // type: actual width is content-driven and locked
       if(index===1) return 48;   // estimate position: content-driven and locked
@@ -1044,14 +1090,6 @@
       if(index===3) return 140;  // material name
       if(index===4) return 56;   // material unit
       return 82;
-    }
-    if(table.classList.contains("ks-table")) {
-      if(index===0) return 42;
-      if(index===1) return 72;
-      if(index===2) return 190;
-      if(index===3) return 420;
-      if(index===4) return 92;
-      return 90;
     }
     return 28;
   }
@@ -1075,10 +1113,16 @@
   }
 
   function tableColumnLocked(table,index) {
-    return table.classList.contains("est-table") && (index===0 || index===1);
+    return (table.classList.contains("est-table") || table.classList.contains("ks-table") || table.classList.contains("avr-table")) && (index===0 || index===1);
   }
 
   function tableColumnResizeMinimum(table,index) {
+    if(table.classList.contains("ks-table") && index>=2 && index<=4) {
+      return Math.max(tableColumnMinimum(table,index),intrinsicColumnWidth(table,index));
+    }
+    if(table.classList.contains("avr-table") && index>=2 && index<=5) {
+      return Math.max(tableColumnMinimum(table,index),intrinsicColumnWidth(table,index));
+    }
     if(table.classList.contains("est-table") && index>=2 && index<=4) {
       return Math.max(tableColumnMinimum(table,index),intrinsicColumnWidth(table,index));
     }
@@ -5222,25 +5266,48 @@
     const amount=rows.reduce(function(s,x){return s+Number(x.amount||0);},0);
     let body="";
     ui.currentGroupKeys=[];
+    ui.avrWidthSamples=Array.from({length:9},function(){return [];});
+    function widthSample(index,value){
+      const text=String(value==null?"":value).trim();
+      if(text) ui.avrWidthSamples[index].push(text);
+    }
+    widthSample(0,"Р");widthSample(0,"М");
     if(version){
       dataState.estimates.forEach(function(estimate){
-        const estimateRows=rows.map(function(x){return {fact:x,row:estimateRowMap.get(x.estimate_row_id)};}).filter(function(x){return x.row&&x.row.estimate_id===estimate.id&&passesSearch([x.row.position,x.row.basis,x.row.name]);});
+        const estimateRows=rows.map(function(x){return {fact:x,row:estimateRowMap.get(x.estimate_row_id)};})
+          .filter(function(x){return x.row&&x.row.estimate_id===estimate.id&&passesSearch([x.row.position,x.row.basis,x.row.name]);});
         if(!estimateRows.length) return;
         const estimateKey="avr:"+estimate.id;
         registerGroup(estimateKey);
-        body+='<tr class="group-row group-toggle" data-group-key="'+estimateKey+'"><td colspan="6"><span class="group-arrow">'+groupArrow(estimateKey)+'</span>'+esc("Смета №"+estimate.number+" · "+estimate.name)+'</td><td class="num">'+exFmt(estimateRows.reduce(function(s,x){return s+Number(x.fact.quantity||0);},0))+'</td><td class="num">'+exFmt(estimateRows.reduce(function(s,x){return s+Number(x.fact.quantity_m3||0);},0))+'</td><td class="num">'+exMoney(estimateRows.reduce(function(s,x){return s+Number(x.fact.amount||0);},0))+'</td></tr>';
+        const estimateQty=estimateRows.reduce(function(s,x){return s+Number(x.fact.quantity||0);},0);
+        const estimateM3=estimateRows.reduce(function(s,x){return s+Number(x.fact.quantity_m3||0);},0);
+        const estimateAmount=estimateRows.reduce(function(s,x){return s+Number(x.fact.amount||0);},0);
+        widthSample(6,exFmt(estimateQty));widthSample(7,exFmt(estimateM3));widthSample(8,exMoney(estimateAmount));
+        body+='<tr class="group-row group-toggle" data-group-key="'+estimateKey+'"><td colspan="6"><span class="group-arrow">'+groupArrow(estimateKey)+'</span>'+esc("Смета №"+estimate.number+" · "+estimate.name)+'</td><td class="num">'+exFmt(estimateQty)+'</td><td class="num">'+exFmt(estimateM3)+'</td><td class="num">'+exMoney(estimateAmount)+'</td></tr>';
         if(ui.collapsed.has(estimateKey)) return;
-        const sections=dataState.estimateSections.filter(function(s){return s.estimate_id===estimate.id;});
+        const sections=dataState.estimateSections.filter(function(s){return s.estimate_id===estimate.id;})
+          .sort(function(a,b){return Number(a.sort_order||0)-Number(b.sort_order||0);});
         sections.forEach(function(section){
-          const sectionRows=estimateRows.filter(function(x){return x.row.section_id===section.id;});
+          const sectionRows=estimateRows.filter(function(x){return x.row.section_id===section.id;})
+            .sort(function(a,b){return Number(a.row.sort_order||0)-Number(b.row.sort_order||0);});
           if(!sectionRows.length) return;
           const sectionKey=estimateKey+":"+section.id;
           registerGroup(sectionKey);
-          body+='<tr class="group-row group-toggle group-level-2" data-group-key="'+sectionKey+'"><td colspan="9"><span class="group-arrow">'+groupArrow(sectionKey)+'</span>'+esc(section.title)+'</td></tr>';
-          if(ui.collapsed.has(sectionKey)) return;
+          const sectionQty=sectionRows.reduce(function(s,x){return s+Number(x.fact.quantity||0);},0);
+          const sectionM3=sectionRows.reduce(function(s,x){return s+Number(x.fact.quantity_m3||0);},0);
+          const sectionAmount=sectionRows.reduce(function(s,x){return s+Number(x.fact.amount||0);},0);
+          widthSample(6,exFmt(sectionQty));widthSample(7,exFmt(sectionM3));widthSample(8,exMoney(sectionAmount));
+          body+='<tr class="group-row group-toggle" data-group-key="'+sectionKey+'"><td colspan="6" class="est-group-title" style="padding-left:22px"><span class="group-arrow">'+groupArrow(sectionKey)+'</span>'+esc(section.title)+'</td><td class="num">'+exFmt(sectionQty)+'</td><td class="num">'+exFmt(sectionM3)+'</td><td class="num">'+exMoney(sectionAmount)+'</td></tr>';
+          if(ui.collapsed.has(sectionKey)||ui.collapseLeaves) return;
           sectionRows.forEach(function(x){
-            const r=x.row;const f=x.fact;const item=(dataState.catalogItems||[]).find(function(c){return c.id===r.catalog_item_id;});
-            body+='<tr class="data-row"><td class="center"><span class="row-type '+(r.row_type==="work"?'work':'material')+'">'+(r.row_type==="work"?'Р':'М')+'</span></td><td class="center">'+esc(r.position||"")+'</td><td>'+esc(estimateDisplayBasis(r))+'</td><td>'+esc(item&&item.mark||"")+'</td><td>'+esc(estimateDisplayName(r))+'</td><td class="center">'+esc(r.unit||"")+'</td><td class="num">'+exFmt(f.quantity)+'</td><td class="num">'+(r.row_type==="material"?exFmt(f.quantity_m3):"—")+'</td><td class="num">'+exMoney(f.amount)+'</td></tr>';
+            const r=x.row,f=x.fact,item=(dataState.catalogItems||[]).find(function(c){return c.id===r.catalog_item_id;});
+            const displayBasis=estimateDisplayBasis(r),displayName=estimateDisplayName(r),mark=item&&item.mark||"";
+            widthSample(1,r.position);widthSample(2,displayBasis);widthSample(3,mark);
+            if(r.row_type==="material"){widthSample(4,displayName);widthSample(5,r.unit);}
+            widthSample(6,exFmt(f.quantity));
+            if(r.row_type==="material") widthSample(7,exFmt(f.quantity_m3));
+            widthSample(8,exMoney(f.amount));
+            body+='<tr class="data-row" data-row-type="'+esc(r.row_type||"")+'"><td class="center"><span class="type-mark">'+(r.row_type==="work"?"Р":"М")+'</span></td><td class="center">'+esc(r.position||"")+'</td><td title="'+esc(displayBasis||"")+'">'+esc(displayBasis||"")+'</td><td>'+esc(mark)+'</td><td title="'+esc(displayName||"")+'">'+esc(displayName||"")+'</td><td class="center">'+esc(r.unit||"")+'</td><td class="num">'+exFmt(f.quantity)+'</td><td class="num">'+(r.row_type==="material"?exFmt(f.quantity_m3):"—")+'</td><td class="num">'+exMoney(f.amount)+'</td></tr>';
           });
         });
       });
@@ -5261,7 +5328,15 @@
       '<div class="execution-table-title avr-execution-title"><span class="avr-execution-caption">'+avrTitle+'</span><span class="spacer"></span>'+
       '<button class="service-action" data-service="collapse" type="button">Свернуть всё</button>'+
       '<button class="service-action" data-service="expand" type="button">Развернуть всё</button></div>'+
-      '<div class="engineering-scroll"><table class="eng-table avr-table" data-table-key="avr"><thead><tr><th>Тип</th><th>Поз. сметы</th><th>Обоснование</th><th>Марка</th><th>Наименование</th><th>Ед. изм.</th><th>Кол-во в акте</th><th>Кол-во, м³</th><th>Стоимость по акту</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+      '<div class="engineering-scroll"><table class="eng-table avr-table" data-table-key="avr-v2"><thead><tr>'+
+      '<th>Тип</th>'+
+      '<th><span class="column-header-stack"><span>Поз.</span><span>см.</span></span></th>'+
+      '<th>Обоснование</th><th>Марка</th><th>Наименование</th>'+
+      '<th><span class="column-header-stack"><span>Ед.</span><span>изм.</span></span></th>'+
+      '<th><span class="column-header-stack"><span>Кол-во</span><span>в акте</span></span></th>'+
+      '<th><span class="column-header-stack"><span>Кол-во,</span><span>м³</span></span></th>'+
+      '<th><span class="column-header-stack"><span>Стоимость</span><span>по акту</span></span></th>'+
+      '</tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
 
   function renderAvrRegistry() {
@@ -5287,6 +5362,8 @@
   }
 
   function renderKs6() {
+    // Position is an identity column here, exactly as in the estimate grid: no filter.
+    clearColumnFilter("position");
     const docs=(dataState.avrDocuments||[]).slice().sort(function(a,b){return String(a.period_month).localeCompare(String(b.period_month));});
     const sources=executionPeriods().map(function(period){
       const doc=docs.find(function(x){return periodKey(x.period_month)===period;})||null;
@@ -5295,27 +5372,149 @@
     const factByVersionRow=new Map();
     (dataState.avrRows||[]).forEach(function(x){factByVersionRow.set(x.version_id+":"+x.estimate_row_id,Number(x.quantity||0));});
     const estimates=dataState.estimates.filter(function(e){return ui.estimates[e.number]!==false;});
+    const monthNames=["Янв.","Февр.","Март","Апр.","Май","Июнь","Июль","Авг.","Сент.","Окт.","Нояб.","Дек."];
+    const years=[];
+    sources.forEach(function(source){
+      const parts=source.period.split("-");
+      const year=parts[0];
+      let group=years.find(function(x){return x.year===year;});
+      if(!group){group={year:year,sources:[]};years.push(group);}
+      group.sources.push(source);
+    });
+
     ui.currentGroupKeys=[];
+    ui.ks6WidthSamples=Array.from({length:8+sources.length},function(){return [];});
+    function widthSample(index,value){
+      const text=String(value==null?"":value).trim();
+      if(text) ui.ks6WidthSamples[index].push(text);
+    }
+    widthSample(0,"Р");widthSample(0,"М");
+
+    function rowFacts(rows){
+      const monthTotals=sources.map(function(x){
+        return x.version?rows.reduce(function(sum,r){return sum+(factByVersionRow.get(x.version.id+":"+r.id)||0);},0):0;
+      });
+      const estimateTotal=rows.reduce(function(sum,r){return sum+Number(r.quantity||0);},0);
+      const accrued=monthTotals.reduce(function(sum,v){return sum+v;},0);
+      return {estimateTotal:estimateTotal,monthTotals:monthTotals,accrued:accrued,rest:estimateTotal-accrued};
+    }
+
+    function groupRow(label,rows,key,depth){
+      registerGroup(key);
+      const f=rowFacts(rows);
+      widthSample(5,exFmt(f.estimateTotal));
+      widthSample(6,exFmt(f.accrued));
+      widthSample(7,exFmt(f.rest));
+      f.monthTotals.forEach(function(v,i){widthSample(8+i,exFmt(v));});
+      return '<tr class="group-row group-toggle" data-group-key="'+key+'">'+
+        '<td colspan="5" class="est-group-title" style="padding-left:'+(8+depth*14)+'px"><span class="group-arrow">'+groupArrow(key)+'</span>'+esc(label)+'</td>'+
+        '<td class="num">'+exFmt(f.estimateTotal)+'</td>'+
+        '<td class="num">'+exFmt(f.accrued)+'</td>'+
+        '<td class="num '+(f.rest<0?'warning-num':'')+'">'+(f.rest<0?'<span class="warning-icon">⚠</span>':'')+exFmt(f.rest)+'</td>'+
+        f.monthTotals.map(function(v){return '<td class="num">'+exFmt(v)+'</td>';}).join("")+
+      '</tr>';
+    }
+
     let body="";
     estimates.forEach(function(e){
-      const rows=dataState.estimateRows.filter(function(r){return r.estimate_id===e.id&&passesSearch([r.position,r.basis,r.name])&&rowPassesColumnFilters({position:r.position,basis:r.basis,name:r.name});});
-      if(!rows.length&&currentSearch()) return;
-      const key="ks6:"+e.id;registerGroup(key);
-      const totalEstimate=rows.reduce(function(s,r){return s+Number(r.quantity||0);},0);
-      const monthTotals=sources.map(function(x){return x.version?rows.reduce(function(s,r){return s+(factByVersionRow.get(x.version.id+":"+r.id)||0);},0):0;});
-      const accrued=monthTotals.reduce(function(s,v){return s+v;},0);
-      body+='<tr class="group-row group-toggle" data-group-key="'+key+'"><td colspan="5"><span class="group-arrow">'+groupArrow(key)+'</span>'+esc("Смета №"+e.number+" · "+e.name)+'</td><td class="num">'+exFmt(totalEstimate)+'</td>'+monthTotals.map(function(v){return '<td class="num">'+exFmt(v)+'</td>';}).join("")+'<td class="num">'+exFmt(accrued)+'</td><td class="num '+(totalEstimate-accrued<0?'warning-num':'')+'">'+exFmt(totalEstimate-accrued)+'</td></tr>';
-      if(ui.collapsed.has(key)) return;
-      rows.forEach(function(r){
-        const values=sources.map(function(x){return x.version?(factByVersionRow.get(x.version.id+":"+r.id)||0):0;});
-        const sum=values.reduce(function(s,v){return s+v;},0);const rest=Number(r.quantity||0)-sum;
-        body+='<tr class="data-row"><td class="center"><span class="row-type '+(r.row_type==="work"?'work':'material')+'">'+(r.row_type==="work"?'Р':'М')+'</span></td><td>'+esc(r.position)+'</td><td>'+esc(estimateDisplayBasis(r))+'</td><td>'+esc(estimateDisplayName(r))+'</td><td>'+esc(r.unit)+'</td><td class="num">'+exFmt(r.quantity)+'</td>'+values.map(function(v){return '<td class="num">'+exFmt(v)+'</td>';}).join("")+'<td class="num">'+exFmt(sum)+'</td><td class="num '+(rest<0?'warning-num':'')+'">'+(rest<0?'<span class="warning-icon">⚠</span>':'')+exFmt(rest)+'</td></tr>';
+      let rows=dataState.estimateRows.filter(function(r){
+        return r.estimate_id===e.id &&
+          passesSearch([r.position,estimateDisplayBasis(r),estimateDisplayName(r),r.basis,r.name]) &&
+          rowPassesColumnFilters({basis:estimateDisplayBasis(r),name:estimateDisplayName(r)});
       });
+      rows.sort(function(a,b){return Number(a.sort_order||0)-Number(b.sort_order||0);});
+      if(!rows.length&&(currentSearch()||Object.keys(filterBucket()).length)) return;
+
+      const estimateKey="ks6:"+e.id;
+      body+=groupRow("Смета №"+e.number+" · "+(e.name||""),rows,estimateKey,0);
+      if(ui.collapsed.has(estimateKey)) return;
+
+      const sections=dataState.estimateSections.filter(function(sec){return sec.estimate_id===e.id;})
+        .sort(function(a,b){return Number(a.sort_order||0)-Number(b.sort_order||0);});
+      const seenSections=new Set();
+      sections.forEach(function(sec){
+        const sectionRows=rows.filter(function(r){return r.section_id===sec.id;})
+          .sort(function(a,b){return Number(a.sort_order||0)-Number(b.sort_order||0);});
+        if(!sectionRows.length) return;
+        seenSections.add(sec.id);
+        const sectionKey=estimateKey+":section:"+sec.id;
+        body+=groupRow(sec.title,sectionRows,sectionKey,1);
+        if(ui.collapsed.has(sectionKey)||ui.collapseLeaves) return;
+        sectionRows.forEach(function(r){
+          const values=sources.map(function(x){return x.version?(factByVersionRow.get(x.version.id+":"+r.id)||0):0;});
+          const sum=values.reduce(function(s,v){return s+v;},0);
+          const rest=Number(r.quantity||0)-sum;
+          const basis=estimateDisplayBasis(r),name=estimateDisplayName(r);
+          widthSample(1,r.position);widthSample(2,basis);
+          if(r.row_type==="material"){widthSample(3,name);widthSample(4,r.unit);}
+          widthSample(5,exFmt(r.quantity));widthSample(6,exFmt(sum));widthSample(7,exFmt(rest));
+          values.forEach(function(v,i){widthSample(8+i,exFmt(v));});
+          body+='<tr class="data-row" data-row-type="'+esc(r.row_type||"")+'">'+
+            '<td class="center"><span class="type-mark">'+(r.row_type==="work"?"Р":"М")+'</span></td>'+
+            '<td class="center">'+esc(r.position||"")+'</td>'+
+            filterCell("basis",basis,esc(basis||""),"")+
+            filterCell("name",name,esc(name||""),"")+
+            '<td class="center" title="'+esc(r.unit||"")+'">'+esc(r.unit||"")+'</td>'+
+            '<td class="num">'+exFmt(r.quantity)+'</td>'+
+            '<td class="num">'+exFmt(sum)+'</td>'+
+            '<td class="num '+(rest<0?'warning-num':'')+'">'+(rest<0?'<span class="warning-icon">⚠</span>':'')+exFmt(rest)+'</td>'+
+            values.map(function(v){return '<td class="num">'+exFmt(v)+'</td>';}).join("")+
+          '</tr>';
+        });
+      });
+
+      const unsectioned=rows.filter(function(r){return !r.section_id||!seenSections.has(r.section_id);});
+      if(unsectioned.length){
+        const sectionKey=estimateKey+":section:other";
+        body+=groupRow("Без раздела",unsectioned,sectionKey,1);
+        if(!ui.collapsed.has(sectionKey)&&!ui.collapseLeaves){
+          unsectioned.forEach(function(r){
+            const values=sources.map(function(x){return x.version?(factByVersionRow.get(x.version.id+":"+r.id)||0):0;});
+            const sum=values.reduce(function(s,v){return s+v;},0),rest=Number(r.quantity||0)-sum;
+            const basis=estimateDisplayBasis(r),name=estimateDisplayName(r);
+            widthSample(1,r.position);widthSample(2,basis);
+            if(r.row_type==="material"){widthSample(3,name);widthSample(4,r.unit);}
+            widthSample(5,exFmt(r.quantity));widthSample(6,exFmt(sum));widthSample(7,exFmt(rest));
+            values.forEach(function(v,i){widthSample(8+i,exFmt(v));});
+            body+='<tr class="data-row" data-row-type="'+esc(r.row_type||"")+'">'+
+              '<td class="center"><span class="type-mark">'+(r.row_type==="work"?"Р":"М")+'</span></td>'+
+              '<td class="center">'+esc(r.position||"")+'</td>'+
+              filterCell("basis",basis,esc(basis||""),"")+
+              filterCell("name",name,esc(name||""),"")+
+              '<td class="center" title="'+esc(r.unit||"")+'">'+esc(r.unit||"")+'</td>'+
+              '<td class="num">'+exFmt(r.quantity)+'</td>'+
+              '<td class="num">'+exFmt(sum)+'</td>'+
+              '<td class="num '+(rest<0?'warning-num':'')+'">'+(rest<0?'<span class="warning-icon">⚠</span>':'')+exFmt(rest)+'</td>'+
+              values.map(function(v){return '<td class="num">'+exFmt(v)+'</td>';}).join("")+
+            '</tr>';
+          });
+        }
+      }
     });
+
     const columnCount=8+sources.length;
     if(!body) body=tableMessage("Нет строк по текущему фильтру.",columnCount);
+
+    const head1='<tr>'+
+      '<th rowspan="2">Тип</th>'+
+      '<th rowspan="2"><span class="column-header-stack"><span>Поз.</span><span>см.</span></span></th>'+
+      '<th class="filterable-head" rowspan="2">'+filterHeader("Обоснование","basis")+'</th>'+
+      '<th class="filterable-head" rowspan="2">'+filterHeader("Наименование","name")+'</th>'+
+      '<th rowspan="2"><span class="column-header-stack"><span>Ед.</span><span>изм.</span></span></th>'+
+      '<th rowspan="2"><span class="column-header-stack"><span>По</span><span>смете</span></span></th>'+
+      '<th rowspan="2"><span class="column-header-stack"><span>Запроцен-</span><span>товано</span></span></th>'+
+      '<th rowspan="2">Остаток</th>'+
+      years.map(function(group){return '<th class="ks-year-head" colspan="'+group.sources.length+'">'+esc(group.year)+'</th>';}).join("")+
+    '</tr>';
+    const head2='<tr>'+years.map(function(group){
+      return group.sources.map(function(source){
+        const monthIndex=Math.max(0,Number(source.period.slice(5,7))-1);
+        return '<th class="ks-month-head" title="'+esc(periodLabel(source.period,false))+'">'+esc(monthNames[monthIndex]||source.period.slice(5,7))+'</th>';
+      }).join("");
+    }).join("")+'</tr>';
+
     $("workArea").className="work-area table-work";
-    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table ks-table" data-table-key="ks6"><thead><tr><th>Тип</th><th class="filterable-head">'+filterHeader("Поз. сметы","position")+'</th><th class="filterable-head">'+filterHeader("Обоснование","basis")+'</th><th class="filterable-head">'+filterHeader("Наименование","name")+'</th><th>Ед. изм.</th><th>По смете</th>'+sources.map(function(x){return '<th>'+esc(periodLabel(x.period,true))+'</th>';}).join("")+'<th>Запроцентовано</th><th>Остаток</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    $("workArea").innerHTML='<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table ks-table" data-table-key="ks6-v3"><thead>'+head1+head2+'</thead><tbody>'+body+'</tbody></table></div></div>';
   }
 
   function selectedS29Document() {
