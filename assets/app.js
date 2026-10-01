@@ -6931,6 +6931,56 @@
     return values.findIndex(function(value){const text=importNorm(value);return patterns.some(function(pattern){return pattern.test(text);});});
   }
 
+  function accountingMatchNorm(value) {
+    return String(value==null?"":value)
+      .toLowerCase()
+      .replace(/[()]/g,"")
+      .replace(/[^a-zA-Zа-яА-ЯёЁ0-9]/g,"");
+  }
+
+  function accountingAutoLinkMap(rows) {
+    const sourceByCode=new Map();
+    (rows||[]).forEach(function(row){
+      const code=String(row.material_code||"").trim();
+      const name=accountingMatchNorm(row.name);
+      if(!code||!name) return;
+      if(!sourceByCode.has(code)) sourceByCode.set(code,new Set());
+      sourceByCode.get(code).add(name);
+    });
+
+    const catalog=(dataState.catalogItems||[]).map(function(item){
+      return {
+        id:item.id,
+        mark:accountingMatchNorm(item.mark),
+        name:accountingMatchNorm(item.name)
+      };
+    }).filter(function(item){return item.mark.length>=4;});
+
+    const result=new Map();
+    sourceByCode.forEach(function(names,code){
+      let bestScore=0;
+      let bestIds=[];
+      catalog.forEach(function(item){
+        let itemScore=0;
+        names.forEach(function(sourceName){
+          let score=0;
+          if(item.name.length>=4&&sourceName.indexOf(item.name)>=0) score+=item.name.length*100;
+          if(item.mark.length>=4&&sourceName.indexOf(item.mark)>=0) score+=item.mark.length;
+          if(score>itemScore) itemScore=score;
+        });
+        if(itemScore<=0) return;
+        if(itemScore>bestScore){
+          bestScore=itemScore;
+          bestIds=[item.id];
+        }else if(itemScore===bestScore&&bestIds.indexOf(item.id)<0){
+          bestIds.push(item.id);
+        }
+      });
+      if(bestIds.length===1) result.set(code,bestIds[0]);
+    });
+    return result;
+  }
+
   async function parseAccountingWorkbook(file,expectedKey) {
     await ensureXlsxLoaded();
     if(!window.XLSX) throw new Error("Модуль чтения Excel не загрузился.");
@@ -6985,6 +7035,8 @@
       rows.push({source_row_no:entry.rowNo,account_code:columns.account>=0?String(entry.values[columns.account]||"").trim():null,material_code:code,name:name,unit:columns.unit>=0?String(entry.values[columns.unit]||"").trim():null,quantity:qty,unit_price:numberAt(columns.price),amount:numberAt(columns.amount),raw_data:{sheet:entry.sheet,row:entry.values}});
     }
     if(!rows.length) throw new Error("После проверки в бухгалтерском отчёте не осталось строк материалов.");
+    const autoLinks=accountingAutoLinkMap(rows);
+    rows.forEach(function(row){row.catalog_item_id=autoLinks.get(String(row.material_code||"").trim())||null;});
     return {buffer:buffer,rows:rows,period:detected};
   }
 
