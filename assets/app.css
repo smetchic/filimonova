@@ -2747,3 +2747,13 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
   max-width:27px;
   padding:0;
 }
+
+
+/* S-29 calculation uses the same compact vertical rhythm as AVR. */
+.s29-execution-title{
+  gap:10px;
+}
+.s29-execution-title .context-muted{
+  font-size:10.5px;
+  white-space:nowrap;
+}
