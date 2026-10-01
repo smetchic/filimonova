@@ -5543,14 +5543,19 @@
       return '<tr class="data-row"><td>'+esc(c.mark||"")+'</td><td>'+esc(c.name||"")+'</td><td>Текущий месяц</td><td class="num">'+exFmt(x.avr_quantity_pieces)+'</td><td class="num">'+exFmt(x.volume_per_piece_snapshot_m3)+'</td><td class="num">'+exFmt(x.avr_quantity_m3)+'</td><td class="num">'+exFmt(x.written_off_m3)+'</td><td class="num '+(delta<0?'warning-num':'')+'">'+exFmt(delta)+'</td><td class="num">'+exFmt(x.written_off_m3)+'</td><td>—</td></tr>';
     }).join("");
     if(!body) body=tableMessage(doc?"В С-29 выбранного месяца нет строк.":"С-29 появится после выбора подписанного АВР и бухгалтерского снимка.",10);
-    $("workArea").className="work-area execution-work";
+    $("workArea").className="work-area execution-work avr-execution-work s29-execution-work";
     $("workArea").innerHTML=renderExecutionMetrics([
       {label:"Панелей по АВР",value:exFmt0(totalPieces)+" шт.",note:rows.length+" позиций"},
       {label:"Норма текущего месяца",value:exFmt(norm)+" м³",note:"по проектным объёмам"},
       {label:"Фактически списано",value:exFmt(actual)+" м³",note:"по бухгалтерскому снимку"},
       {label:"Экономия",value:exFmt(economy)+" м³",note:"переносится далее",tone:economy>0?"warn":""},
       {label:"Перерасход",value:exFmt(overrun)+" м³",note:"контроль списания",tone:overrun>0?"danger":""}
-    ])+'<div class="engineering-shell execution-table"><div class="execution-table-title"><strong>Расчёт текущей С-29</strong><span>перерасход и текущий месяц — отдельные строки</span></div><div class="engineering-scroll"><table class="eng-table s29-table"><thead><tr><th>Марка</th><th>Наименование</th><th>Тип строки</th><th>АВР, шт.</th><th>1 шт., м³</th><th>По нормам, м³</th><th>Фактически, м³</th><th>Эконом(+)/перерасход(−)</th><th>Списание, м³</th><th>Месяц происхождения</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    ])+'<div class="engineering-shell execution-table">'+
+      '<div class="execution-table-title avr-execution-title s29-execution-title">'+
+        '<span class="avr-execution-caption">Расчёт текущей С-29</span>'+
+        '<span class="context-muted">перерасход и текущий месяц — отдельные строки</span>'+
+      '</div>'+
+      '<div class="engineering-scroll"><table class="eng-table s29-table"><thead><tr><th>Марка</th><th>Наименование</th><th>Тип строки</th><th>АВР, шт.</th><th>1 шт., м³</th><th>По нормам, м³</th><th>Фактически, м³</th><th>Эконом(+)/перерасход(−)</th><th>Списание, м³</th><th>Месяц происхождения</th></tr></thead><tbody>'+body+'</tbody></table></div></div>';
   }
 
   function renderAccounting() {
@@ -7822,9 +7827,13 @@
     $("globalSearch").classList.toggle("has-value",!!$("searchInput").value);
 
     $("contextRow").innerHTML = buildContext(pageKey,tab);
-    $("contextRow").classList.toggle("avr-context-row",pageKey==="avr" && tab===0);
+    $("contextRow").classList.toggle("avr-context-row",(pageKey==="avr" && tab===0) || (pageKey==="s29" && tab===0));
     $("serviceLeft").innerHTML = buildServiceLeft(pageKey,tab);
-    $("serviceRow").classList.toggle("hidden",(pageKey==="estimates" && (tab===1 || tab===2)) || (pageKey==="avr" && tab===0));
+    $("serviceRow").classList.toggle("hidden",
+      (pageKey==="estimates" && (tab===1 || tab===2)) ||
+      (pageKey==="avr" && tab===0) ||
+      (pageKey==="s29" && tab===0)
+    );
     // Project UI rule: page-level controls belong in the existing service row;
     // do not add local button bars above working tables.
     if(pageKey==="recon" && tab===0){
