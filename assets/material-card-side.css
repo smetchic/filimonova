@@ -81,6 +81,7 @@
 #materialCardModal .mv-grid3{grid-template-columns:repeat(2,minmax(0,1fr))!important}
 #materialCardModal .mv-unit-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
 #materialCardModal .mv-source-grid{grid-template-columns:1fr!important}
+#materialCardModal .mv-block[data-mc-estimate-compact="1"] .mv-kpi2{grid-template-columns:1fr!important}
 
 #materialCardModal .mc-estimate-status{
   float:right;
