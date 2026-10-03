@@ -5,6 +5,17 @@
   const MODES=new Set(["light","dark","system"]);
   const media=window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
 
+  // Load the correction layer after all legacy project styles. It only contains
+  // html[data-theme="dark"] overrides, so the light theme is untouched.
+  (function ensureDarkFixes(){
+    if(document.querySelector('link[data-dark-theme-fixes]')) return;
+    const link=document.createElement("link");
+    link.rel="stylesheet";
+    link.href="./assets/theme-dark-fixes.css?v=20261004-0210";
+    link.dataset.darkThemeFixes="1";
+    document.head.appendChild(link);
+  })();
+
   function readMode(){
     const saved=String(localStorage.getItem(KEY)||"light");
     return MODES.has(saved)?saved:"light";
@@ -35,7 +46,7 @@
   if(media){
     const onSystemChange=function(){if(readMode()==="system")apply("system",false);};
     if(media.addEventListener) media.addEventListener("change",onSystemChange);
-    else if(media.addListener) media.addListener(onSystemChange);
+    else if(media.addListener) media.addListener("change",onSystemChange);
   }
 
   function settingsActive(){
