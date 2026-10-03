@@ -2,7 +2,7 @@
    but present it as the single right-side panel. */
 
 /* The temporary UX drawer duplicated the real material card. The real card below
-   is now the only material-detail surface. */
+   is the only material-detail surface. */
 .ux-detail-drawer{
   display:none!important;
 }
@@ -14,9 +14,9 @@
   bottom:0!important;
   left:auto!important;
   inset:auto 0 0 auto!important;
-  width:min(720px,48vw)!important;
-  min-width:560px!important;
-  max-width:calc(100vw - 260px)!important;
+  width:min(900px,calc(100vw - 260px))!important;
+  min-width:760px!important;
+  max-width:900px!important;
   height:100vh!important;
   padding:0!important;
   margin:0!important;
@@ -39,6 +39,8 @@
   right:auto!important;
   bottom:auto!important;
   transform:none!important;
+  display:flex!important;
+  flex-direction:column!important;
   width:100%!important;
   min-width:0!important;
   max-width:none!important;
@@ -50,7 +52,7 @@
   border-left:1px solid #cfd3d8!important;
   border-radius:0!important;
   box-shadow:-12px 0 30px rgba(31,41,55,.14)!important;
-  overflow:auto!important;
+  overflow:hidden!important;
   overscroll-behavior:contain!important;
   background:#fff!important;
   pointer-events:auto!important;
@@ -60,7 +62,9 @@
 
 /* Preserve the approved card typography exactly while adapting only the geometry. */
 #materialCardModal .material-card-head{
+  flex:0 0 auto!important;
   cursor:default!important;
+  background:#fff!important;
 }
 
 #materialCardModal .material-section-label{
@@ -78,9 +82,40 @@
   font-family:"Segoe UI Variable","Segoe UI",Arial,sans-serif!important;
 }
 
-/* At the normal desktop width retain the original two-column Overview card. */
-#materialCardModal .material-v11 .mv-overview-two{
-  grid-template-columns:minmax(0,1.52fr) minmax(250px,.96fr)!important;
+#materialCardModal .material-tabs{
+  flex:0 0 auto!important;
+  background:#fff!important;
+}
+
+#materialCardModal .material-body{
+  flex:1 1 auto!important;
+  min-height:0!important;
+  overflow:auto!important;
+  overscroll-behavior:contain!important;
+  background:#fff!important;
+}
+
+/* Overview is now a true summary. Project characteristics and money are already
+   available on "Проект и смета", so do not show the same information twice. */
+#materialCardModal .material-body > .mv-overview-two{
+  display:block!important;
+}
+#materialCardModal .material-body > .mv-overview-two > .mv-block:nth-child(2){
+  display:none!important;
+}
+#materialCardModal .material-body > .mv-overview-two + .mv-block.mv-mt{
+  display:none!important;
+}
+
+/* Detailed tabs keep the original spacious layout. */
+#materialCardModal .mv-grid2{
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+}
+#materialCardModal .mv-grid3{
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+}
+#materialCardModal .mv-source-grid{
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
 }
 
 /* Tables inside the side panel remain horizontally usable instead of shrinking
@@ -91,13 +126,20 @@
   overflow:auto!important;
 }
 
-@media(max-width:1180px){
+@media(max-width:1220px){
   #materialCardModal.material-modal-backdrop{
-    width:min(680px,58vw)!important;
-    min-width:500px!important;
-    max-width:92vw!important;
+    width:min(820px,72vw)!important;
+    min-width:620px!important;
+    max-width:82vw!important;
   }
-  #materialCardModal .material-v11 .mv-overview-two,
+}
+
+@media(max-width:940px){
+  #materialCardModal.material-modal-backdrop{
+    width:88vw!important;
+    min-width:0!important;
+    max-width:88vw!important;
+  }
   #materialCardModal .mv-grid2,
   #materialCardModal .mv-grid3,
   #materialCardModal .mv-source-grid{
@@ -107,9 +149,9 @@
 
 @media(max-width:760px){
   #materialCardModal.material-modal-backdrop{
-    width:94vw!important;
+    width:96vw!important;
     min-width:0!important;
-    max-width:94vw!important;
+    max-width:96vw!important;
   }
   #materialCardModal .material-tabs{
     overflow-x:auto!important;
