@@ -2,34 +2,23 @@
   "use strict";
 
   const MODAL_ID = "materialCardModal";
-
   function text(el){ return String(el && el.textContent || "").replace(/\s+/g," ").trim(); }
-
-  function findBlock(body,title){
-    return Array.from(body.querySelectorAll(":scope > .mv-block, :scope > .mv-grid2 > .mv-block"))
-      .find(function(block){
-        const head=block.querySelector(":scope > .mv-block-title");
-        return head && text(head).indexOf(title)===0;
-      }) || null;
-  }
+  function esc(value){ return String(value==null?"":value).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 
   function refineOverview(body){
     const wrap=body.querySelector(":scope > .mv-overview-two");
     if(!wrap) return;
-
     const blocks=Array.from(wrap.children).filter(function(x){return x.classList.contains("mv-block");});
     const project=blocks.find(function(x){const h=x.querySelector(".mv-block-title");return h&&text(h).indexOf("Проект")===0;});
     const execution=blocks.find(function(x){const h=x.querySelector(".mv-block-title");return h&&text(h).indexOf("Исполнение")===0;});
 
     if(project && !project.dataset.mcOverviewCompact){
-      const metrics=Array.from(project.querySelectorAll(".mv-qty"));
-      metrics.forEach(function(metric){
+      Array.from(project.querySelectorAll(".mv-qty")).forEach(function(metric){
         const label=text(metric.querySelector("b"));
         if(label!=="Всего по проекту" && label!=="Объём 1 шт.") metric.remove();
       });
       project.dataset.mcOverviewCompact="1";
     }
-
     if(execution && !execution.dataset.mcOverviewCompact){
       Array.from(execution.querySelectorAll(".mv-kpi")).forEach(function(kpi){
         const label=kpi.querySelector(".mv-kpi-label");
@@ -40,7 +29,6 @@
       });
       execution.dataset.mcOverviewCompact="1";
     }
-
     if(project && execution && wrap.firstElementChild!==project) wrap.insertBefore(project,execution);
     wrap.classList.add("mc-overview-stack");
   }
@@ -51,7 +39,6 @@
     const blocks=Array.from(top.children).filter(function(x){return x.classList.contains("mv-block");});
     const estimate=blocks.find(function(x){const h=x.querySelector(".mv-block-title");return h&&text(h).indexOf("Смета")===0;});
     if(!estimate || estimate.dataset.mcEstimateCompact) return;
-
     const kpis=Array.from(estimate.querySelectorAll(".mv-kpi2 > .mv-kpi"));
     const control=kpis.find(function(kpi){const l=kpi.querySelector(".mv-kpi-label");return l&&text(l)==="Контроль";});
     if(control){
@@ -99,7 +86,7 @@
 
   function refineFloors(body){
     const grid=body.querySelector(".mv-floor-grid");
-    if(!grid || grid.dataset.mcFloorDone) return;
+    if(!grid) return;
     const children=Array.from(grid.children);
     const firstRowHead=children.findIndex(function(x){return x.classList.contains("rowhead");});
     if(firstRowHead<4) return;
@@ -118,17 +105,16 @@
     shell.appendChild(makeFloorTable(headers,[row1,row2],0,split));
     shell.appendChild(makeFloorTable(headers,[row1,row2],split,floorCount));
 
+    const total1=(row1[colCount-1]&&row1[colCount-1]!=="0"&&row1[colCount-1]!=="—")?row1[colCount-1]:"";
+    const total2=(row2[colCount-1]&&row2[colCount-1]!=="0"&&row2[colCount-1]!=="—")?row2[colCount-1]:"";
     const totals=document.createElement("div");
     totals.className="mc-floor-totals";
-    const total1=row1[colCount-1]||"";
-    const total2=row2[colCount-1]||"";
-    totals.innerHTML='<span>Секция 1 <b>'+total1+'</b></span><span>Секция 2 <b>'+total2+'</b></span>';
+    totals.innerHTML='<span>Секция 1'+(total1?' <b>'+esc(total1)+'</b>':'')+'</span><span>Секция 2'+(total2?' <b>'+esc(total2)+'</b>':'')+'</span>';
     shell.appendChild(totals);
-
     grid.replaceWith(shell);
   }
 
-  function compactTable(block,title,keep,labels,className){
+  function compactTable(block,keep,labels,className){
     if(!block) return;
     const table=block.querySelector("table");
     if(!table || table.dataset.mcCompact) return;
@@ -139,12 +125,8 @@
         cells[0].colSpan=keep.length;
         return;
       }
-      for(let i=cells.length-1;i>=0;i--){
-        if(keep.indexOf(i)===-1) cells[i].remove();
-      }
-      if(rowIndex===0){
-        Array.from(row.cells).forEach(function(cell,i){if(labels[i]!=null) cell.textContent=labels[i];});
-      }
+      for(let i=cells.length-1;i>=0;i--){ if(keep.indexOf(i)===-1) cells[i].remove(); }
+      if(rowIndex===0){ Array.from(row.cells).forEach(function(cell,i){if(labels[i]!=null) cell.textContent=labels[i];}); }
     });
     table.dataset.mcCompact="1";
     table.classList.add("mc-compact-table",className);
@@ -158,9 +140,8 @@
     const blocks=Array.from(body.querySelectorAll(":scope > .mv-block"));
     const estimateBlock=blocks.find(function(x){const h=x.querySelector(":scope > .mv-block-title");return h&&text(h).indexOf("Связанные строки смет")===0;});
     const worksBlock=blocks.find(function(x){const h=x.querySelector(":scope > .mv-block-title");return h&&text(h).indexOf("Связанные работы")===0;});
-
-    compactTable(estimateBlock,"Связанные строки смет",[0,1,2,3,5,8],["№ см.","Поз.","Обоснование","Наименование","Кол-во","Стоимость"],"mc-estimate-table");
-    compactTable(worksBlock,"Связанные работы",[0,1,2,3,7],["№ см.","Поз.","Обозначение","Наименование","На 1 панель"],"mc-work-table");
+    compactTable(estimateBlock,[0,1,2,3,5,8],["№ см.","Поз.","Обоснование","Наименование","Кол-во","Стоимость"],"mc-estimate-table");
+    compactTable(worksBlock,[0,1,2,3,7],["№ см.","Поз.","Обозначение","Наименование","На 1 панель"],"mc-work-table");
   }
 
   function propMap(box){
@@ -190,11 +171,11 @@
     const box=document.createElement("div");
     box.className="mv-source-box mc-position-data";
     box.innerHTML='<div class="mv-source-head">Данные позиции</div><div class="mv-props">'+
-      '<div class="mv-prop"><b>Смета</b><span>'+estimateNo+'</span></div>'+
-      '<div class="mv-prop"><b>Поз. см.</b><span>'+position+'</span></div>'+
-      '<div class="mv-prop"><b>Обоснование</b><span>'+sourceBasis+'</span></div>'+
-      '<div class="mv-prop mc-prop-wide"><b>Обозначение</b><span>'+designation+'</span></div>'+
-      ((sourceName&&projectName&&sourceName!==projectName)?'<div class="mv-prop mc-prop-wide"><b>Наименование по смете</b><span>'+sourceName+'</span></div>':'')+
+      '<div class="mv-prop"><b>Смета</b><span>'+esc(estimateNo)+'</span></div>'+
+      '<div class="mv-prop"><b>Поз. см.</b><span>'+esc(position)+'</span></div>'+
+      '<div class="mv-prop"><b>Обоснование</b><span>'+esc(sourceBasis)+'</span></div>'+
+      '<div class="mv-prop mc-prop-wide"><b>Обозначение</b><span>'+esc(designation)+'</span></div>'+
+      ((sourceName&&projectName&&sourceName!==projectName)?'<div class="mv-prop mc-prop-wide"><b>Наименование по смете</b><span>'+esc(sourceName)+'</span></div>':'')+
       '</div>';
     grid.innerHTML="";
     grid.appendChild(box);
