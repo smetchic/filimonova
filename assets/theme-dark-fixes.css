@@ -146,14 +146,22 @@ html[data-theme="dark"] .montage-table tbody .montage-day:hover{
 html[data-theme="dark"] .review-panel,
 html[data-theme="dark"] .review-panel-title,
 html[data-theme="dark"] .review-grid,
-html[data-theme="dark"] .review-grid>div{
+html[data-theme="dark"] .review-grid>div,
+html[data-theme="dark"] .execution-metric,
+html[data-theme="dark"] .execution-table-title{
   background:var(--dark-surface)!important;
   color:var(--dark-text)!important;
   border-color:var(--dark-line)!important;
 }
 html[data-theme="dark"] .review-grid span,
-html[data-theme="dark"] .review-note{color:var(--dark-muted)!important}
-html[data-theme="dark"] .review-grid strong{color:var(--dark-text)!important}
+html[data-theme="dark"] .review-note,
+html[data-theme="dark"] .execution-metric span,
+html[data-theme="dark"] .execution-metric small{color:var(--dark-muted)!important}
+html[data-theme="dark"] .review-grid strong,
+html[data-theme="dark"] .execution-metric strong{color:var(--dark-text)!important}
+html[data-theme="dark"] .execution-metric.ok strong{color:#2fc176!important}
+html[data-theme="dark"] .execution-metric.warn strong{color:#e0ad5f!important}
+html[data-theme="dark"] .execution-metric.danger strong{color:#f18d84!important}
 
 /* Material card: force all primary numeric values readable, preserve semantic green/warn. */
 html[data-theme="dark"] #materialCardModal .mv-kpi-value,
@@ -216,9 +224,7 @@ html[data-theme="dark"] .recon-choice-header{
 }
 
 /* Scrollbars: reduce the remaining bright system bars on Chromium. */
-html[data-theme="dark"] *{
-  scrollbar-color:#555d68 #202328;
-}
+html[data-theme="dark"] *{scrollbar-color:#555d68 #202328}
 html[data-theme="dark"] *::-webkit-scrollbar{width:11px;height:11px}
 html[data-theme="dark"] *::-webkit-scrollbar-track{background:#202328}
 html[data-theme="dark"] *::-webkit-scrollbar-thumb{background:#555d68;border:2px solid #202328;border-radius:8px}
