@@ -1,0 +1,225 @@
+/* Dark-theme corrections for legacy light surfaces and hard-coded colors.
+   Loaded after all project UI styles. */
+
+html[data-theme="dark"]{
+  --dark-bg:#17191d;
+  --dark-surface:#202328;
+  --dark-head:#252a31;
+  --dark-group:#292e35;
+  --dark-line:#363c45;
+  --dark-line-strong:#49515d;
+  --dark-text:#e7e9ed;
+  --dark-muted:#aeb4bd;
+  --dark-faint:#858c96;
+}
+
+/* Context + service rows: remove the light strips visible above tables. */
+html[data-theme="dark"] .context-row,
+html[data-theme="dark"] .service-row,
+html[data-theme="dark"] .local-action-row{
+  background:var(--dark-bg)!important;
+  color:var(--dark-text)!important;
+  border-color:var(--dark-line)!important;
+}
+html[data-theme="dark"] .context-caption,
+html[data-theme="dark"] .check,
+html[data-theme="dark"] .context-link,
+html[data-theme="dark"] .service-meta,
+html[data-theme="dark"] .service-action{
+  color:var(--dark-muted)!important;
+}
+html[data-theme="dark"] .context-link:hover,
+html[data-theme="dark"] .service-action:hover{
+  color:var(--dark-text)!important;
+  background:#282d34!important;
+}
+html[data-theme="dark"] .check input{
+  background:#20242a!important;
+  border-color:#69717e!important;
+}
+html[data-theme="dark"] .check input:checked{
+  background:var(--accent)!important;
+  border-color:var(--accent)!important;
+}
+
+/* Canonical engineering headers. Several late legacy rules use !important light fills. */
+html[data-theme="dark"] #workArea .spec-table thead th,
+html[data-theme="dark"] #workArea .eng-table thead th,
+html[data-theme="dark"] #workArea .est-table thead th,
+html[data-theme="dark"] #workArea .ks-table thead th,
+html[data-theme="dark"] #workArea .avr-table thead th,
+html[data-theme="dark"] #workArea .s29-table thead th,
+html[data-theme="dark"] #workArea .supply-table thead th,
+html[data-theme="dark"] #workArea .price-table thead th,
+html[data-theme="dark"] #workArea .supplier-source-price-table thead th,
+html[data-theme="dark"] #workArea .montage-table thead th,
+html[data-theme="dark"] #workArea .gpr-table thead th,
+html[data-theme="dark"] #workArea .compact-registry thead th{
+  background:var(--dark-head)!important;
+  color:#c9ced6!important;
+  border-color:var(--dark-line)!important;
+  box-shadow:inset 0 1px 0 #3d444e,inset 0 -1px 0 #343a43!important;
+}
+html[data-theme="dark"] #workArea .eng-table tbody td,
+html[data-theme="dark"] #workArea .spec-table tbody td,
+html[data-theme="dark"] #workArea .est-table tbody td,
+html[data-theme="dark"] #workArea .ks-table tbody td,
+html[data-theme="dark"] #workArea .avr-table tbody td,
+html[data-theme="dark"] #workArea .s29-table tbody td,
+html[data-theme="dark"] #workArea .supply-table tbody td,
+html[data-theme="dark"] #workArea .price-table tbody td,
+html[data-theme="dark"] #workArea .supplier-source-price-table tbody td,
+html[data-theme="dark"] #workArea .montage-table tbody td,
+html[data-theme="dark"] #workArea .gpr-table tbody td,
+html[data-theme="dark"] #workArea .compact-registry tbody td{
+  background:var(--dark-surface)!important;
+  color:var(--dark-text)!important;
+  border-color:var(--dark-line)!important;
+}
+html[data-theme="dark"] #workArea .group-row td,
+html[data-theme="dark"] #workArea .section-row td,
+html[data-theme="dark"] #workArea .subtotal-row td,
+html[data-theme="dark"] #workArea .total-row td,
+html[data-theme="dark"] #workArea .supplier-source-group td{
+  background:var(--dark-group)!important;
+  color:#e0e3e8!important;
+  border-color:var(--dark-line)!important;
+}
+
+/* Supplier price source banner. */
+html[data-theme="dark"] .supplier-price-source-banner{
+  background:#1e2227!important;
+  color:var(--dark-muted)!important;
+  border-color:var(--dark-line)!important;
+}
+html[data-theme="dark"] .supplier-price-source-banner strong{color:var(--dark-text)!important}
+
+/* Excel-like formula strips on Current price and GPR. */
+html[data-theme="dark"] .formula-strip,
+html[data-theme="dark"] .current-price-work .formula-strip,
+html[data-theme="dark"] .gpr-work .formula-strip{
+  background:var(--dark-surface)!important;
+  color:var(--dark-text)!important;
+  border-color:var(--dark-line-strong)!important;
+}
+html[data-theme="dark"] .formula-address,
+html[data-theme="dark"] .formula-name,
+html[data-theme="dark"] .formula-expression{
+  background:var(--dark-surface)!important;
+  color:var(--dark-text)!important;
+  border-color:var(--dark-line)!important;
+}
+html[data-theme="dark"] .formula-address{color:var(--dark-muted)!important}
+html[data-theme="dark"] .formula-name span{color:var(--dark-muted)!important}
+html[data-theme="dark"] .formula-active{
+  background:#223047!important;
+  box-shadow:inset 0 0 0 2px var(--accent)!important;
+}
+html[data-theme="dark"] .formula-ref1{background:#222f43!important}
+html[data-theme="dark"] .formula-ref2{background:#213329!important}
+html[data-theme="dark"] .formula-ref3{background:#31283e!important}
+html[data-theme="dark"] .formula-ref4{background:#3a2925!important}
+
+/* GPR month cells and sticky identity column. */
+html[data-theme="dark"] .gpr-table .gpr-sticky,
+html[data-theme="dark"] .gpr-table tbody .gpr-sticky,
+html[data-theme="dark"] .gpr-table .gpr-month{
+  background:var(--dark-surface)!important;
+  color:var(--dark-text)!important;
+  border-color:var(--dark-line)!important;
+}
+html[data-theme="dark"] .gpr-table thead .gpr-sticky{background:var(--dark-head)!important}
+
+/* Montage calendar: day cells must not stay white in dark mode. */
+html[data-theme="dark"] .montage-table tbody .montage-day,
+html[data-theme="dark"] .montage-table tbody .day-cell{
+  background:var(--dark-surface)!important;
+  color:var(--dark-text)!important;
+  border-color:var(--dark-line)!important;
+}
+html[data-theme="dark"] .montage-table tbody .montage-day:hover{
+  background:#2b323b!important;
+  box-shadow:inset 0 0 0 1px #70849c!important;
+}
+
+/* Review/AVR metric panels: values had inherited black. */
+html[data-theme="dark"] .review-panel,
+html[data-theme="dark"] .review-panel-title,
+html[data-theme="dark"] .review-grid,
+html[data-theme="dark"] .review-grid>div{
+  background:var(--dark-surface)!important;
+  color:var(--dark-text)!important;
+  border-color:var(--dark-line)!important;
+}
+html[data-theme="dark"] .review-grid span,
+html[data-theme="dark"] .review-note{color:var(--dark-muted)!important}
+html[data-theme="dark"] .review-grid strong{color:var(--dark-text)!important}
+
+/* Material card: force all primary numeric values readable, preserve semantic green/warn. */
+html[data-theme="dark"] #materialCardModal .mv-kpi-value,
+html[data-theme="dark"] #materialCardModal .mv-qty strong,
+html[data-theme="dark"] #materialCardModal .mv-unit strong,
+html[data-theme="dark"] #materialCardModal .mv-cost strong,
+html[data-theme="dark"] #materialCardModal .mv-flow-card strong,
+html[data-theme="dark"] #materialCardModal .mv-prop span,
+html[data-theme="dark"] #materialCardModal .mc-floor-table td.val{
+  color:var(--dark-text)!important;
+}
+html[data-theme="dark"] #materialCardModal .good,
+html[data-theme="dark"] #materialCardModal .mv-kpi.good .mv-kpi-value,
+html[data-theme="dark"] #materialCardModal .mc-estimate-status.good{color:#2fc176!important}
+html[data-theme="dark"] #materialCardModal .warn,
+html[data-theme="dark"] #materialCardModal .mv-kpi.warn .mv-kpi-value,
+html[data-theme="dark"] #materialCardModal .mc-estimate-status.warn{color:#e0ad5f!important}
+
+/* Type chips and status pills: avoid bright white islands. */
+html[data-theme="dark"] .type-mark{
+  background:#343a43!important;
+  color:#d8dce2!important;
+  border-color:#4a515c!important;
+}
+html[data-theme="dark"] .soft-status{
+  background:#2a2f36!important;
+  color:#cdd2d8!important;
+  border-color:#4a515b!important;
+}
+html[data-theme="dark"] .soft-status.ok{
+  background:#20372b!important;
+  color:#82d4a4!important;
+  border-color:#365b45!important;
+}
+html[data-theme="dark"] .soft-status.warn{
+  background:#3b3222!important;
+  color:#e6bd70!important;
+  border-color:#655536!important;
+}
+
+/* Common secondary labels that were hard-coded dark gray. */
+html[data-theme="dark"] .review-grid span,
+html[data-theme="dark"] .execution-metric span,
+html[data-theme="dark"] .execution-metric small,
+html[data-theme="dark"] .recon-target-head span,
+html[data-theme="dark"] .recon-choice-position,
+html[data-theme="dark"] .mv-note,
+html[data-theme="dark"] .mv-block-title .sub{color:var(--dark-muted)!important}
+
+/* Popup/table surfaces not covered by the canonical table selectors. */
+html[data-theme="dark"] .column-filter-popup,
+html[data-theme="dark"] .filter-values,
+html[data-theme="dark"] .filter-footer,
+html[data-theme="dark"] .ux-column-popup-list,
+html[data-theme="dark"] .recon-choice,
+html[data-theme="dark"] .recon-choice-header{
+  background:var(--dark-surface)!important;
+  color:var(--dark-text)!important;
+  border-color:var(--dark-line)!important;
+}
+
+/* Scrollbars: reduce the remaining bright system bars on Chromium. */
+html[data-theme="dark"] *{
+  scrollbar-color:#555d68 #202328;
+}
+html[data-theme="dark"] *::-webkit-scrollbar{width:11px;height:11px}
+html[data-theme="dark"] *::-webkit-scrollbar-track{background:#202328}
+html[data-theme="dark"] *::-webkit-scrollbar-thumb{background:#555d68;border:2px solid #202328;border-radius:8px}
+html[data-theme="dark"] *::-webkit-scrollbar-corner{background:#202328}
