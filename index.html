@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Филимонова</title>
+<script>
+(function(){try{var m=localStorage.getItem("filimonova.appearance")||"light";var a=m==="system"&&window.matchMedia?window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light":m;document.documentElement.dataset.theme=a==="dark"?"dark":"light";document.documentElement.dataset.appearance=m;document.documentElement.style.colorScheme=a==="dark"?"dark":"light";}catch(_){}})();
+</script>
 <link rel="stylesheet" href="./assets/app.css?v=20261001-2340">
 <link rel="stylesheet" href="./assets/ux-overhaul.css?v=20261003-1944">
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2"></script>
@@ -13,6 +16,8 @@
 <script defer src="./assets/material-card-compact.js?v=20261003-2342"></script>
 <link rel="stylesheet" href="./assets/material-card-v11.css?v=20260929-integrated">
 <link rel="stylesheet" href="./assets/material-card-side.css?v=20261003-2342">
+<link rel="stylesheet" href="./assets/theme-dark.css?v=20261004-0148">
+<script defer src="./assets/theme-settings.js?v=20261004-0148"></script>
 </head>
 <body>
 
