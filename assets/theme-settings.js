@@ -5,15 +5,22 @@
   const MODES=new Set(["light","dark","system"]);
   const media=window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
 
-  // Load the correction layer after all legacy project styles. It only contains
-  // html[data-theme="dark"] overrides, so the light theme is untouched.
-  (function ensureDarkFixes(){
-    if(document.querySelector('link[data-dark-theme-fixes]')) return;
-    const link=document.createElement("link");
-    link.rel="stylesheet";
-    link.href="./assets/theme-dark-fixes.css?v=20261004-0210";
-    link.dataset.darkThemeFixes="1";
-    document.head.appendChild(link);
+  // Load correction layers after all legacy project styles.
+  (function ensureThemeFixes(){
+    if(!document.querySelector('link[data-dark-theme-fixes]')){
+      const dark=document.createElement("link");
+      dark.rel="stylesheet";
+      dark.href="./assets/theme-dark-fixes.css?v=20261004-1924";
+      dark.dataset.darkThemeFixes="1";
+      document.head.appendChild(dark);
+    }
+    if(!document.querySelector('link[data-light-theme-fixes]')){
+      const light=document.createElement("link");
+      light.rel="stylesheet";
+      light.href="./assets/theme-light-fixes.css?v=20261004-1930";
+      light.dataset.lightThemeFixes="1";
+      document.head.appendChild(light);
+    }
   })();
 
   function readMode(){
