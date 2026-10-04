@@ -1,4 +1,4 @@
-/* Light-theme corrections for supplier price reconciliation/check window. */
+/* Light-theme corrections for supplier price reconciliation/check window and price status cells. */
 
 html[data-theme="light"] .supplier-check-modal,
 html[data-theme="light"] .supplier-check-body,
@@ -27,15 +27,16 @@ html[data-theme="light"] .supplier-check-table tbody tr:nth-child(even) td{
   background:#fafafa!important;
 }
 
-/* Compact status chips: no oversized mint capsules. */
-html[data-theme="light"] .supplier-check-table .soft-status{
+/* Canonical compact status chip in light mode. */
+html[data-theme="light"] .soft-status{
   display:inline-flex!important;
   align-items:center!important;
   justify-content:center!important;
   min-height:20px!important;
+  height:20px!important;
   padding:0 8px!important;
   border-radius:10px!important;
-  font-size:11px!important;
+  font-size:10.5px!important;
   line-height:18px!important;
   font-weight:500!important;
   white-space:nowrap!important;
@@ -44,23 +45,107 @@ html[data-theme="light"] .supplier-check-table .soft-status{
   color:#5f6368!important;
   border:1px solid #d9dde2!important;
 }
-
-html[data-theme="light"] .supplier-check-table .soft-status.ok{
+html[data-theme="light"] .soft-status.ok{
   background:#eef7f1!important;
   color:#356348!important;
   border-color:#bfd8c8!important;
 }
-
-html[data-theme="light"] .supplier-check-table .soft-status.warn{
+html[data-theme="light"] .soft-status.warn{
   background:#fff7e6!important;
   color:#7a5b20!important;
   border-color:#e8d49f!important;
 }
-
-html[data-theme="light"] .supplier-check-table .soft-status.bad{
+html[data-theme="light"] .soft-status.bad{
   background:#fff0ee!important;
   color:#9c443a!important;
   border-color:#e8bdb7!important;
+}
+
+/* Main Supply / Price screens use price-state, not supplier-check-table.
+   Keep exactly one visual capsule; nested legacy status/button wrappers become transparent. */
+html[data-theme="light"] .price-state{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  min-height:20px!important;
+  height:20px!important;
+  padding:0 8px!important;
+  border-radius:10px!important;
+  font-size:10.5px!important;
+  line-height:18px!important;
+  font-weight:500!important;
+  white-space:nowrap!important;
+  box-shadow:none!important;
+  background:#f3f4f6!important;
+  color:#5f6368!important;
+  border:1px solid #d9dde2!important;
+}
+html[data-theme="light"] .price-state.ok{
+  background:#eef7f1!important;
+  color:#356348!important;
+  border-color:#bfd8c8!important;
+}
+html[data-theme="light"] .price-state.review,
+html[data-theme="light"] .price-state.warn{
+  background:#fff7e6!important;
+  color:#7a5b20!important;
+  border-color:#e8d49f!important;
+}
+html[data-theme="light"] .price-state.bad{
+  background:#fff0ee!important;
+  color:#9c443a!important;
+  border-color:#e8bdb7!important;
+}
+html[data-theme="light"] .price-state.supplier{
+  background:#f2f5fa!important;
+  color:#535f75!important;
+  border-color:#d4dbe7!important;
+}
+html[data-theme="light"] .price-state.none{
+  background:#fbf7ed!important;
+  color:#7a5a34!important;
+  border-color:#e6d9be!important;
+}
+
+/* Remove the second, inner pill when old markup nests status components. */
+html[data-theme="light"] .price-state > .soft-status,
+html[data-theme="light"] .soft-status > .price-state{
+  display:contents!important;
+  color:inherit!important;
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+  padding:0!important;
+  min-height:0!important;
+  height:auto!important;
+}
+html[data-theme="light"] .price-state > button,
+html[data-theme="light"] .price-state > .table-text-action,
+html[data-theme="light"] .price-state > .local-text-action,
+html[data-theme="light"] .soft-status > button,
+html[data-theme="light"] .soft-status > .table-text-action,
+html[data-theme="light"] .soft-status > .local-text-action{
+  border:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  padding:0!important;
+  margin:0!important;
+  min-height:0!important;
+  height:auto!important;
+  border-radius:0!important;
+  color:inherit!important;
+  font:inherit!important;
+  line-height:inherit!important;
+  text-decoration:none!important;
+}
+
+/* Do not tint the whole status cell/row: only the chip carries status colour. */
+html[data-theme="light"] .supply-table td:has(> .price-state),
+html[data-theme="light"] .price-table td:has(> .price-state),
+html[data-theme="light"] .supplier-source-price-table td:has(> .price-state),
+html[data-theme="light"] .supplier-check-table td:has(> .soft-status){
+  background:#fff!important;
+  border-radius:0!important;
 }
 
 html[data-theme="light"] .supplier-check-status-filter,
