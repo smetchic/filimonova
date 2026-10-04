@@ -58,10 +58,31 @@ html[data-theme="light"] .supplier-source-price-table td:last-child{
   max-width:196px!important;
   box-sizing:border-box!important;
 }
+
+/* UX status enhancer can add ux-state-* to the whole td. Undo that here:
+   td must stay a regular table cell; only the nested .price-state is coloured. */
 html[data-theme="light"] .supplier-source-price-table td.status-cell,
-html[data-theme="light"] .price-table td.status-cell,
-html[data-theme="light"] td.status-cell:has(> .price-state){
+html[data-theme="light"] .supplier-source-price-table td[data-filter-field="price"],
+html[data-theme="light"] .supplier-source-price-table td.status-cell.ux-state-ok,
+html[data-theme="light"] .supplier-source-price-table td.status-cell.ux-state-warn,
+html[data-theme="light"] .supplier-source-price-table td.status-cell.ux-state-bad,
+html[data-theme="light"] .supplier-source-price-table td.status-cell.ux-state-neutral,
+html[data-theme="light"] .supplier-source-price-table td[data-filter-field="price"].ux-state-ok,
+html[data-theme="light"] .supplier-source-price-table td[data-filter-field="price"].ux-state-warn,
+html[data-theme="light"] .supplier-source-price-table td[data-filter-field="price"].ux-state-bad,
+html[data-theme="light"] .supplier-source-price-table td[data-filter-field="price"].ux-state-neutral{
+  display:table-cell!important;
+  width:196px!important;
+  min-width:196px!important;
+  max-width:196px!important;
+  height:auto!important;
+  min-height:0!important;
+  padding:5px 8px!important;
+  margin:0!important;
+  vertical-align:middle!important;
   background:#fff!important;
+  color:#18181b!important;
+  border:1px solid #e4e4e7!important;
   border-radius:0!important;
   box-shadow:none!important;
   outline:0!important;
