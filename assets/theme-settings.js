@@ -17,7 +17,7 @@
     if(!document.querySelector('link[data-light-theme-fixes]')){
       const light=document.createElement("link");
       light.rel="stylesheet";
-      light.href="./assets/theme-light-fixes.css?v=20261004-1930";
+      light.href="./assets/theme-light-fixes.css?v=20261004-2010";
       light.dataset.lightThemeFixes="1";
       document.head.appendChild(light);
     }
@@ -53,7 +53,7 @@
   if(media){
     const onSystemChange=function(){if(readMode()==="system")apply("system",false);};
     if(media.addEventListener) media.addEventListener("change",onSystemChange);
-    else if(media.addListener) media.addListener("change",onSystemChange);
+    else if(media.addListener) media.addListener(onSystemChange);
   }
 
   function settingsActive(){
