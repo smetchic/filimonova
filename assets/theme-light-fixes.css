@@ -1,0 +1,71 @@
+/* Light-theme corrections for supplier price reconciliation/check window. */
+
+html[data-theme="light"] .supplier-check-modal,
+html[data-theme="light"] .supplier-check-body,
+html[data-theme="light"] .supplier-check-tabs,
+html[data-theme="light"] .supplier-check-summary,
+html[data-theme="light"] .supplier-check-table{
+  background:#fff!important;
+  color:#18181b!important;
+  border-color:#e4e4e7!important;
+}
+
+html[data-theme="light"] .supplier-check-table thead th{
+  background:#f4f4f5!important;
+  color:#5f6368!important;
+  border-color:#e1e3e6!important;
+  box-shadow:none!important;
+}
+
+html[data-theme="light"] .supplier-check-table tbody td{
+  background:#fff!important;
+  color:#18181b!important;
+  border-color:#eceef0!important;
+}
+
+html[data-theme="light"] .supplier-check-table tbody tr:nth-child(even) td{
+  background:#fafafa!important;
+}
+
+/* Compact status chips: no oversized mint capsules. */
+html[data-theme="light"] .supplier-check-table .soft-status{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  min-height:20px!important;
+  padding:0 8px!important;
+  border-radius:10px!important;
+  font-size:11px!important;
+  line-height:18px!important;
+  font-weight:500!important;
+  white-space:nowrap!important;
+  box-shadow:none!important;
+  background:#f3f4f6!important;
+  color:#5f6368!important;
+  border:1px solid #d9dde2!important;
+}
+
+html[data-theme="light"] .supplier-check-table .soft-status.ok{
+  background:#eef7f1!important;
+  color:#356348!important;
+  border-color:#bfd8c8!important;
+}
+
+html[data-theme="light"] .supplier-check-table .soft-status.warn{
+  background:#fff7e6!important;
+  color:#7a5b20!important;
+  border-color:#e8d49f!important;
+}
+
+html[data-theme="light"] .supplier-check-table .soft-status.bad{
+  background:#fff0ee!important;
+  color:#9c443a!important;
+  border-color:#e8bdb7!important;
+}
+
+html[data-theme="light"] .supplier-check-status-filter,
+html[data-theme="light"] .supplier-check-status-filter select{
+  background:#fff!important;
+  color:#27272a!important;
+  border-color:#d4d4d8!important;
+}
