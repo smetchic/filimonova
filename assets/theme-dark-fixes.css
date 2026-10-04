@@ -223,6 +223,67 @@ html[data-theme="dark"] .recon-choice-header{
   border-color:var(--dark-line)!important;
 }
 
+/* Supplier price reconciliation/check window has its own legacy light palette. */
+html[data-theme="dark"] .supplier-check-modal,
+html[data-theme="dark"] .supplier-check-body,
+html[data-theme="dark"] .supplier-check-tabs,
+html[data-theme="dark"] .supplier-check-summary,
+html[data-theme="dark"] .supplier-check-table{
+  background:var(--dark-surface)!important;
+  color:var(--dark-text)!important;
+  border-color:var(--dark-line)!important;
+}
+html[data-theme="dark"] .supplier-check-tabs{background:var(--dark-bg)!important}
+html[data-theme="dark"] .supplier-check-tabs button{
+  background:transparent!important;
+  color:var(--dark-muted)!important;
+  border-color:var(--dark-line)!important;
+}
+html[data-theme="dark"] .supplier-check-tabs button.active{
+  color:var(--accent)!important;
+  border-bottom-color:var(--accent)!important;
+}
+html[data-theme="dark"] .supplier-check-summary{color:var(--dark-muted)!important}
+html[data-theme="dark"] .supplier-check-table thead th{
+  background:var(--dark-head)!important;
+  color:#c9ced6!important;
+  border-color:var(--dark-line)!important;
+  box-shadow:none!important;
+}
+html[data-theme="dark"] .supplier-check-table tbody td{
+  background:var(--dark-surface)!important;
+  color:var(--dark-text)!important;
+  border-color:var(--dark-line)!important;
+}
+html[data-theme="dark"] .supplier-check-table tbody tr:nth-child(even) td{background:#1e2227!important}
+html[data-theme="dark"] .supplier-check-table .soft-status{
+  background:#293039!important;
+  color:#cdd3db!important;
+  border-color:#4a535e!important;
+  box-shadow:none!important;
+}
+html[data-theme="dark"] .supplier-check-table .soft-status.ok{
+  background:#1f382a!important;
+  color:#85d5a6!important;
+  border-color:#385e48!important;
+}
+html[data-theme="dark"] .supplier-check-table .soft-status.warn{
+  background:#3a3121!important;
+  color:#e5bc70!important;
+  border-color:#665638!important;
+}
+html[data-theme="dark"] .supplier-check-table .soft-status.bad{
+  background:#3c2727!important;
+  color:#ee9c94!important;
+  border-color:#694442!important;
+}
+html[data-theme="dark"] .supplier-check-status-filter,
+html[data-theme="dark"] .supplier-check-status-filter select{
+  background:#20242a!important;
+  color:var(--dark-text)!important;
+  border-color:var(--dark-line-strong)!important;
+}
+
 /* Scrollbars: reduce the remaining bright system bars on Chromium. */
 html[data-theme="dark"] *{scrollbar-color:#555d68 #202328}
 html[data-theme="dark"] *::-webkit-scrollbar{width:11px;height:11px}
