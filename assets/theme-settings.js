@@ -17,7 +17,7 @@
     if(!document.querySelector('link[data-light-theme-fixes]')){
       const light=document.createElement("link");
       light.rel="stylesheet";
-      light.href="./assets/theme-light-fixes.css?v=20261004-2010";
+      light.href="./assets/theme-light-fixes.css?v=20261004-2055";
       light.dataset.lightThemeFixes="1";
       document.head.appendChild(light);
     }
