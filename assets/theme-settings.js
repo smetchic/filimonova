@@ -17,7 +17,7 @@
     if(!document.querySelector('link[data-light-theme-fixes]')){
       const light=document.createElement("link");
       light.rel="stylesheet";
-      light.href="./assets/theme-light-fixes.css?v=20261004-2325";
+      light.href="./assets/theme-light-fixes.css?v=20261004-2330";
       light.dataset.lightThemeFixes="1";
       document.head.appendChild(light);
     }
@@ -46,8 +46,6 @@
     });
   }
 
-  // Apply as soon as this bundle executes; index also primes the same attribute
-  // before paint so navigation between pages does not flash white.
   apply(readMode(),false);
 
   if(media){
@@ -90,8 +88,6 @@
       return;
     }
 
-    // Settings had only a placeholder in the current project version. Remove just
-    // that placeholder; leave any future real settings sections untouched.
     Array.from(area.querySelectorAll(":scope > .empty-state")).forEach(function(node){node.remove();});
     area.classList.add("content-work","theme-settings-host");
     area.insertAdjacentHTML("afterbegin",markup());
