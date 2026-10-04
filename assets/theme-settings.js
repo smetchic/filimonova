@@ -5,22 +5,94 @@
   const MODES=new Set(["light","dark","system"]);
   const media=window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
 
-  // Load correction layers after all legacy project styles.
   (function ensureThemeFixes(){
-    if(!document.querySelector('link[data-dark-theme-fixes]')){
-      const dark=document.createElement("link");
+    const stamp="20261004-2345";
+    let dark=document.querySelector('link[data-dark-theme-fixes]');
+    if(!dark){
+      dark=document.createElement("link");
       dark.rel="stylesheet";
-      dark.href="./assets/theme-dark-fixes.css?v=20261004-1924";
       dark.dataset.darkThemeFixes="1";
       document.head.appendChild(dark);
     }
-    if(!document.querySelector('link[data-light-theme-fixes]')){
-      const light=document.createElement("link");
+    dark.href="./assets/theme-dark-fixes.css?v="+stamp;
+
+    let light=document.querySelector('link[data-light-theme-fixes]');
+    if(!light){
+      light=document.createElement("link");
       light.rel="stylesheet";
-      light.href="./assets/theme-light-fixes.css?v=20261004-2330";
       light.dataset.lightThemeFixes="1";
       document.head.appendChild(light);
     }
+    light.href="./assets/theme-light-fixes.css?v="+stamp;
+
+    let statusStyle=document.querySelector('style[data-price-status-runtime-fix]');
+    if(!statusStyle){
+      statusStyle=document.createElement("style");
+      statusStyle.dataset.priceStatusRuntimeFix="1";
+      document.head.appendChild(statusStyle);
+    }
+    statusStyle.textContent=`
+      .supplier-source-price-table td.status-cell,
+      .supplier-source-price-table td[data-filter-field="price"]{
+        border-radius:0!important;
+        box-shadow:none!important;
+        outline:0!important;
+      }
+      html[data-theme="light"] .supplier-source-price-table td.status-cell,
+      html[data-theme="light"] .supplier-source-price-table td[data-filter-field="price"]{
+        background:#fff!important;
+      }
+      html[data-theme="dark"] .supplier-source-price-table td.status-cell,
+      html[data-theme="dark"] .supplier-source-price-table td[data-filter-field="price"]{
+        background:#202328!important;
+      }
+      .supplier-source-price-table td.status-cell > .price-state,
+      .supplier-source-price-table td[data-filter-field="price"] > .price-state{
+        display:inline-flex!important;
+        width:auto!important;
+        max-width:calc(100% - 2px)!important;
+        min-width:0!important;
+        height:20px!important;
+        min-height:20px!important;
+        align-items:center!important;
+        justify-content:center!important;
+        padding:0 8px!important;
+        margin:0!important;
+        border-radius:10px!important;
+        box-sizing:border-box!important;
+        white-space:nowrap!important;
+        font-size:10.5px!important;
+        line-height:18px!important;
+        font-weight:400!important;
+        box-shadow:none!important;
+      }
+      html[data-theme="light"] .supplier-source-price-table .price-state.ok{
+        background:#eef7f1!important;color:#356348!important;border:1px solid #bfd8c8!important;
+      }
+      html[data-theme="light"] .supplier-source-price-table .price-state.review,
+      html[data-theme="light"] .supplier-source-price-table .price-state.warn{
+        background:#fff7e6!important;color:#9a5619!important;border:1px solid #e8d49f!important;
+      }
+      html[data-theme="light"] .supplier-source-price-table .price-state.bad{
+        background:#fff0ee!important;color:#9c443a!important;border:1px solid #e8bdb7!important;
+      }
+      html[data-theme="light"] .supplier-source-price-table .price-state.supplier,
+      html[data-theme="light"] .supplier-source-price-table .price-state.none{
+        background:#fbf7ed!important;color:#7a5a34!important;border:1px solid #e6d9be!important;
+      }
+      html[data-theme="dark"] .supplier-source-price-table .price-state.ok{
+        background:#20372b!important;color:#82d4a4!important;border:1px solid #365b45!important;
+      }
+      html[data-theme="dark"] .supplier-source-price-table .price-state.review,
+      html[data-theme="dark"] .supplier-source-price-table .price-state.warn,
+      html[data-theme="dark"] .supplier-source-price-table .price-state.supplier,
+      html[data-theme="dark"] .supplier-source-price-table .price-state.none{
+        background:#3b3222!important;color:#e6bd70!important;border:1px solid #655536!important;
+      }
+      html[data-theme="dark"] .supplier-source-price-table .price-state.bad{
+        background:#3b2525!important;color:#f0a39c!important;border:1px solid #694040!important;
+      }
+    `;
   })();
 
   function readMode(){
