@@ -1,10 +1,10 @@
-const ESTIMATE_IMPORT_SLOTS = [
-  {number:"200",label:"№200 — Секция 1 · Цоколь"},
-  {number:"201",label:"№201 — Секция 2 · Цоколь"},
-  {number:"202",label:"№202 — Секция 1 · Выше 0.000"},
-  {number:"203",label:"№203 — Секция 2 · Выше 0.000"},
-  {number:"207",label:"№207 — Элементы лестниц"}
-];
+// Local estimates of the object come from its settings (number, section, zone).
+function estimateImportSlots() {
+  return objectSettings().estimates.map(function(e){
+    const scope=e.stairs ? (e.section||"Элементы лестниц") : [e.section,e.zone].filter(Boolean).join(" · ");
+    return {number:e.number,label:"№"+e.number+(scope?" — "+scope:"")};
+  });
+}
 
 function estimateNumber(value,label) {
   if(value==null || value==="" || /^[-–—]$/.test(importText(value))) return null;
@@ -202,7 +202,7 @@ async function refreshEstimateImportStatuses() {
   if(!result.error){
     (result.data||[]).forEach(function(x){if(x.source_slot && !latest[x.source_slot]) latest[x.source_slot]=x;});
   }
-  list.innerHTML=ESTIMATE_IMPORT_SLOTS.map(function(slot){
+  list.innerHTML=estimateImportSlots().map(function(slot){
     const cur=latest["estimate_"+slot.number];
     const detail=cur
       ? '<span class="spec-import-loaded">'+esc(cur.source_name||"Excel")+' · '+esc(String((cur.report&&cur.report.rows)||"—"))+' строк · '+esc(String((cur.report&&cur.report.materials)||"—"))+' М</span>'
@@ -242,7 +242,7 @@ async function prepareEstimateImport(number,file) {
     const parsed=parseEstimateWorkbook(buffer,number);
     const hash=await sha256Hex(buffer);
     ui.pendingEstimateImport={number:number,fileName:file.name,hash:hash,parsed:parsed};
-    const slot=ESTIMATE_IMPORT_SLOTS.find(function(x){return x.number===number;});
+    const slot=estimateImportSlots().find(function(x){return x.number===number;});
     preview.innerHTML=
       '<strong>'+esc(slot?slot.label:"№"+number)+'</strong>'+
       '<span>'+esc(file.name)+'</span>'+

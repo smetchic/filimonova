@@ -79,11 +79,11 @@ async function exportCurrentTableToExcel() {
 }
 
 function buildSpecContext(tab) {
-  const all = ui.spec.s1 && ui.spec.s2 && ui.spec.basement && ui.spec.above && ui.spec.stairs;
+  const sections = buildingSections();
+  const all = sections.every(specSectionOn) && ui.spec.basement && ui.spec.above && ui.spec.stairs;
   let html = '<span class="context-caption">Показывать:</span>';
   html += checkHtml("all","Все",all,"spec");
-  html += checkHtml("s1","Секция 1",ui.spec.s1,"spec");
-  html += checkHtml("s2","Секция 2",ui.spec.s2,"spec");
+  sections.forEach(function(bs){ html += checkHtml(sectionKey(bs),bs,specSectionOn(bs),"spec"); });
   html += checkHtml("basement","Цокольные",ui.spec.basement,"spec");
   html += checkHtml("above","Выше 0.000",ui.spec.above,"spec");
   html += checkHtml("stairs","Лестницы",ui.spec.stairs,"spec");
@@ -124,8 +124,9 @@ function buildContext(pageKey, tab) {
     return buildEstimateContext(0);
   }
   if (pageKey === "montage") {
-    const montage=ui.montage||{s1:true,s2:true,level:"1",period:""};
-    const all=!!montage.s1&&!!montage.s2;
+    const montage=ui.montage||{level:"1",period:""};
+    const sections=buildingSections();
+    const all=sections.every(montageSectionOn);
     const levels=levelCodes();
     if(!levels.includes(montage.level)) montage.level="1";
     if(!montage.period){
@@ -134,8 +135,7 @@ function buildContext(pageKey, tab) {
     }
     return '<span class="context-caption">Показывать:</span>' +
       checkHtml("all","Все",all,"montage") +
-      checkHtml("s1","Секция 1",!!montage.s1,"montage") +
-      checkHtml("s2","Секция 2",!!montage.s2,"montage") +
+      sections.map(function(bs){return checkHtml(sectionKey(bs),bs,montageSectionOn(bs),"montage");}).join("") +
       '<span>·</span><span class="context-caption">Уровень:</span>'+
       '<select class="execution-select execution-period-select montage-context-select" data-montage-level>'+
         levels.map(function(code){return '<option value="'+esc(code)+'"'+(code===montage.level?' selected':'')+'>'+esc(code)+'</option>';}).join("")+

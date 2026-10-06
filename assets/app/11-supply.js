@@ -53,7 +53,7 @@ function renderSupplySummary() {
   let body="";
 
   function vectorForRow(r){
-    const projectPieces=r.houseOnly?Number(r.houseTotal||0):(Number(r.bySection["Секция 1"]||0)+Number(r.bySection["Секция 2"]||0));
+    const projectPieces=summaryProjectQty(r);
     const projectM3=projectPieces*Number(r.volumePerPiece||0);
     const delivered=fact.byCatalog.get(r.catalogItemId)||{pieces:0,m3:0};
     const mountedPieces=Number(mountedByCatalog.get(r.catalogItemId)||0);

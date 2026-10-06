@@ -189,8 +189,8 @@ function openMaterialCard(id,mark,sourceName) {
         '</div>','mv-mb');
 
       const floors='<div class="mv-floor-wrap"><div class="mv-floor-grid"><div class="head">Секция</div>'+levels.map(function(x){return '<div class="head">'+esc(x)+'</div>';}).join("")+'<div class="head">Всего</div>'+
-        ["Секция 1","Секция 2"].map(function(bs){
-          return '<div class="rowhead">'+bs+'</div>'+levels.map(function(code){
+        buildingSections().map(function(bs){
+          return '<div class="rowhead">'+esc(bs)+'</div>'+levels.map(function(code){
             let v=0;st.rows.filter(function(r){return r.section&&r.section.building_section===bs;}).forEach(function(r){v+=Number(r.quantities.get(code)||0);});
             return '<div class="'+(v?"val":"zero")+'">'+(v?fmt0(v):"—")+'</div>';
           }).join("")+'<div class="total">'+fmt0(st.rows.filter(function(r){return r.section&&r.section.building_section===bs;}).reduce(function(s,r){return s+Number(r.total||0);},0))+'</div>';

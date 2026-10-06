@@ -580,7 +580,7 @@ async function exportEstimateJournalExcel() {
     }
 
     const workbook=new ExcelJS.Workbook();
-    workbook.creator="ПТО Филимонова";
+    workbook.creator="ПТО "+(dataState.project&&dataState.project.name||cfg.projectName);
     workbook.created=new Date();
     const ws=workbook.addWorksheet("Журнал сверки",{
       views:[{state:"frozen",ySplit:2}]

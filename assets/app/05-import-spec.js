@@ -1,10 +1,14 @@
-const SPEC_IMPORT_SLOTS = [
-  {key:"spec_s1_basement",label:"Секция 1 — Цоколь",kind:"project"},
-  {key:"spec_s1_above",label:"Секция 1 — Выше 0.000",kind:"project"},
-  {key:"spec_s2_basement",label:"Секция 2 — Цоколь",kind:"project"},
-  {key:"spec_s2_above",label:"Секция 2 — Выше 0.000",kind:"project"},
-  {key:"spec_stairs",label:"Элементы лестниц",kind:"stairs"}
-];
+// Two specification files per building section (basement and above 0.000) plus the stairs file.
+function specImportSlots() {
+  const slots=[];
+  buildingSections().forEach(function(bs){
+    const key=sectionKey(bs);
+    slots.push({key:"spec_"+key+"_basement",label:bs+" — Цоколь",kind:"project"});
+    slots.push({key:"spec_"+key+"_above",label:bs+" — Выше 0.000",kind:"project"});
+  });
+  slots.push({key:"spec_stairs",label:"Элементы лестниц",kind:"stairs"});
+  return slots;
+}
 
 const SPEC_BASEMENT_SECTIONS = [
   "Наружные стеновые панели цоколя",
@@ -247,7 +251,7 @@ async function refreshSpecImportStatuses() {
   if(!result.error){
     (result.data||[]).forEach(function(x){if(x.source_slot && !latest[x.source_slot]) latest[x.source_slot]=x;});
   }
-  list.innerHTML=SPEC_IMPORT_SLOTS.map(function(slot){
+  list.innerHTML=specImportSlots().map(function(slot){
     const cur=latest[slot.key];
     const detail=cur
       ? '<span class="spec-import-loaded">'+esc(cur.source_name||"Excel")+' · '+esc(String((cur.report&&cur.report.positions)||"—"))+' поз. · '+esc(String((cur.report&&cur.report.quantity_total)||"—"))+' шт.</span>'
@@ -285,7 +289,7 @@ async function prepareSpecImport(slotKey,file) {
     const parsed=parseSpecificationWorkbook(buffer,slotKey);
     const hash=await sha256Hex(buffer);
     ui.pendingSpecImport={slotKey:slotKey,fileName:file.name,hash:hash,parsed:parsed};
-    const slot=SPEC_IMPORT_SLOTS.find(function(x){return x.key===slotKey;});
+    const slot=specImportSlots().find(function(x){return x.key===slotKey;});
     preview.innerHTML='<strong>'+esc(slot?slot.label:slotKey)+'</strong>'+
       '<span>'+esc(file.name)+'</span>'+
       '<span>'+parsed.panels.length+' позиций</span>'+

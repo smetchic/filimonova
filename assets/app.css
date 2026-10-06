@@ -3233,3 +3233,24 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 @media(max-width:1100px){
   .supply-doc-context-row .supply-doc-edit-hint{display:none}
 }
+
+/* Object switcher (sidebar brand) and object settings */
+#appView .brand{cursor:pointer}
+#appView .brand:hover .brand-title{text-decoration:underline}
+.object-dialog{width:min(640px,calc(100vw - 28px))}
+.object-dialog-body{overflow:auto;padding:12px 14px;display:flex;flex-direction:column;gap:14px}
+.object-list{display:flex;flex-direction:column;gap:6px}
+.object-list-item{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:8px 10px;border:1px solid #E4E4E7;border-radius:7px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.object-list-item:hover{border-color:#A1A1AA}
+.object-list-item.current{border-color:#18181B}
+.object-list-item span{font-size:11px;color:#8A8A92}
+.object-settings{display:flex;flex-direction:column;gap:8px;border-top:1px solid #E4E4E7;padding-top:12px}
+.object-settings-title{font-size:12.5px;font-weight:600}
+.object-estimates{border-collapse:collapse;width:100%}
+.object-estimates th{font-size:11px;font-weight:500;color:#8A8A92;text-align:left;padding:2px 4px}
+.object-estimates td{padding:2px 4px}
+.object-estimates input,.object-estimates select{width:100%;height:28px;font:inherit;font-size:12.5px;padding:0 6px;border:1px solid #D4D4D8;border-radius:6px;background:transparent;color:inherit}
+.object-estimates td:first-child{width:90px}
+.object-estimates td:last-child{width:34px}
+.object-settings-note{font-size:11px;color:#8A8A92}
+.object-dialog-state{font-size:12px;color:#8A8A92}

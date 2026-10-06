@@ -344,16 +344,19 @@ function estimateIntrinsicColumnWidth(table,index) {
 
 function intrinsicColumnWidth(table,index) {
   if (table.classList.contains("working-summary")) {
-    if (index === 3 || index === 4 || index === 6) return 58;
-    if (index === 5 || index === 7) return 64;
+    // Columns: №, mark, name, total, then quantity/volume per section, then each level per section.
+    const sections=buildingSections();
+    const floorStart=4+sections.length*2;
+    if (index === 3) return 58;
+    if (index >= 4 && index < floorStart) return (index-4)%2===0 ? 58 : 64;
     // Floor subcolumns contain only quantities. Keep them compact and stable:
     // size from the complete project dataset, not from the currently visible grouping.
-    if (index >= 8) {
+    if (index >= floorStart) {
       const levels=levelCodes();
-      const floorEnd=8+levels.length*2;
+      const floorEnd=floorStart+levels.length*sections.length;
       if(index < floorEnd){
-        const rel=index-8, section=rel%2===0?"Секция 1":"Секция 2";
-        const code=levels[Math.floor(rel/2)];
+        const rel=index-floorStart, section=sections[rel%sections.length];
+        const code=levels[Math.floor(rel/sections.length)];
         let maxText="0";
         buildWorkingSummaryRows().forEach(function(r){
           const v=Number((r.byLevel[section]&&r.byLevel[section].get(code))||0);
