@@ -11,9 +11,13 @@ function renderHome() {
     '<div class="review-note">Спецификация загружена из реальных Excel. Сметы и связи отображаются после импорта соответствующих файлов.</div></div>';
 }
 
-function renderSimple(text) {
+// Sections that exist only as empty frames stay out of the menu; a stale saved page or link opens Главная.
+const UNFINISHED_PAGES=["diffs","import","docs"];
+
+// Настройки is filled by theme-settings.js.
+function renderSettings() {
   $("workArea").className = "work-area content-work";
-  $("workArea").innerHTML = '<div class="review-panel"><div class="review-panel-title">'+esc(text)+'</div><div class="review-note">Каркас раздела подключён. Детализируем его после основных рабочих экранов.</div></div>';
+  $("workArea").innerHTML = "";
 }
 
 function renderContent(pageKey,tab) {
@@ -33,12 +37,9 @@ function renderContent(pageKey,tab) {
   if (pageKey === "avr") return renderAvr(tab);
   if (pageKey === "s29") return renderS29(tab);
   if (pageKey === "recon") return tab === 0 ? renderRecon() : renderEstimateJournal();
-  if (pageKey === "diffs") return renderSimple("Расхождения");
   if (pageKey === "links") return renderWorkLinks();
-  if (pageKey === "import") return renderSimple("Импорт");
-  if (pageKey === "docs") return renderSimple("Документы");
-  if (pageKey === "settings") return renderSimple("Настройки");
-  return renderSimple("Раздел");
+  if (pageKey === "settings") return renderSettings();
+  return renderHome();
 }
 
 function wireContextControls() {
@@ -209,7 +210,8 @@ function renderPage(pageKey,tabIndex) {
   const previousScroller = document.querySelector("#workArea .engineering-scroll");
   const previousScroll = previousScroller ? {left:previousScroller.scrollLeft,top:previousScroller.scrollTop} : null;
 
-  const page = pages[pageKey] || pages.home;
+  if (!pages[pageKey] || UNFINISHED_PAGES.includes(pageKey)) pageKey = "home";
+  const page = pages[pageKey];
   ui.page = pageKey;
   localStorage.setItem("filimonova.ui.page",pageKey);
 

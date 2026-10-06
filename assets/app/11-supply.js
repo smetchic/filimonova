@@ -290,9 +290,11 @@ function renderSupplyDocuments() {
     '</tr></thead><tbody>'+body+'</tbody></table></div></div>';
 
   document.querySelectorAll(".supply-doc-row").forEach(function(row){
-    row.onclick=function(){
+    row.onclick=function(e){
       document.querySelectorAll(".supply-doc-row.active-row").forEach(function(x){x.classList.remove("active-row");});
       row.classList.add("active-row");
+      // A phone has no double click: one tap opens the invoice.
+      if(isPhoneLayout() && !e.target.closest("button,a,input,select")) row.ondblclick(e);
     };
     row.ondblclick=function(e){
       if(e.target.closest("button,a,input,select")) return;
@@ -439,6 +441,10 @@ function supplyEditorSuggestionValues(field,row,query) {
   return values;
 }
 
+function isPhoneLayout() {
+  return window.matchMedia("(max-width:760px)").matches;
+}
+
 function openTtnSuggestions(input,field,row,draftRows,rerender) {
   closeTtnSuggestions();
   const values=supplyEditorSuggestionValues(field,row,input.value||"");
@@ -448,9 +454,10 @@ function openTtnSuggestions(input,field,row,draftRows,rerender) {
   const pop=document.createElement("div");
   pop.className="ttn-suggest-popup";
   pop.dataset.ttnSuggestionField=field;
-  pop.style.left=rect.left+"px";
+  const width=Math.min(Math.max(rect.width,field==="name"?300:180),window.innerWidth-16);
+  pop.style.left=Math.max(8,Math.min(rect.left,window.innerWidth-width-8))+"px";
   pop.style.top=(rect.bottom+2)+"px";
-  pop.style.width=Math.max(rect.width,field==="name"?300:180)+"px";
+  pop.style.width=width+"px";
 
   values.slice(0,60).forEach(function(x){
     const option=document.createElement("button");
@@ -595,25 +602,26 @@ function openSupplyDocumentEditor(documentRow) {
       totalVat+=Number(c.vat||0);
       totalGross+=Number(c.gross||0);
       const state=supplyEditorRowStatus(row,type);
-      const common='<td class="ttn-source-input"><input data-ttn-mark="'+index+'" value="'+esc(row.source_mark||"")+'" placeholder="Марка" autocomplete="off"></td>'+
-        '<td class="ttn-source-input ttn-name-input"><input data-ttn-name="'+index+'" value="'+esc(row.source_name||"")+'" placeholder="Наименование" autocomplete="off"></td>';
+      // data-label captions the fields when a phone shows each row as a card.
+      const common='<td class="ttn-source-input" data-label="Марка"><input data-ttn-mark="'+index+'" value="'+esc(row.source_mark||"")+'" placeholder="Марка" autocomplete="off"></td>'+
+        '<td class="ttn-source-input ttn-name-input" data-label="Наименование"><input data-ttn-name="'+index+'" value="'+esc(row.source_name||"")+'" placeholder="Наименование" autocomplete="off"></td>';
 
       if(!green){
         return '<tr data-ttn-row="'+index+'">'+common+
-          '<td class="num-input"><input data-ttn-pieces="'+index+'" inputmode="decimal" value="'+esc(row.qty_pieces||"")+'"></td>'+
-          '<td class="num computed">'+(c.m3!=null?exFmt(c.m3):"—")+'</td>'+
-          '<td class="ttn-link-state '+(state==="Сопоставлено"?"ok":"review")+'">'+esc(state)+'</td>'+
+          '<td class="num-input" data-label="Кол-во, шт."><input data-ttn-pieces="'+index+'" inputmode="decimal" value="'+esc(row.qty_pieces||"")+'"></td>'+
+          '<td class="num computed" data-label="Объём, м³">'+(c.m3!=null?exFmt(c.m3):"—")+'</td>'+
+          '<td class="ttn-link-state '+(state==="Сопоставлено"?"ok":"review")+'" data-label="Сопоставление">'+esc(state)+'</td>'+
           '<td class="center"><button class="table-text-action" data-ttn-remove="'+index+'" type="button">удалить</button></td></tr>';
       }
 
       return '<tr data-ttn-row="'+index+'">'+common+
-        '<td class="num-input"><input data-ttn-m3="'+index+'" inputmode="decimal" value="'+esc(row.qty_m3||"")+'"></td>'+
-        '<td class="num computed">'+(c.pcs!=null?exFmt(c.pcs):"—")+'</td>'+
-        '<td class="num-input"><input data-ttn-price="'+index+'" inputmode="decimal" value="'+esc(row.unit_price||"")+'"></td>'+
-        '<td class="num computed">'+(c.net!=null?exMoney(c.net):"—")+'</td>'+
-        '<td class="num computed">'+(c.vat!=null?exMoney(c.vat):"—")+'</td>'+
-        '<td class="num computed">'+(c.gross!=null?exMoney(c.gross):"—")+'</td>'+
-        '<td class="ttn-link-state '+(state==="Сопоставлено"?"ok":"review")+'">'+esc(state)+'</td>'+
+        '<td class="num-input" data-label="Кол-во по ТТН, м³"><input data-ttn-m3="'+index+'" inputmode="decimal" value="'+esc(row.qty_m3||"")+'"></td>'+
+        '<td class="num computed" data-label="Расчёт, шт.">'+(c.pcs!=null?exFmt(c.pcs):"—")+'</td>'+
+        '<td class="num-input" data-label="Цена за 1 м³"><input data-ttn-price="'+index+'" inputmode="decimal" value="'+esc(row.unit_price||"")+'"></td>'+
+        '<td class="num computed" data-label="Сумма без НДС">'+(c.net!=null?exMoney(c.net):"—")+'</td>'+
+        '<td class="num computed" data-label="НДС">'+(c.vat!=null?exMoney(c.vat):"—")+'</td>'+
+        '<td class="num computed" data-label="Сумма с НДС">'+(c.gross!=null?exMoney(c.gross):"—")+'</td>'+
+        '<td class="ttn-link-state '+(state==="Сопоставлено"?"ok":"review")+'" data-label="Сопоставление">'+esc(state)+'</td>'+
         '<td class="center"><button class="table-text-action" data-ttn-remove="'+index+'" type="button">удалить</button></td></tr>';
     }).join("");
 
@@ -622,9 +630,9 @@ function openSupplyDocumentEditor(documentRow) {
       : '<thead><tr><th>Марка</th><th>Наименование</th><th>Кол-во, шт.</th><th>Объём, м³</th><th>Сопоставление</th><th></th></tr></thead>';
 
     const foot=green
-      ? '<tfoot><tr class="ttn-total-row"><td colspan="2">ИТОГО</td><td class="num">'+(totalM3?exFmt(totalM3):"")+'</td><td class="num">'+(totalPcs?exFmt(totalPcs):"")+'</td><td></td><td class="num">'+(totalNet?exMoney(totalNet):"")+'</td><td class="num">'+(totalVat?exMoney(totalVat):"")+'</td><td class="num">'+(totalGross?exMoney(totalGross):"")+'</td><td></td><td></td></tr>'+
+      ? '<tfoot><tr class="ttn-total-row"><td colspan="2">ИТОГО</td><td class="num" data-label="м³">'+(totalM3?exFmt(totalM3):"")+'</td><td class="num" data-label="шт.">'+(totalPcs?exFmt(totalPcs):"")+'</td><td></td><td class="num" data-label="Без НДС">'+(totalNet?exMoney(totalNet):"")+'</td><td class="num" data-label="НДС">'+(totalVat?exMoney(totalVat):"")+'</td><td class="num" data-label="С НДС">'+(totalGross?exMoney(totalGross):"")+'</td><td></td><td></td></tr>'+
         '<tr class="ttn-add-row"><td colspan="'+cols+'"><button class="table-text-action" data-ttn-add-row type="button">+ Добавить строку</button></td></tr></tfoot>'
-      : '<tfoot><tr class="ttn-total-row"><td colspan="2">ИТОГО</td><td class="num">'+(totalPcs?exFmt(totalPcs):"")+'</td><td class="num">'+(totalM3?exFmt(totalM3):"")+'</td><td></td><td></td></tr>'+
+      : '<tfoot><tr class="ttn-total-row"><td colspan="2">ИТОГО</td><td class="num" data-label="шт.">'+(totalPcs?exFmt(totalPcs):"")+'</td><td class="num" data-label="м³">'+(totalM3?exFmt(totalM3):"")+'</td><td></td><td></td></tr>'+
         '<tr class="ttn-add-row"><td colspan="'+cols+'"><button class="table-text-action" data-ttn-add-row type="button">+ Добавить строку</button></td></tr></tfoot>';
 
     zone.innerHTML='<div class="ttn-grid-scroll"><table class="ttn-grid">'+head+'<tbody>'+body+'</tbody>'+foot+'</table></div>'+

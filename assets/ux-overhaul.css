@@ -312,3 +312,155 @@
   .ux-detail-drawer{width:92vw;min-width:0}
   .ux-dashboard-head{align-items:flex-start;flex-wrap:wrap}
 }
+
+/* Bars above the work area with nothing in them */
+#contextRow.is-empty,
+#serviceRow.is-empty{display:none!important}
+
+/* Page menu ("…") */
+.page-menu{
+  position:fixed;
+  z-index:2400;
+  min-width:210px;
+  padding:4px;
+  border:1px solid var(--ux-line);
+  border-radius:8px;
+  background:var(--ux-panel);
+  box-shadow:var(--ux-shadow);
+}
+.page-menu button{
+  display:block;
+  width:100%;
+  height:32px;
+  border:0;
+  border-radius:5px;
+  background:transparent;
+  padding:0 10px;
+  text-align:left;
+  font:inherit;
+  font-size:12.5px;
+  color:var(--ux-ink);
+  cursor:pointer;
+}
+.page-menu button:hover:not(:disabled){background:var(--ux-soft)}
+.page-menu button:disabled{color:var(--ux-muted);cursor:default}
+
+/* Montage: undo after a click changed the fact */
+.montage-undo{
+  position:fixed;
+  left:50%;
+  bottom:22px;
+  z-index:2400;
+  transform:translateX(-50%);
+  display:flex;
+  align-items:center;
+  gap:16px;
+  max-width:calc(100vw - 32px);
+  padding:10px 12px 10px 16px;
+  border-radius:8px;
+  background:#25272b;
+  color:#fff;
+  font-size:12.5px;
+  box-shadow:var(--ux-shadow);
+}
+.montage-undo button{
+  flex:0 0 auto;
+  height:28px;
+  border:0;
+  border-radius:5px;
+  background:rgba(255,255,255,.14);
+  color:#fff;
+  padding:0 12px;
+  font:inherit;
+  font-weight:600;
+  cursor:pointer;
+}
+.montage-undo button:hover:not(:disabled){background:rgba(255,255,255,.24)}
+
+/* Print: only the page title and the work area */
+@media print{
+  .sidebar,.utility-row,.tabs-search-row,#contextRow,#serviceRow,.page-menu,.montage-undo{display:none!important}
+  .app{display:block!important}
+  .main,.page,.work-area,.engineering-shell,.engineering-scroll{overflow:visible!important;height:auto!important;max-height:none!important}
+}
+
+/* Phone: entering an invoice */
+@media(max-width:760px){
+  .supply-doc-context-row .context-caption,
+  .supply-doc-context-row .supply-doc-context-note{display:none}
+  .supply-doc-context-row .supply-doc-add-link{
+    flex:1 1 auto;
+    height:42px;
+    border-radius:8px;
+    background:var(--ux-blue);
+    color:#fff!important;
+    font-size:15px;
+    font-weight:600;
+    text-align:center;
+  }
+
+  .ttn-modal-backdrop{padding:0;align-items:stretch}
+  .ttn-modal{width:100vw;height:100vh;height:100dvh;border:0;border-radius:0}
+  .ttn-modal-head{min-height:52px}
+  .ttn-close{width:40px;height:40px;font-size:24px}
+  .ttn-type-tabs{height:auto;padding:8px 12px;gap:8px}
+  .ttn-type-tabs button{flex:1 1 0;height:38px;font-size:14px}
+  .ttn-meta{flex-wrap:wrap;gap:10px 12px;padding:10px 12px}
+  .ttn-meta label,.ttn-file{flex:1 1 140px;flex-direction:column;align-items:stretch;gap:4px;font-size:12px}
+  .ttn-file{flex-basis:100%;margin-left:0;max-width:none}
+  .ttn-meta input[type="date"],
+  .ttn-meta input[type="text"]{width:100%;height:40px;border:1px solid var(--ux-line);border-radius:6px;padding:0 10px;font-size:16px}
+  .ttn-file .context-link{max-width:none;height:40px;border:1px dashed var(--ux-line);border-radius:6px;text-align:center}
+
+  .ttn-table-zone{overflow:auto}
+  .ttn-grid-scroll{flex:0 0 auto;min-height:0;overflow:visible}
+  .ttn-grid,.ttn-grid tbody,.ttn-grid tfoot{display:block;width:100%;min-width:0}
+  .ttn-grid thead{display:none}
+  .ttn-grid tbody tr{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px 10px;
+    padding:12px;
+    border-bottom:6px solid var(--ux-soft);
+  }
+  .ttn-grid tbody td{
+    display:flex;
+    flex-direction:column;
+    justify-content:flex-end;
+    gap:3px;
+    min-width:0!important;
+    height:auto;
+    padding:0!important;
+    border:0;
+    background:transparent;
+    font-size:14px;
+  }
+  .ttn-grid tbody td[data-label]::before{content:attr(data-label);font-size:11.5px;color:var(--ux-muted);text-align:left}
+  .ttn-grid tbody td.ttn-source-input{grid-column:1/-1}
+  .ttn-grid tbody td.computed{min-height:40px;text-align:left;justify-content:center}
+  .ttn-grid tbody td.ttn-link-state{white-space:normal}
+  .ttn-grid tbody td.center{align-items:flex-end}
+  .ttn-grid .ttn-source-input input,
+  .ttn-grid .num-input input{height:42px;border:1px solid var(--ux-line);border-radius:6px;padding:0 10px;font-size:16px;background:var(--ux-panel)}
+  .ttn-grid .num-input input{text-align:left}
+  .ttn-grid .table-text-action{min-height:36px;font-size:13px}
+
+  .ttn-total-row{display:flex;flex-wrap:wrap;gap:4px 14px;padding:10px 12px}
+  .ttn-total-row td{position:static;display:flex;gap:4px;height:auto;padding:0;border:0;background:transparent;font-size:13px}
+  .ttn-total-row td:empty{display:none}
+  .ttn-total-row td[data-label]::after{content:attr(data-label);font-weight:400;color:var(--ux-muted)}
+  .ttn-add-row{display:block;padding:4px 12px 12px}
+  .ttn-add-row td{position:static;display:block;height:auto;padding:0;border:0}
+  .ttn-add-row .table-text-action{width:100%;height:42px;border:1px dashed var(--ux-line);border-radius:8px;font-size:14px}
+
+  .ttn-recon-scroll{max-height:none;overflow-x:auto}
+  .ttn-inline-note{padding:10px 12px;font-size:12px}
+
+  .ttn-modal-foot{height:auto;flex:0 0 auto;flex-wrap:wrap;gap:8px;padding:10px 12px calc(10px + env(safe-area-inset-bottom))}
+  .ttn-status{flex-basis:100%;max-width:none;white-space:normal}
+  .ttn-status:empty{display:none}
+  .ttn-modal-foot .spacer{display:none}
+  .ttn-modal-foot .context-link{flex:1 1 0;height:44px;border-radius:8px;font-size:15px;text-align:center}
+  .ttn-modal-foot .ttn-save{background:var(--ux-blue);color:#fff!important}
+  .ttn-suggest-popup button{min-height:40px;font-size:14px}
+}

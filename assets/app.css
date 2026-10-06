@@ -1401,7 +1401,7 @@ body.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
 .working-summary thead th,
 .working-summary thead .floor-parent{
   white-space:normal!important;
-  overflow-wrap:anywhere!important;
+  overflow-wrap:normal!important;
   word-break:normal!important;
   text-overflow:clip!important;
   overflow:hidden!important;

@@ -1,19 +1,81 @@
+const PAGE_MENU_HTML='<button class="action more" data-page-menu type="button" aria-label="Ещё" aria-haspopup="true">…</button>';
+
 function renderUtilityActions(pageKey) {
   const el=$("pageActions");
   if(!el) return;
   if(pageKey==="spec"){
-    el.innerHTML='<button class="action" data-spec-import-open type="button">Импорт Excel</button><button class="action more" type="button" aria-label="Ещё">…</button>';
+    el.innerHTML='<button class="action" data-spec-import-open type="button">Импорт Excel</button>'+PAGE_MENU_HTML;
     const btn=el.querySelector("[data-spec-import-open]");
     if(btn) btn.onclick=openSpecImportModal;
   }else if(pageKey==="estimates"){
-    el.innerHTML='<button class="action" data-estimate-import-open type="button">Импорт Excel</button><button class="action more" type="button" aria-label="Ещё">…</button>';
+    el.innerHTML='<button class="action" data-estimate-import-open type="button">Импорт Excel</button>'+PAGE_MENU_HTML;
     const btn=el.querySelector("[data-estimate-import-open]");
     if(btn) btn.onclick=openEstimateImportModal;
-  }else if(pageKey==="avr" || pageKey==="s29"){
-    el.innerHTML="";
   }else{
-    el.innerHTML='<button class="action" type="button">Настроить</button><button class="action more" type="button" aria-label="Ещё">…</button>';
+    el.innerHTML=PAGE_MENU_HTML;
   }
+  el.querySelector("[data-page-menu]").onclick=function(e){e.stopPropagation();togglePageMenu(e.currentTarget);};
+}
+
+function closePageMenu() {
+  const menu=document.querySelector(".page-menu");
+  if(menu) menu.remove();
+  document.removeEventListener("click",closePageMenu);
+}
+
+function togglePageMenu(anchor) {
+  if(document.querySelector(".page-menu")) return closePageMenu();
+  const hasTable=!!document.querySelector("#workArea table");
+  const menu=document.createElement("div");
+  menu.className="page-menu";
+  menu.setAttribute("role","menu");
+  menu.innerHTML=
+    '<button type="button" role="menuitem" data-page-menu-action="excel"'+(hasTable?'':' disabled')+'>Скачать таблицу в Excel</button>'+
+    '<button type="button" role="menuitem" data-page-menu-action="print">Печать страницы</button>';
+  const rect=anchor.getBoundingClientRect();
+  menu.style.top=Math.round(rect.bottom+4)+"px";
+  menu.style.right=Math.round(window.innerWidth-rect.right)+"px";
+  document.body.appendChild(menu);
+  menu.querySelector('[data-page-menu-action="excel"]').onclick=function(){closePageMenu();exportCurrentTableToExcel();};
+  menu.querySelector('[data-page-menu-action="print"]').onclick=function(){closePageMenu();window.print();};
+  setTimeout(function(){document.addEventListener("click",closePageMenu);},0);
+}
+
+// Numbers in tables are formatted for reading ("1 164 000,00"); turn them back into
+// numbers so Excel can sum them.
+function excelValueFromText(text) {
+  const t=String(text).replace(/[\u00a0\u202f\s]/g,"");
+  if(/^[-−]?\d+(,\d+)?$/.test(t)) return Number(t.replace("−","-").replace(",","."));
+  return text;
+}
+
+async function exportCurrentTableToExcel() {
+  const table=document.querySelector("#workArea table");
+  if(!table) return;
+  let XLSX;
+  try{XLSX=await ensureXlsxLoaded();}catch(err){alert(err.message||String(err));return;}
+  const sheet=XLSX.utils.table_to_sheet(table,{raw:true});
+  Object.keys(sheet).forEach(function(addr){
+    const cell=sheet[addr];
+    if(addr[0]==="!" || !cell || typeof cell.v!=="string") return;
+    cell.v=cell.v.replace(/^[▾▸▼►]\s*/,"");
+    const v=excelValueFromText(cell.v.trim());
+    if(typeof v==="number"){cell.v=v;cell.t="n";}
+  });
+  const page=pages[ui.page]||{title:"Таблица",tabs:[]};
+  const tabName=page.tabs[ui.tabs[ui.page]||0]||"";
+  const book=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book,sheet,"Таблица");
+  const date=new Date().toISOString().slice(0,10);
+  const name=[page.title.split(" — ")[0],tabName!==page.title?tabName:"",date].filter(Boolean).join(" · ");
+  const blob=new Blob([XLSX.write(book,{type:"array",bookType:"xlsx"})],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+  const link=document.createElement("a");
+  link.href=URL.createObjectURL(blob);
+  link.download=name.replace(/[\\/:*?"<>|]/g,"-")+".xlsx";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(function(){URL.revokeObjectURL(link.href);},1000);
 }
 
 function buildSpecContext(tab) {
@@ -29,7 +91,7 @@ function buildSpecContext(tab) {
 }
 
 function buildEstimateContext(tab) {
-  if (tab !== 0 && !(ui.page === "avr" && tab === 2)) return '<span class="context-muted">Контекст текущего представления</span>';
+  if (tab !== 0 && !(ui.page === "avr" && tab === 2)) return "";
   const numbers = dataState.estimates.map(function(e){ return e.number; });
   const all = numbers.length > 0 && numbers.every(function(n){ return ui.estimates[n] !== false; });
   let html = '<span class="context-caption">Показывать:</span>';
@@ -121,7 +183,7 @@ function buildContext(pageKey, tab) {
     if (tab === 2) return '<span class="context-caption">Прайс поставщика</span><span>Исходный порядок и данные поставщика · сверка с Рабочей сводкой</span><span class="spacer"></span><button class="context-link" data-supplier-check-open type="button">Проверить прайс</button><button class="context-link" data-supplier-import-open type="button">Импорт прайса поставщика</button>';
     return '<span class="context-muted">Данные по всему объекту</span>';
   }
-  return '<span class="context-muted">Контекст страницы</span>';
+  return "";
 }
 
 function buildServiceLeft(pageKey,tab) {
@@ -151,7 +213,7 @@ function buildServiceLeft(pageKey,tab) {
     const last=ui.workLinkLastAuto;
     return '<span class="context-muted">'+linkedMaterials+' / '+materials.length+' материалов · '+linkedWorks+' / '+works.length+' работ имеют связь'+(last?' · авто: '+last.matched+' · не определено: '+last.unresolved:'')+'</span>';
   }
-  if (pageKey === "montage") return '<span class="context-muted">ЛКМ +1 · ПКМ −1</span>';
+  if (pageKey === "montage") return '<span class="context-muted">'+esc(MONTAGE_CLICK_HINT)+'</span>';
   return "";
 }
 

@@ -395,8 +395,7 @@ function intrinsicColumnWidth(table,index) {
     const txt=(cell.textContent||"").trim();
     const canvas=intrinsicColumnWidth.canvas||(intrinsicColumnWidth.canvas=document.createElement("canvas"));
     const ctx=canvas.getContext("2d");
-    const cs=getComputedStyle(cell);
-    ctx.font=cs.font||"12px Segoe UI";
+    ctx.font=canvasFontOf(cell);
     let w=Math.ceil(ctx.measureText(txt).width)+18;
     if(cell.querySelector(".column-filter-trigger")) w+=28;
     max=Math.max(max,w);
@@ -411,6 +410,98 @@ function intrinsicColumnWidth(table,index) {
     return Math.max(120,Math.min(max,280));
   }
   return Math.max(28,Math.min(max,340));
+}
+
+// Chromium leaves the computed `font` shorthand empty, and an empty canvas font silently
+// falls back to 10px, so build it from the longhands.
+function canvasFontOf(cell) {
+  const cs=getComputedStyle(cell);
+  return [cs.fontStyle,cs.fontWeight,cs.fontSize,cs.fontFamily].join(" ");
+}
+
+const NUMERIC_CELL_TEXT=/^[\d\s.,:\-−+%]+$/;
+
+// The narrowest width each column needs so that numbers, dates, codes and whole header words
+// are never cut. Saved and dragged widths may not go below it. A header spanning several
+// columns (for example "Смонтировано" over шт./м³) yields a need for their sum in `spans`. Text is measured in a
+// real span because table digits use tabular-nums, which canvas measurement ignores.
+function columnContentMinimums(table,count) {
+  const mins=new Array(count).fill(0);
+  const spans=new Map();
+  const styles=new Map();
+  // Per column and cell style, keep only the longest strings: they are the widest.
+  const candidates=new Map();
+  function styleKey(cell) {
+    const key=cell.tagName+"|"+cell.className+"|"+(cell.parentElement?cell.parentElement.className:"");
+    if(!styles.has(key)) styles.set(key,cell);
+    return key;
+  }
+  function add(index,span,text,cell,extra) {
+    if(index+span>count || !text) return;
+    const key=styleKey(cell);
+    const ck=index+"/"+span+"|"+key+"|"+extra;
+    let c=candidates.get(ck);
+    if(!c){c={index:index,span:span,key:key,extra:extra,len:0,texts:new Set()};candidates.set(ck,c);}
+    if(text.length>c.len){c.len=text.length;c.texts=new Set([text]);}
+    else if(text.length===c.len) c.texts.add(text);
+  }
+  // A status badge inside a cell adds its own padding and border to the text width.
+  const badgeCache=new Map();
+  function badgeExtra(cell) {
+    const badge=cell.children.length===1?cell.firstElementChild:null;
+    if(!badge || badge.textContent.trim()!==cell.textContent.trim()) return 0;
+    if(!badgeCache.has(badge.className)){
+      const cs=getComputedStyle(badge);
+      badgeCache.set(badge.className,Math.ceil((parseFloat(cs.paddingLeft)||0)+(parseFloat(cs.paddingRight)||0)+(parseFloat(cs.borderLeftWidth)||0)+(parseFloat(cs.borderRightWidth)||0)+(parseFloat(cs.marginLeft)||0)+(parseFloat(cs.marginRight)||0)));
+    }
+    return badgeCache.get(badge.className);
+  }
+  if(table.tHead) Array.from(table.tHead.rows).forEach(function(row){
+    Array.from(row.cells).forEach(function(th){
+      const span=Number(th.dataset.logicalSpan||th.colSpan||1);
+      const label=th.querySelector(".header-label");
+      ((label||th).textContent||"").trim().split(/\s+/).forEach(function(word){
+        add(Number(th.dataset.logicalStart),span,word,th,th.querySelector(".column-filter-trigger")?26:0);
+      });
+    });
+  });
+  Array.from(table.tBodies).forEach(function(body){
+    Array.from(body.rows).forEach(function(row){
+      let c=0;
+      Array.from(row.cells).forEach(function(cell){
+        const span=cell.colSpan||1;
+        if(span===1){
+          const text=(cell.textContent||"").trim();
+          // Numbers, dates, short marks, status labels and single-token codes (ГЭСН…, ТТН-…)
+          // stay whole; long names may be cut.
+          if(text && (cell.classList.contains("num") || NUMERIC_CELL_TEXT.test(text) || text.length<=16 || (text.length<=32 && !/\s/.test(text)))) add(c,1,text,cell,badgeExtra(cell));
+        }
+        c+=span;
+      });
+    });
+  });
+  if(!candidates.size) return {mins:mins,spans:[]};
+  const probe=document.createElement("span");
+  probe.style.cssText="position:absolute;left:-9999px;top:0;visibility:hidden;white-space:nowrap";
+  document.body.appendChild(probe);
+  const fontProps=["fontStyle","fontWeight","fontSize","fontFamily","fontVariantNumeric","letterSpacing"];
+  candidates.forEach(function(c){
+    const cs=getComputedStyle(styles.get(c.key));
+    fontProps.forEach(function(prop){probe.style[prop]=cs[prop];});
+    const pad=(parseFloat(cs.paddingLeft)||0)+(parseFloat(cs.paddingRight)||0)+(parseFloat(cs.borderLeftWidth)||0)+(parseFloat(cs.borderRightWidth)||0)+2;
+    c.texts.forEach(function(text){
+      probe.textContent=text;
+      const need=Math.ceil(probe.getBoundingClientRect().width+pad+c.extra);
+      if(c.span===1) mins[c.index]=Math.max(mins[c.index],need);
+      else {
+        const sk=c.index+"/"+c.span;
+        const prev=spans.get(sk);
+        if(!prev || prev.need<need) spans.set(sk,{start:c.index,span:c.span,need:need});
+      }
+    });
+  });
+  probe.remove();
+  return {mins:mins,spans:Array.from(spans.values())};
 }
 
 function tableWidthStorageKey(table) {
@@ -520,6 +611,10 @@ function tableColumnLocked(table,index) {
 }
 
 function tableColumnResizeMinimum(table,index) {
+  return Math.max(tableColumnTypeMinimum(table,index),(table._contentMins&&table._contentMins[index])||0);
+}
+
+function tableColumnTypeMinimum(table,index) {
   if(table.classList.contains("ks-table") && index>=2 && index<=4) {
     return Math.max(tableColumnMinimum(table,index),intrinsicColumnWidth(table,index));
   }
@@ -557,6 +652,14 @@ function installResizeAutofit(table) {
       return Number.isFinite(n) && n>=min ? n : min;
     });
   }
+  const content=columnContentMinimums(table,count);
+  content.spans.forEach(function(s){
+    let sum=0;
+    for(let i=s.start;i<s.start+s.span;i++) sum+=Math.max(widths[i],content.mins[i]);
+    if(sum<s.need) content.mins[s.start+s.span-1]=Math.max(content.mins[s.start+s.span-1],widths[s.start+s.span-1]+s.need-sum);
+  });
+  table._contentMins=content.mins;
+  widths=widths.map(function(w,i){return Math.max(w,content.mins[i]||0);});
   if(table.classList.contains("est-table")) {
     const policyKey="filimonova.tablewidths."+currentViewKey()+"."+(table.dataset.tableKey||table.className.replace(/\s+/g,"."))+".identity-policy";
     if(localStorage.getItem(policyKey)!=="3") {

@@ -98,7 +98,7 @@ function renderMontage(tab) {
         ?"Проектное количество на уровне уже смонтировано."
         : available<1
           ?"Нет физически доступных поставленных изделий этой номенклатуры."
-          :"ЛКМ +1 · ПКМ −1";
+          :MONTAGE_CLICK_HINT;
 
     body+='<tr class="data-row montage-data-row'+(floorState.locked?' montage-floor-locked':'')+'" data-material-id="'+esc(r.catalog_item_id||"")+'" data-spec-row-id="'+esc(r.id)+'">'+
       '<td class="sticky-1 center">'+esc(r.position_no)+'</td>'+
@@ -136,11 +136,44 @@ function renderMontage(tab) {
     '</tr></thead><tbody>'+body+'</tbody></table></div></div>';
 }
 
-async function adjustMontageFact(specificationRowId,eventDate,delta) {
+const MONTAGE_CLICK_HINT="Щелчок по дню добавляет 1 шт., правый щелчок убирает 1 шт.";
+
+// A click changes the fact at once, so every change offers an undo for a few seconds.
+let montageUndoTimer=null;
+function showMontageUndo(cell,delta) {
+  const old=document.querySelector(".montage-undo");
+  if(old) old.remove();
+  if(montageUndoTimer){clearTimeout(montageUndoTimer);montageUndoTimer=null;}
+  const row=cell.closest("tr");
+  const mark=row&&row.cells[1]?row.cells[1].textContent.trim():"";
+  const date=cell.dataset.montageDate.split("-").reverse().slice(0,2).join(".");
+  const specRowId=cell.dataset.montageSpecRow, eventDate=cell.dataset.montageDate, level=ui.montage.level;
+  const bar=document.createElement("div");
+  bar.className="montage-undo";
+  bar.setAttribute("role","status");
+  bar.innerHTML='<span>'+esc((delta>0?"Добавлено":"Убрано")+" 1 шт.: "+mark+", уровень "+level+", "+date)+'</span><button type="button">Отменить</button>';
+  document.body.appendChild(bar);
+  function close(){bar.remove();if(montageUndoTimer){clearTimeout(montageUndoTimer);montageUndoTimer=null;}}
+  bar.querySelector("button").onclick=async function(){
+    const btn=this;
+    btn.disabled=true;
+    try{
+      await adjustMontageFact(specRowId,eventDate,-delta,level);
+      close();
+      rerenderContent();
+    }catch(err){
+      btn.disabled=false;
+      alert("Не удалось отменить:\n"+(err&&err.message?err.message:String(err)));
+    }
+  };
+  montageUndoTimer=setTimeout(close,8000);
+}
+
+async function adjustMontageFact(specificationRowId,eventDate,delta,levelCode) {
   const result=await client.rpc("adjust_montage_fact",{
     p_project_id:dataState.project.id,
     p_specification_row_id:specificationRowId,
-    p_level_code:ui.montage.level,
+    p_level_code:levelCode||ui.montage.level,
     p_event_date:eventDate,
     p_delta:delta
   });
@@ -161,6 +194,7 @@ function wireMontageControls() {
       cell.classList.add("montage-busy");
       try{
         await adjustMontageFact(cell.dataset.montageSpecRow,cell.dataset.montageDate,delta);
+        showMontageUndo(cell,delta);
         rerenderContent();
       }catch(err){
         alert("Монтаж не изменён:\n"+(err&&err.message?err.message:String(err)));
