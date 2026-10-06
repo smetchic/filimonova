@@ -168,7 +168,7 @@ function buildContext(pageKey, tab) {
       const periodSource=(dataState.accountingPeriodSources||[]).find(function(x){return periodKey(x.period_month)===ui.s29.period;});
       const source=periodSource?(dataState.imports||[]).find(function(x){return x.id===periodSource.import_id;}):null;
       const stale=!!doc&&!!signed&&!!periodSource&&(doc.avr_version_id!==signed.id||doc.accounting_import_id!==periodSource.import_id);
-      let actions='<button class="context-link" data-s29-excel type="button" '+(!doc?'disabled':'')+'>Сформировать Excel</button>';
+      let actions='<button class="context-link" data-s29-form type="button" '+(!doc?'disabled':'')+'>Бланк С-29</button><button class="context-link" data-s29-excel type="button" '+(!doc?'disabled':'')+'>Расшифровка Excel</button>';
       if(signed&&periodSource&&(!doc||doc.status!=="fixed")) actions='<button class="context-link" data-s29-calculate type="button">'+(doc?(stale?'АВР месяца изменился · Обновить данные':'Пересчитать'):'Рассчитать С-29')+'</button>'+actions;
       if(doc&&doc.status!=="fixed") actions+='<button class="context-link" data-s29-fix="'+doc.id+'" type="button">Зафиксировать</button>';
       if(doc&&doc.status==="fixed") actions+='<span class="execution-status signed">Зафиксирован</span>';
