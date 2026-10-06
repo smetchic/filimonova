@@ -431,7 +431,7 @@ async function setAvrVersionState(versionId,action) {
     if(!ok) return;
   }
   if(action==="unsign"){
-    const ok=await executionConfirm("Отмена подписания АВР","Версия v"+version.version_no+" снова станет рабочей версией «Используется». Для тестирования действие временно доступно без проверки роли администратора.","Отменить подписание");
+    const ok=await executionConfirm("Отмена подписания АВР","Версия v"+version.version_no+" снова станет рабочей версией «Используется». Действие доступно только администратору.","Отменить подписание");
     if(!ok) return;
   }
   const result=await client.rpc("set_avr_version_state",{p_project_id:dataState.project.id,p_version_id:versionId,p_action:action});
@@ -758,9 +758,9 @@ function ensureJsZipLoaded() {
   return jszipLoadPromise;
 }
 
-// Бланк С-29 (assets/templates/s29-blank.xlsx): строка 26 — образец строки таблицы,
+// Бланк С-29 (assets/templates/s29-blank.xlsx): строка 28 — образец строки таблицы,
 // всё ниже неё сдвигается на число добавленных строк.
-const S29_FORM_ROW=26;
+const S29_FORM_ROW=28;
 function xmlEsc(value) { return String(value==null?"":value).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 function s29CellXml(ref,style,value) {
   const s=style?' s="'+style+'"':"";
@@ -778,17 +778,64 @@ function s29ShiftRef(ref,shift) {
   return ref.replace(/(\$?[A-Z]+\$?)(\d+)/g,function(all,col,row){const n=Number(row);return col+(n>S29_FORM_ROW?n+shift:n);});
 }
 
+const S29_REQ_FIELDS=[
+  ["org","Организация","Наименование организации"],
+  ["approverPos","Утверждает: должность","Например, Главный инженер"],
+  ["approverName","Утверждает: инициалы, фамилия",""],
+  ["object","Объект строительства","Полное наименование объекта"],
+  ["part","Строка под объектом","Например, Жилой дом № … по генплану."],
+  ["actNumber","Номер акта (АВР)",""],
+  ["mol","Материально ответственное лицо",""]
+];
+function s29RequisitesKey() { return "filimonova.s29.requisites."+(dataState.project&&dataState.project.id||""); }
+
+// Реквизиты шапки бланка: спрашиваем перед выгрузкой и запоминаем в этом браузере.
+function askS29Requisites(doc) {
+  let saved={};
+  try{saved=JSON.parse(localStorage.getItem(s29RequisitesKey())||"{}")||{};}catch(e){saved={};}
+  const avrDoc=(dataState.avrDocuments||[]).find(function(x){return periodKey(x.period_month)===periodKey(doc.period_month);});
+  const values=Object.assign({object:dataState.project&&(dataState.project.full_name||dataState.project.name)||""},saved,{actNumber:String(avrDoc&&avrDoc.display_number||"").replace(/^№\s*/,"")});
+  return new Promise(function(resolve){
+    const backdrop=document.createElement("div");
+    backdrop.className="spec-import-backdrop open execution-confirm";
+    backdrop.innerHTML='<div class="spec-import-modal execution-confirm-card"><div class="spec-import-head"><div><strong>Бланк С-29 за '+esc(periodLabel(doc.period_month,false).toLowerCase())+'</strong><span>Реквизиты шапки. Они запомнятся для следующих выгрузок.</span></div><button class="spec-import-close" type="button">×</button></div>'+
+      '<div class="supplier-import-fields" style="grid-template-columns:1fr">'+S29_REQ_FIELDS.map(function(f){return '<label><span>'+esc(f[1])+'</span><input type="text" data-s29-req="'+f[0]+'" placeholder="'+esc(f[2])+'" value="'+esc(values[f[0]]||"")+'"></label>';}).join("")+'</div>'+
+      '<div class="spec-import-foot"><button class="context-link execution-confirm-cancel" type="button">Отмена</button><span class="spacer"></span><button class="context-link execution-confirm-apply" type="button">Сформировать бланк</button></div></div>';
+    document.body.appendChild(backdrop);
+    let done=false;
+    function finish(ok){
+      if(done)return;done=true;
+      const result={};
+      backdrop.querySelectorAll("[data-s29-req]").forEach(function(input){result[input.dataset.s29Req]=input.value.trim();});
+      backdrop.remove();
+      if(!ok) return resolve(null);
+      const keep=Object.assign({},result);delete keep.actNumber;
+      try{localStorage.setItem(s29RequisitesKey(),JSON.stringify(keep));}catch(e){}
+      resolve(result);
+    }
+    backdrop.querySelector(".spec-import-close").onclick=function(){finish(false);};
+    backdrop.querySelector(".execution-confirm-cancel").onclick=function(){finish(false);};
+    backdrop.querySelector(".execution-confirm-apply").onclick=function(){finish(true);};
+    backdrop.onclick=function(e){if(e.target===backdrop) finish(false);};
+  });
+}
+
+const s29Num=new Intl.NumberFormat("ru-RU",{maximumFractionDigits:3});
+function s29Sign(value) { const v=s29Round(value);return v===0?"":(v>0?"+":"-")+s29Num.format(Math.abs(v)); }
+
 async function exportS29Form() {
   const doc=selectedS29Document();if(!doc) return;
+  const req=await askS29Requisites(doc);if(!req) return;
   try{
     await ensureJsZipLoaded();
-    const response=await fetch("./assets/templates/s29-blank.xlsx?v=20261006");
+    const response=await fetch("./assets/templates/s29-blank.xlsx?v=20261006b");
     if(!response.ok) throw new Error("Не удалось загрузить бланк С-29.");
     const zip=await JSZip.loadAsync(await response.arrayBuffer());
     const sheetPath="xl/worksheets/sheet1.xml";
     let sheet=await zip.file(sheetPath).async("string");
     let book=await zip.file("xl/workbook.xml").async("string");
     const catalog=new Map(dataState.catalogItems.map(function(x){return [x.id,x];}));
+    const accounting=new Map((dataState.accountingRows||[]).map(function(x){return [x.id,x];}));
     const rows=(dataState.s29Rows||[]).filter(function(x){return x.document_id===doc.id;}).map(function(r){return {r:r,item:catalog.get(r.catalog_item_id)||{}};});
     rows.sort(function(a,b){return String(a.item.mark||"").localeCompare(String(b.item.mark||""),"ru",{numeric:true});});
     const shift=Math.max(rows.length,1)-1;
@@ -805,26 +852,32 @@ async function exportS29Form() {
     });
     const lines=rows.map(function(x,i){
       const r=x.r,norm=Number(r.avr_quantity_m3||0),economy=Number(r.economy_m3||0),overrun=Number(r.overrun_m3||0);
-      const note=[exFmt0(r.avr_quantity_pieces)+" шт. × "+exFmt(r.volume_per_piece_snapshot_m3)+" м³",r.note||""].filter(Boolean).join("; ");
-      const values={A:i+1,B:x.item.mark||"",C:x.item.name||"",D:"м³",E:norm,F:s29Round(norm-economy+overrun),G:s29Round(economy-overrun),H:Number(r.written_off_m3||0),I:note};
+      const name=(x.item.name||"")+"\n1 шт. = "+s29Num.format(Number(r.volume_per_piece_snapshot_m3||0))+" м³; по АВР — "+exFmt0(r.avr_quantity_pieces)+" шт.";
+      const sources=(dataState.s29Allocations||[]).filter(function(a){return a.s29_row_id===r.id;}).map(function(a){const acc=accounting.get(a.accounting_row_id)||{};return (acc.material_code||"—")+" - "+s29Num.format(Number(a.allocated_m3||0))+" м3";});
+      const note=sources.concat(r.note?[r.note]:[]).join("\n");
+      const values={A:i+1,B:x.item.mark||"",C:name,D:"м³",E:s29Round(norm),F:s29Round(norm-economy+overrun),G:s29Sign(economy-overrun),H:s29Round(r.written_off_m3),I:note};
       const row=S29_FORM_ROW+i;
-      const lines=Math.max(1,s29TextLines(values.C,34),s29TextLines(values.I,10));
-      return '<row r="'+row+'" spans="1:9" ht="'+(lines*15+3)+'" customHeight="1">'+"ABCDEFGHI".split("").map(function(col){return s29CellXml(col+row,styles[col],values[col]);}).join("")+'</row>';
+      const height=Math.max(2,s29TextLines(values.C,36),s29TextLines(values.I,21));
+      return '<row r="'+row+'" spans="1:9" ht="'+(height*14+2)+'" customHeight="1">'+"ABCDEFGHI".split("").map(function(col){return s29CellXml(col+row,styles[col],values[col]);}).join("")+'</row>';
     });
     sheet=sheet.replace(rowRe,lines.length?lines.join(""):sample[0]);
     sheet=sheet.replace(/<mergeCell ref="([^"]+)"\/>/g,function(all,ref){return '<mergeCell ref="'+s29ShiftRef(ref,shift)+'"/>';});
     sheet=sheet.replace(/<dimension ref="([^"]+)"\/>/,function(all,ref){return '<dimension ref="'+s29ShiftRef(ref,shift)+'"/>';});
     book=book.replace(/(<definedName [^>]*>)([^<]*)(<\/definedName>)/g,function(all,open,ref,close){return open+s29ShiftRef(ref,shift)+close;});
 
-    sheet=s29SetCell(sheet,"D11","за "+periodLabel(doc.period_month,false).toLowerCase());
-    sheet=s29SetCell(sheet,"D12",dataState.project&&dataState.project.name||"");
-    sheet=s29SetCell(sheet,"D16","АВР за "+periodLabel(doc.period_month,false).toLowerCase());
-    sheet=s29SetCell(sheet,"D"+(33+shift),new Date().toLocaleDateString("ru-RU"));
+    const month=periodLabel(doc.period_month,false).toLowerCase();
+    sheet=s29SetCell(sheet,"A2",req.org);
+    sheet=s29SetCell(sheet,"E5",req.approverPos);
+    sheet=s29SetCell(sheet,"H5",req.approverName);
+    sheet=s29SetCell(sheet,"A12","Объект строительства: "+req.object);
+    sheet=s29SetCell(sheet,"A14",req.part);
+    sheet=s29SetCell(sheet,"A18","Номер и наименование акта: "+(req.actNumber?"№"+req.actNumber+" ":"")+"за "+month+" года");
+    sheet=s29SetCell(sheet,"D20",req.mol);
 
     zip.file(sheetPath,sheet);
     zip.file("xl/workbook.xml",book);
     const blob=await zip.generateAsync({type:"blob",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",compression:"DEFLATE"});
-    xlDownload(blob,"С-29_бланк_"+periodKey(doc.period_month)+".xlsx");
+    xlDownload(blob,"С-29_"+periodKey(doc.period_month)+".xlsx");
   }catch(err){alert("Бланк С-29 не сформирован:\n"+(err&&err.message?err.message:String(err)));}
 }
 
