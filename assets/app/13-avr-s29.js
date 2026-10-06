@@ -620,26 +620,126 @@ async function fixS29(documentId) {
   await refreshProjectDataSlices(["s29Documents","s29Rows","s29Allocations","s29Carryovers","s29CarryoverSettlements"],dataState.project);renderPage("s29",0);
 }
 
+// Оформленная книга Excel без шаблона: заголовок, шапка таблицы с заливкой,
+// рамки, переносы, итоги, закреплённая шапка, печать на ширину листа.
+const XL_STYLES='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+  '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
+  '<numFmts count="2"><numFmt numFmtId="164" formatCode="#,##0.000"/><numFmt numFmtId="165" formatCode="#,##0"/></numFmts>'+
+  '<fonts count="4"><font><sz val="11"/><name val="Calibri"/><family val="2"/><charset val="204"/></font>'+
+  '<font><b/><sz val="14"/><name val="Calibri"/><family val="2"/><charset val="204"/></font>'+
+  '<font><sz val="10"/><color rgb="FF595959"/><name val="Calibri"/><family val="2"/><charset val="204"/></font>'+
+  '<font><b/><sz val="11"/><name val="Calibri"/><family val="2"/><charset val="204"/></font></fonts>'+
+  '<fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>'+
+  '<fill><patternFill patternType="solid"><fgColor rgb="FFDDE5F0"/><bgColor indexed="64"/></patternFill></fill>'+
+  '<fill><patternFill patternType="solid"><fgColor rgb="FFF2F2F2"/><bgColor indexed="64"/></patternFill></fill></fills>'+
+  '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>'+
+  '<border><left style="thin"><color rgb="FF8C8C8C"/></left><right style="thin"><color rgb="FF8C8C8C"/></right><top style="thin"><color rgb="FF8C8C8C"/></top><bottom style="thin"><color rgb="FF8C8C8C"/></bottom><diagonal/></border></borders>'+
+  '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'+
+  '<cellXfs count="12">'+
+  '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'+
+  '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>'+
+  '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>'+
+  '<xf numFmtId="0" fontId="3" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>'+
+  '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>'+
+  '<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment vertical="top"/></xf>'+
+  '<xf numFmtId="0" fontId="3" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="top"/></xf>'+
+  '<xf numFmtId="164" fontId="3" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="top"/></xf>'+
+  '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top" wrapText="1"/></xf>'+
+  '<xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment vertical="top"/></xf>'+
+  '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'+
+  '<xf numFmtId="165" fontId="3" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="top"/></xf>'+
+  '</cellXfs><cellStyles count="1"><cellStyle name="Обычный" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+const XL_CELL={text:4,num:5,center:8,int:9};
+
+function s29TextLines(value,width) {
+  if(value===null||value===undefined||value==="") return 1;
+  return String(value).split("\n").reduce(function(sum,part){return sum+Math.max(1,Math.ceil(part.length/width));},0);
+}
+function xlCol(index) { let s="";index++;while(index>0){const m=(index-1)%26;s=String.fromCharCode(65+m)+s;index=Math.floor((index-1)/26);}return s; }
+
+function xlSheetXml(sheet) {
+  const cols=sheet.columns,last=xlCol(cols.length-1),rows=[];
+  rows.push('<row r="1" ht="22" customHeight="1">'+s29CellXml("A1",1,sheet.title)+'</row>');
+  (sheet.subtitle||[]).forEach(function(line,i){rows.push('<row r="'+(i+2)+'">'+s29CellXml("A"+(i+2),2,line)+'</row>');});
+  const headRow=(sheet.subtitle||[]).length+3;
+  const headLines=Math.max.apply(null,cols.map(function(c){return s29TextLines(c.title,c.width-2);}));
+  rows.push('<row r="'+headRow+'" ht="'+(headLines*15+4)+'" customHeight="1">'+cols.map(function(c,i){return s29CellXml(xlCol(i)+headRow,3,c.title);}).join("")+'</row>');
+  sheet.rows.forEach(function(values,n){
+    const r=headRow+1+n;
+    const lines=Math.max.apply(null,cols.map(function(c,i){return (c.type||"text")==="text"||c.type==="center"?s29TextLines(values[i],c.width-2):1;}));
+    rows.push('<row r="'+r+'" ht="'+(lines*15+3)+'" customHeight="1">'+cols.map(function(c,i){return s29CellXml(xlCol(i)+r,XL_CELL[c.type||"text"],values[i]);}).join("")+'</row>');
+  });
+  if(sheet.totals){
+    const r=headRow+1+sheet.rows.length;
+    rows.push('<row r="'+r+'">'+cols.map(function(c,i){
+      if(i===(sheet.totalLabel||0)) return s29CellXml(xlCol(i)+r,6,"Итого");
+      if(sheet.totals.indexOf(i)<0) return s29CellXml(xlCol(i)+r,6,"");
+      const sum=sheet.rows.reduce(function(acc,row){return acc+(Number(row[i])||0);},0);
+      return s29CellXml(xlCol(i)+r,c.type==="int"?11:7,Math.round(sum*1e6)/1e6);
+    }).join("")+'</row>');
+  }
+  const lastRow=headRow+sheet.rows.length+(sheet.totals?1:0);
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'+
+    '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:'+last+Math.max(lastRow,headRow)+'"/>'+
+    '<sheetViews><sheetView workbookViewId="0" zoomScale="100"><pane ySplit="'+headRow+'" topLeftCell="A'+(headRow+1)+'" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'+
+    '<sheetFormatPr defaultRowHeight="15"/><cols>'+cols.map(function(c,i){return '<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+c.width+'" customWidth="1"/>';}).join("")+'</cols>'+
+    '<sheetData>'+rows.join("")+'</sheetData>'+
+    (sheet.rows.length?'<autoFilter ref="A'+headRow+':'+last+(headRow+sheet.rows.length)+'"/>':'')+
+    '<printOptions horizontalCentered="1"/><pageMargins left="0.5" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/>'+
+    '<pageSetup paperSize="9" orientation="'+(sheet.landscape?"landscape":"portrait")+'" fitToWidth="1" fitToHeight="0"/>'+
+    '<headerFooter><oddFooter>&amp;R&amp;8Лист &amp;P из &amp;N</oddFooter></headerFooter></worksheet>';
+}
+
+async function xlBuildWorkbook(sheets) {
+  await ensureJsZipLoaded();
+  const zip=new JSZip();
+  zip.file("[Content_Types].xml",'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'+sheets.map(function(x,i){return '<Override PartName="/xl/worksheets/sheet'+(i+1)+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>';}).join("")+'</Types>');
+  zip.file("_rels/.rels",'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
+  zip.file("xl/_rels/workbook.xml.rels",'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+sheets.map(function(x,i){return '<Relationship Id="rId'+(i+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet'+(i+1)+'.xml"/>';}).join("")+'<Relationship Id="rId'+(sheets.length+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>');
+  const names=sheets.map(function(x){return '<definedName name="_xlnm.Print_Titles" localSheetId="'+sheets.indexOf(x)+'">\''+xmlEsc(x.name)+'\'!$'+((x.subtitle||[]).length+3)+':$'+((x.subtitle||[]).length+3)+'</definedName>';}).join("");
+  zip.file("xl/workbook.xml",'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView/></bookViews><sheets>'+sheets.map(function(x,i){return '<sheet name="'+xmlEsc(x.name)+'" sheetId="'+(i+1)+'" r:id="rId'+(i+1)+'"/>';}).join("")+'</sheets><definedNames>'+names+'</definedNames></workbook>');
+  zip.file("xl/styles.xml",XL_STYLES);
+  sheets.forEach(function(x,i){zip.file("xl/worksheets/sheet"+(i+1)+".xml",xlSheetXml(x));});
+  return zip.generateAsync({type:"blob",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",compression:"DEFLATE"});
+}
+
+function xlDownload(blob,fileName) {
+  const link=document.createElement("a");
+  link.href=URL.createObjectURL(blob);link.download=fileName;
+  document.body.appendChild(link);link.click();link.remove();
+  setTimeout(function(){URL.revokeObjectURL(link.href);},1000);
+}
+
 async function exportS29Excel() {
-  try{await ensureXlsxLoaded();}catch(err){return alert(err&&err.message?err.message:String(err));}
   const doc=selectedS29Document();if(!doc) return;
-  const catalog=new Map(dataState.catalogItems.map(function(x){return [x.id,x];}));
-  const rows=(dataState.s29Rows||[]).filter(function(x){return x.document_id===doc.id;});
-  const table2=[
-    ["С-29 · Таблица 2"],["Объект",dataState.project&&dataState.project.name||"Филимонова"],["Отчётный месяц",periodLabel(doc.period_month,false)],["Статус",doc.status==="fixed"?"Зафиксирован":"Черновик"],[],
-    ["Код материального ресурса","Наименование материала","Ед. изм.","Количество по производственным нормам, м³","Фактически списано, м³","Экономия, м³","Перерасход, м³","Примечание"]
-  ];
-  rows.forEach(function(r){const item=catalog.get(r.catalog_item_id)||{};table2.push([item.mark||"",(item.name||"")+"\n1 шт. = "+exFmt(r.volume_per_piece_snapshot_m3)+" м³; по АВР — "+exFmt0(r.avr_quantity_pieces)+" шт.","м³",Number(r.avr_quantity_m3||0),Number(r.written_off_m3||0),Number(r.economy_m3||0),Number(r.overrun_m3||0),r.note||""]);});
-  table2.push([],['Материально ответственное лицо','',''],['Начальник участка','',''],['Дата составления',new Date().toLocaleDateString('ru-RU')]);
-  const detail=[["Расшифровка экономии/перерасхода за "+periodLabel(doc.period_month,false)],[],["Марка","Наименование","Вид","Месяц происхождения","Возникло, м³","Погашено, м³","Остаток, м³"]];
-  (dataState.s29Carryovers||[]).filter(function(x){return x.origin_document_id===doc.id;}).forEach(function(x){const item=catalog.get(x.catalog_item_id)||{};const settled=(dataState.s29CarryoverSettlements||[]).filter(function(s){return s.carryover_id===x.id;}).reduce(function(sum,s){return sum+Number(s.settled_m3||0);},0);detail.push([item.mark||"",item.name||"",x.kind==="economy"?"Экономия":"Перерасход",periodLabel(x.origin_month,false),Number(x.created_m3||0),settled,Number(x.created_m3||0)-settled]);});
-  const registry=[["Реестр экономии/перерасхода (накопительный)"],[],["Месяц возникновения","Марка","Наименование","Вид","Возникло, м³","Погашено, м³","Месяц погашения","Остаток, м³"]];
-  (dataState.s29Carryovers||[]).forEach(function(x){const item=catalog.get(x.catalog_item_id)||{};const settlements=(dataState.s29CarryoverSettlements||[]).filter(function(s){return s.carryover_id===x.id;});const settled=settlements.reduce(function(sum,s){return sum+Number(s.settled_m3||0);},0);registry.push([periodLabel(x.origin_month,false),item.mark||"",item.name||"",x.kind==="economy"?"Экономия":"Перерасход",Number(x.created_m3||0),settled,settlements.map(function(s){return periodLabel(s.settlement_month,false);}).join(", ")||"—",Number(x.created_m3||0)-settled]);});
-  const wb=XLSX.utils.book_new();
-  const ws1=XLSX.utils.aoa_to_sheet(table2);const ws2=XLSX.utils.aoa_to_sheet(detail);const ws3=XLSX.utils.aoa_to_sheet(registry);
-  ws1['!cols']=[{wch:22},{wch:58},{wch:10},{wch:22},{wch:20},{wch:16},{wch:16},{wch:28}];ws2['!cols']=[{wch:16},{wch:48},{wch:18},{wch:20},{wch:16},{wch:16},{wch:16}];ws3['!cols']=[{wch:20},{wch:16},{wch:48},{wch:18},{wch:16},{wch:16},{wch:22},{wch:16}];
-  XLSX.utils.book_append_sheet(wb,ws1,"С-29 (таблица 2)");XLSX.utils.book_append_sheet(wb,ws2,"Расшифровка "+periodKey(doc.period_month));XLSX.utils.book_append_sheet(wb,ws3,"Реестр экономии-перерасхода");
-  XLSX.writeFile(wb,"С-29_"+periodKey(doc.period_month)+".xlsx");
+  try{
+    const month=periodLabel(doc.period_month,false);
+    const object=dataState.project&&dataState.project.name||"";
+    const status=doc.status==="fixed"?"зафиксирован":"черновик";
+    const catalog=new Map(dataState.catalogItems.map(function(x){return [x.id,x];}));
+    const byMark=function(a,b){return String(a.mark||"").localeCompare(String(b.mark||""),"ru",{numeric:true});};
+    const rows=(dataState.s29Rows||[]).filter(function(x){return x.document_id===doc.id;}).map(function(r){const item=catalog.get(r.catalog_item_id)||{};return {r:r,mark:item.mark||"",name:item.name||""};}).sort(byMark);
+    const settledFor=function(id){return (dataState.s29CarryoverSettlements||[]).filter(function(s){return s.carryover_id===id;});};
+    const sumSettled=function(list){return list.reduce(function(sum,s){return sum+Number(s.settled_m3||0);},0);};
+    const carry=function(x){const item=catalog.get(x.catalog_item_id)||{};return {x:x,mark:item.mark||"",name:item.name||""};};
+    const created=(dataState.s29Carryovers||[]).filter(function(x){return x.origin_document_id===doc.id;}).map(carry).sort(byMark);
+    const all=(dataState.s29Carryovers||[]).map(carry).sort(function(a,b){return String(a.x.origin_month).localeCompare(String(b.x.origin_month))||byMark(a,b);});
+    const sheets=[
+      {name:"С-29",title:"С-29 · Отчёт о расходе материалов за "+month.toLowerCase(),subtitle:["Объект: "+object+" · статус: "+status,"Объёмы в м³. Факт = по нормам − экономия + перерасход."],landscape:true,
+        columns:[{title:"№",width:5,type:"center"},{title:"Марка",width:14},{title:"Наименование материала",width:44},{title:"По АВР, шт.",width:11,type:"int"},{title:"Объём 1 шт., м³",width:12,type:"num"},{title:"По нормам, м³",width:13,type:"num"},{title:"Факт, м³",width:13,type:"num"},{title:"Экономия, м³",width:13,type:"num"},{title:"Перерасход, м³",width:13,type:"num"},{title:"Списано, м³",width:13,type:"num"},{title:"Примечание",width:24}],
+        rows:rows.map(function(x,i){const r=x.r,norm=Number(r.avr_quantity_m3||0),eco=Number(r.economy_m3||0),over=Number(r.overrun_m3||0);return [i+1,x.mark,x.name,Number(r.avr_quantity_pieces||0),Number(r.volume_per_piece_snapshot_m3||0),norm,norm-eco+over,eco,over,Number(r.written_off_m3||0),r.note||""];}),
+        totals:[3,5,6,7,8,9],totalLabel:1},
+      {name:"Расшифровка",title:"Экономия и перерасход, возникшие за "+month.toLowerCase(),subtitle:["Объект: "+object],
+        columns:[{title:"Марка",width:14},{title:"Наименование материала",width:44},{title:"Вид",width:12,type:"center"},{title:"Возникло, м³",width:13,type:"num"},{title:"Погашено, м³",width:13,type:"num"},{title:"Остаток, м³",width:13,type:"num"}],
+        rows:created.map(function(c){const settled=sumSettled(settledFor(c.x.id)),value=Number(c.x.created_m3||0);return [c.mark,c.name,c.x.kind==="economy"?"Экономия":"Перерасход",value,settled,value-settled];}),
+        },
+      {name:"Реестр",title:"Реестр экономии и перерасхода (накопительный)",subtitle:["Объект: "+object+" · на "+new Date().toLocaleDateString("ru-RU")],landscape:true,
+        columns:[{title:"Месяц возникновения",width:16},{title:"Марка",width:14},{title:"Наименование материала",width:40},{title:"Вид",width:12,type:"center"},{title:"Возникло, м³",width:13,type:"num"},{title:"Погашено, м³",width:13,type:"num"},{title:"Месяцы погашения",width:22},{title:"Остаток, м³",width:13,type:"num"}],
+        rows:all.map(function(c){const list=settledFor(c.x.id),settled=sumSettled(list),value=Number(c.x.created_m3||0);return [periodLabel(c.x.origin_month,false),c.mark,c.name,c.x.kind==="economy"?"Экономия":"Перерасход",value,settled,list.map(function(s){return periodLabel(s.settlement_month,false);}).join(", ")||"—",value-settled];})}
+    ];
+    xlDownload(await xlBuildWorkbook(sheets),"С-29_расшифровка_"+periodKey(doc.period_month)+".xlsx");
+  }catch(err){alert("Excel не сформирован:\n"+(err&&err.message?err.message:String(err)));}
 }
 
 let jszipLoadPromise=null;
@@ -707,7 +807,8 @@ async function exportS29Form() {
       const note=[exFmt0(r.avr_quantity_pieces)+" шт. × "+exFmt(r.volume_per_piece_snapshot_m3)+" м³",r.note||""].filter(Boolean).join("; ");
       const values={A:i+1,B:x.item.mark||"",C:x.item.name||"",D:"м³",E:norm,F:norm-economy+overrun,G:economy-overrun,H:Number(r.written_off_m3||0),I:note};
       const row=S29_FORM_ROW+i;
-      return '<row r="'+row+'" spans="1:9">'+"ABCDEFGHI".split("").map(function(col){return s29CellXml(col+row,styles[col],values[col]);}).join("")+'</row>';
+      const lines=Math.max(1,s29TextLines(values.C,34),s29TextLines(values.I,10));
+      return '<row r="'+row+'" spans="1:9" ht="'+(lines*15+3)+'" customHeight="1">'+"ABCDEFGHI".split("").map(function(col){return s29CellXml(col+row,styles[col],values[col]);}).join("")+'</row>';
     });
     sheet=sheet.replace(rowRe,lines.length?lines.join(""):sample[0]);
     sheet=sheet.replace(/<mergeCell ref="([^"]+)"\/>/g,function(all,ref){return '<mergeCell ref="'+s29ShiftRef(ref,shift)+'"/>';});
@@ -722,10 +823,7 @@ async function exportS29Form() {
     zip.file(sheetPath,sheet);
     zip.file("xl/workbook.xml",book);
     const blob=await zip.generateAsync({type:"blob",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",compression:"DEFLATE"});
-    const link=document.createElement("a");
-    link.href=URL.createObjectURL(blob);link.download="С-29_бланк_"+periodKey(doc.period_month)+".xlsx";
-    document.body.appendChild(link);link.click();link.remove();
-    setTimeout(function(){URL.revokeObjectURL(link.href);},1000);
+    xlDownload(blob,"С-29_бланк_"+periodKey(doc.period_month)+".xlsx");
   }catch(err){alert("Бланк С-29 не сформирован:\n"+(err&&err.message?err.message:String(err)));}
 }
 
