@@ -651,6 +651,7 @@ const XL_STYLES='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
   '</cellXfs><cellStyles count="1"><cellStyle name="Обычный" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
 const XL_CELL={text:4,num:5,center:8,int:9};
 
+function s29Round(value) { return Math.round(Number(value||0)*1e6)/1e6; }
 function s29TextLines(value,width) {
   if(value===null||value===undefined||value==="") return 1;
   return String(value).split("\n").reduce(function(sum,part){return sum+Math.max(1,Math.ceil(part.length/width));},0);
@@ -728,15 +729,15 @@ async function exportS29Excel() {
     const sheets=[
       {name:"С-29",title:"С-29 · Отчёт о расходе материалов за "+month.toLowerCase(),subtitle:["Объект: "+object+" · статус: "+status,"Объёмы в м³. Факт = по нормам − экономия + перерасход."],landscape:true,
         columns:[{title:"№",width:5,type:"center"},{title:"Марка",width:14},{title:"Наименование материала",width:44},{title:"По АВР, шт.",width:11,type:"int"},{title:"Объём 1 шт., м³",width:12,type:"num"},{title:"По нормам, м³",width:13,type:"num"},{title:"Факт, м³",width:13,type:"num"},{title:"Экономия, м³",width:13,type:"num"},{title:"Перерасход, м³",width:13,type:"num"},{title:"Списано, м³",width:13,type:"num"},{title:"Примечание",width:24}],
-        rows:rows.map(function(x,i){const r=x.r,norm=Number(r.avr_quantity_m3||0),eco=Number(r.economy_m3||0),over=Number(r.overrun_m3||0);return [i+1,x.mark,x.name,Number(r.avr_quantity_pieces||0),Number(r.volume_per_piece_snapshot_m3||0),norm,norm-eco+over,eco,over,Number(r.written_off_m3||0),r.note||""];}),
+        rows:rows.map(function(x,i){const r=x.r,norm=Number(r.avr_quantity_m3||0),eco=Number(r.economy_m3||0),over=Number(r.overrun_m3||0);return [i+1,x.mark,x.name,Number(r.avr_quantity_pieces||0),Number(r.volume_per_piece_snapshot_m3||0),norm,s29Round(norm-eco+over),eco,over,Number(r.written_off_m3||0),r.note||""];}),
         totals:[3,5,6,7,8,9],totalLabel:1},
       {name:"Расшифровка",title:"Экономия и перерасход, возникшие за "+month.toLowerCase(),subtitle:["Объект: "+object],
         columns:[{title:"Марка",width:14},{title:"Наименование материала",width:44},{title:"Вид",width:12,type:"center"},{title:"Возникло, м³",width:13,type:"num"},{title:"Погашено, м³",width:13,type:"num"},{title:"Остаток, м³",width:13,type:"num"}],
-        rows:created.map(function(c){const settled=sumSettled(settledFor(c.x.id)),value=Number(c.x.created_m3||0);return [c.mark,c.name,c.x.kind==="economy"?"Экономия":"Перерасход",value,settled,value-settled];}),
+        rows:created.map(function(c){const settled=sumSettled(settledFor(c.x.id)),value=Number(c.x.created_m3||0);return [c.mark,c.name,c.x.kind==="economy"?"Экономия":"Перерасход",value,settled,s29Round(value-settled)];}),
         },
       {name:"Реестр",title:"Реестр экономии и перерасхода (накопительный)",subtitle:["Объект: "+object+" · на "+new Date().toLocaleDateString("ru-RU")],landscape:true,
         columns:[{title:"Месяц возникновения",width:16},{title:"Марка",width:14},{title:"Наименование материала",width:40},{title:"Вид",width:12,type:"center"},{title:"Возникло, м³",width:13,type:"num"},{title:"Погашено, м³",width:13,type:"num"},{title:"Месяцы погашения",width:22},{title:"Остаток, м³",width:13,type:"num"}],
-        rows:all.map(function(c){const list=settledFor(c.x.id),settled=sumSettled(list),value=Number(c.x.created_m3||0);return [periodLabel(c.x.origin_month,false),c.mark,c.name,c.x.kind==="economy"?"Экономия":"Перерасход",value,settled,list.map(function(s){return periodLabel(s.settlement_month,false);}).join(", ")||"—",value-settled];})}
+        rows:all.map(function(c){const list=settledFor(c.x.id),settled=sumSettled(list),value=Number(c.x.created_m3||0);return [periodLabel(c.x.origin_month,false),c.mark,c.name,c.x.kind==="economy"?"Экономия":"Перерасход",value,settled,list.map(function(s){return periodLabel(s.settlement_month,false);}).join(", ")||"—",s29Round(value-settled)];})}
     ];
     xlDownload(await xlBuildWorkbook(sheets),"С-29_расшифровка_"+periodKey(doc.period_month)+".xlsx");
   }catch(err){alert("Excel не сформирован:\n"+(err&&err.message?err.message:String(err)));}
@@ -805,7 +806,7 @@ async function exportS29Form() {
     const lines=rows.map(function(x,i){
       const r=x.r,norm=Number(r.avr_quantity_m3||0),economy=Number(r.economy_m3||0),overrun=Number(r.overrun_m3||0);
       const note=[exFmt0(r.avr_quantity_pieces)+" шт. × "+exFmt(r.volume_per_piece_snapshot_m3)+" м³",r.note||""].filter(Boolean).join("; ");
-      const values={A:i+1,B:x.item.mark||"",C:x.item.name||"",D:"м³",E:norm,F:norm-economy+overrun,G:economy-overrun,H:Number(r.written_off_m3||0),I:note};
+      const values={A:i+1,B:x.item.mark||"",C:x.item.name||"",D:"м³",E:norm,F:s29Round(norm-economy+overrun),G:s29Round(economy-overrun),H:Number(r.written_off_m3||0),I:note};
       const row=S29_FORM_ROW+i;
       const lines=Math.max(1,s29TextLines(values.C,34),s29TextLines(values.I,10));
       return '<row r="'+row+'" spans="1:9" ht="'+(lines*15+3)+'" customHeight="1">'+"ABCDEFGHI".split("").map(function(col){return s29CellXml(col+row,styles[col],values[col]);}).join("")+'</row>';
