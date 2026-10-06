@@ -188,7 +188,7 @@ function renderAvrRegistry() {
       const source=importForVersion(v);
       let actions='<span class="context-muted">—</span>';
       if(v.state==="signed"||v.signed_at){
-        actions='<button class="inline-action" data-avr-unsign="'+v.id+'">Отменить подписание</button>';
+        actions=ui.isAdmin?'<button class="inline-action" data-avr-unsign="'+v.id+'">Отменить подписание</button>':'<span class="context-muted">подписан</span>';
       }else{
         actions=(v.state!=="in_use"?'<button class="inline-action" data-avr-use="'+v.id+'">использовать</button>':'')+'<button class="inline-action" data-avr-sign="'+v.id+'">Отметить как подписанный</button>';
       }
@@ -642,6 +642,93 @@ async function exportS29Excel() {
   XLSX.writeFile(wb,"С-29_"+periodKey(doc.period_month)+".xlsx");
 }
 
+let jszipLoadPromise=null;
+function ensureJsZipLoaded() {
+  if(window.JSZip) return Promise.resolve(window.JSZip);
+  if(jszipLoadPromise) return jszipLoadPromise;
+  jszipLoadPromise=new Promise(function(resolve,reject){
+    const script=document.createElement("script");
+    script.src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+    script.async=true;
+    script.onload=function(){if(window.JSZip) resolve(window.JSZip); else reject(new Error("Модуль ZIP загрузился без JSZip."));};
+    script.onerror=function(){jszipLoadPromise=null;reject(new Error("Не удалось загрузить модуль для бланка Excel."));};
+    document.head.appendChild(script);
+  });
+  return jszipLoadPromise;
+}
+
+// Бланк С-29 (assets/templates/s29-blank.xlsx): строка 26 — образец строки таблицы,
+// всё ниже неё сдвигается на число добавленных строк.
+const S29_FORM_ROW=26;
+function xmlEsc(value) { return String(value==null?"":value).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function s29CellXml(ref,style,value) {
+  const s=style?' s="'+style+'"':"";
+  if(value===null||value===undefined||value==="") return '<c r="'+ref+'"'+s+'/>';
+  if(typeof value==="number") return '<c r="'+ref+'"'+s+'><v>'+(Number.isFinite(value)?value:0)+'</v></c>';
+  return '<c r="'+ref+'"'+s+' t="inlineStr"><is><t xml:space="preserve">'+xmlEsc(value)+'</t></is></c>';
+}
+function s29SetCell(sheet,ref,value) {
+  const re=new RegExp('<c r="'+ref+'"(?: s="(\\d+)")?(?: t="\\w+")?\\s*(?:/>|>[\\s\\S]*?</c>)');
+  const m=sheet.match(re);
+  if(!m) throw new Error("В бланке С-29 нет ячейки "+ref);
+  return sheet.replace(re,s29CellXml(ref,m[1],value));
+}
+function s29ShiftRef(ref,shift) {
+  return ref.replace(/(\$?[A-Z]+\$?)(\d+)/g,function(all,col,row){const n=Number(row);return col+(n>S29_FORM_ROW?n+shift:n);});
+}
+
+async function exportS29Form() {
+  const doc=selectedS29Document();if(!doc) return;
+  try{
+    await ensureJsZipLoaded();
+    const response=await fetch("./assets/templates/s29-blank.xlsx?v=20261006");
+    if(!response.ok) throw new Error("Не удалось загрузить бланк С-29.");
+    const zip=await JSZip.loadAsync(await response.arrayBuffer());
+    const sheetPath="xl/worksheets/sheet1.xml";
+    let sheet=await zip.file(sheetPath).async("string");
+    let book=await zip.file("xl/workbook.xml").async("string");
+    const catalog=new Map(dataState.catalogItems.map(function(x){return [x.id,x];}));
+    const rows=(dataState.s29Rows||[]).filter(function(x){return x.document_id===doc.id;}).map(function(r){return {r:r,item:catalog.get(r.catalog_item_id)||{}};});
+    rows.sort(function(a,b){return String(a.item.mark||"").localeCompare(String(b.item.mark||""),"ru",{numeric:true});});
+    const shift=Math.max(rows.length,1)-1;
+
+    const rowRe=new RegExp('<row r="'+S29_FORM_ROW+'"[^>]*>([\\s\\S]*?)</row>');
+    const sample=sheet.match(rowRe);
+    if(!sample) throw new Error("В бланке С-29 нет строки таблицы.");
+    const styles={};
+    sample[1].replace(/<c r="([A-Z]+)\d+"(?: s="(\d+)")?/g,function(all,col,s){styles[col]=s;return all;});
+    sheet=sheet.replace(/<row r="(\d+)"([^>]*?)(\/>|>([\s\S]*?)<\/row>)/g,function(all,num,attrs,tail,body){
+      const n=Number(num);if(n<=S29_FORM_ROW) return all;
+      if(body===undefined) return '<row r="'+(n+shift)+'"'+attrs+'/>';
+      return '<row r="'+(n+shift)+'"'+attrs+'>'+body.replace(/<c r="([A-Z]+)\d+"/g,function(c,col){return '<c r="'+col+(n+shift)+'"';})+'</row>';
+    });
+    const lines=rows.map(function(x,i){
+      const r=x.r,norm=Number(r.avr_quantity_m3||0),economy=Number(r.economy_m3||0),overrun=Number(r.overrun_m3||0);
+      const note=[exFmt0(r.avr_quantity_pieces)+" шт. × "+exFmt(r.volume_per_piece_snapshot_m3)+" м³",r.note||""].filter(Boolean).join("; ");
+      const values={A:i+1,B:x.item.mark||"",C:x.item.name||"",D:"м³",E:norm,F:norm-economy+overrun,G:economy-overrun,H:Number(r.written_off_m3||0),I:note};
+      const row=S29_FORM_ROW+i;
+      return '<row r="'+row+'" spans="1:9">'+"ABCDEFGHI".split("").map(function(col){return s29CellXml(col+row,styles[col],values[col]);}).join("")+'</row>';
+    });
+    sheet=sheet.replace(rowRe,lines.length?lines.join(""):sample[0]);
+    sheet=sheet.replace(/<mergeCell ref="([^"]+)"\/>/g,function(all,ref){return '<mergeCell ref="'+s29ShiftRef(ref,shift)+'"/>';});
+    sheet=sheet.replace(/<dimension ref="([^"]+)"\/>/,function(all,ref){return '<dimension ref="'+s29ShiftRef(ref,shift)+'"/>';});
+    book=book.replace(/(<definedName [^>]*>)([^<]*)(<\/definedName>)/g,function(all,open,ref,close){return open+s29ShiftRef(ref,shift)+close;});
+
+    sheet=s29SetCell(sheet,"D11","за "+periodLabel(doc.period_month,false).toLowerCase());
+    sheet=s29SetCell(sheet,"D12",dataState.project&&dataState.project.name||"");
+    sheet=s29SetCell(sheet,"D16","АВР за "+periodLabel(doc.period_month,false).toLowerCase());
+    sheet=s29SetCell(sheet,"D"+(33+shift),new Date().toLocaleDateString("ru-RU"));
+
+    zip.file(sheetPath,sheet);
+    zip.file("xl/workbook.xml",book);
+    const blob=await zip.generateAsync({type:"blob",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",compression:"DEFLATE"});
+    const link=document.createElement("a");
+    link.href=URL.createObjectURL(blob);link.download="С-29_бланк_"+periodKey(doc.period_month)+".xlsx";
+    document.body.appendChild(link);link.click();link.remove();
+    setTimeout(function(){URL.revokeObjectURL(link.href);},1000);
+  }catch(err){alert("Бланк С-29 не сформирован:\n"+(err&&err.message?err.message:String(err)));}
+}
+
 function wireExecutionControls() {
   const period=document.querySelector("[data-avr-period]");
   if(period) period.onchange=function(){ui.avr.period=period.value;ui.avr.versionId="";localStorage.setItem("filimonova.avr.period",period.value);renderPage("avr",0);};
@@ -673,4 +760,5 @@ function wireExecutionControls() {
   const calculate=document.querySelector("[data-s29-calculate]");if(calculate)calculate.onclick=calculateS29;
   const fix=document.querySelector("[data-s29-fix]");if(fix)fix.onclick=function(){fix.disabled=true;fixS29(fix.dataset.s29Fix).catch(function(err){alert(err.message||err);fix.disabled=false;});};
   const excel=document.querySelector("[data-s29-excel]");if(excel)excel.onclick=exportS29Excel;
+  const form=document.querySelector("[data-s29-form]");if(form)form.onclick=exportS29Form;
 }
