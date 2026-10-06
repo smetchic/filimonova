@@ -141,9 +141,28 @@ function renderEstimateTable() {
   $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="eng-table est-table" data-table-key="estimate-main-v6">' + head + '<tbody>' + body + '</tbody></table></div></div>';
 }
 
+// Прогнозный индекс один на объект и хранится в current_price_settings;
+// пока строки нет, действует предварительный 1,0647.
+const DEFAULT_FORECAST_INDEX=1.0647;
+function savedForecastIndex() {
+  const row=(dataState.currentPriceSettings||[])[0];
+  const v=row?Number(row.forecast_index):NaN;
+  return Number.isFinite(v)&&v>0?v:DEFAULT_FORECAST_INDEX;
+}
+function currentPriceParams() {
+  if(!ui.currentPrice) ui.currentPrice={competition:1,vat:0};
+  ui.currentPrice.forecast=savedForecastIndex();
+  return ui.currentPrice;
+}
+async function saveForecastIndex(value) {
+  const result=await client.from("current_price_settings").upsert({project_id:dataState.project.id,forecast_index:value},{onConflict:"project_id"}).select("project_id,forecast_index");
+  if(result.error) throw result.error;
+  dataState.currentPriceSettings=result.data||[];
+  invalidateDerivedDataCache();
+}
+
 function currentPriceModel() {
-  if(!ui.currentPrice) ui.currentPrice={forecast:1.0647,competition:1,vat:0};
-  const P=ui.currentPrice,m=maps();
+  const P=currentPriceParams(),m=maps();
   const selectedIds=new Set(dataState.estimates.filter(function(e){return ui.estimates[e.number]!==false;}).map(function(e){return e.id;}));
   const base={salary:0,machines:0,drivers:0,transport:0,materials:0};
   dataState.estimateRows.filter(function(r){return selectedIds.has(r.estimate_id);}).forEach(function(r){
@@ -189,14 +208,14 @@ function currentPriceModel() {
 
 function currentRefValue(row,mode) {
   if(row.v==null || ["competitionK","afterCompetition","forecastK","afterForecast","vat","grand"].includes(row.id)) return "";
-  const P=ui.currentPrice||{forecast:1.0647,competition:1};
+  const P=currentPriceParams();
   if(mode==="forecast") return money(row.v*P.forecast);
   if(mode==="competition") return money(row.v*P.competition);
   return money(row.v*P.competition*P.forecast);
 }
 
 function currentFormulaParts(r) {
-  const P=ui.currentPrice||{forecast:1.0647,competition:1,vat:0};
+  const P=currentPriceParams();
   const parts={
     direct:["=",{r:"salary",t:"Заработная плата"}," + ",{r:"machines",t:"Эксплуатация машин и механизмов"}," + ",{r:"transport",t:"Транспортные расходы подрядчика"}," + ",{r:"materials",t:"Материалы подрядчика"}],
     ohr:["=(",{r:"salary",t:"Заработная плата"}," + ",{r:"drivers",t:"Заработная плата машинистов"},") × ",{r:"ohr:pct",t:"109,31%"}],
@@ -211,7 +230,7 @@ function currentFormulaParts(r) {
     returnTemp:["=−",{r:"temporary",t:"Временные здания и сооружения"}," × ",{r:"returnTemp:pct",t:"15%"}],
     contractor:["=",{r:"totalWorks",t:"Всего строительных и иных специальных монтажных работ"}," + ",{r:"returnTemp",t:"Возврат от временных зданий и сооружений"}],
     afterCompetition:["=",{r:"contractor",t:"Итого подрядных работ"}," × ",{r:"competitionK:k",t:Number(P.competition||1).toFixed(4).replace(".",",")}],
-    afterForecast:["=",{r:"afterCompetition",t:"Итого с учётом конкурсного коэффициента"}," × ",{r:"forecastK:k",t:Number(P.forecast||1.0647).toFixed(4).replace(".",",")}],
+    afterForecast:["=",{r:"afterCompetition",t:"Итого с учётом конкурсного коэффициента"}," × ",{r:"forecastK:k",t:Number(P.forecast).toFixed(4).replace(".",",")}],
     vat:["=",{r:"afterForecast",t:"Итого с учётом прогнозного индекса"}," × ",{r:"vat:pct",t:String(P.vat||0).replace(".",",")+"%"}],
     grand:["=",{r:"afterForecast",t:"Итого с учётом прогнозного индекса"}," + ",{r:"vat",t:"НДС"}]
   };
@@ -239,7 +258,7 @@ function renderCurrentPricePlaceholder() {
     const cls=r.kind==="subtotal"?"subtotal":r.kind==="final"?"final":"";
     const pct=r.pct==null?"":String(r.id==="winter"?"2,5740":r.pct).replace(".",",");
     let k="";
-    if(r.id==="forecastK") k='<input class="forecast-input" value="'+Number((ui.currentPrice||{}).forecast||1.0647).toFixed(4).replace(".",",")+'" aria-label="Прогнозный индекс">';
+    if(r.id==="forecastK") k='<input class="forecast-input" value="'+savedForecastIndex().toFixed(4).replace(".",",")+'" aria-label="Прогнозный индекс"'+(ui.isAdmin?'':' readonly title="Индекс меняет администратор"')+'>';
     else if(r.k!=null) k=Number(r.k).toFixed(4).replace(".",",");
     return '<tr class="'+cls+' data-row" data-formula-row="'+r.id+'" data-current-row-no="'+no+'"><td class="center">'+no+'</td>'+filterCell("name",r.name,esc(r.name),"")+'<td class="num" data-formula-cell="'+r.id+':pct">'+pct+'</td><td class="num rate-cell" data-formula-cell="'+r.id+':k">'+k+'</td><td class="num formula-amount" data-formula-cell="'+r.id+'">'+money(r.v)+'</td><td class="num muted">'+currentRefValue(r,"forecast")+'</td><td class="num muted">'+currentRefValue(r,"competition")+'</td><td class="num muted">'+currentRefValue(r,"both")+'</td></tr>';
   }).join("");
@@ -268,7 +287,9 @@ function renderCurrentPricePlaceholder() {
   const input=document.querySelector(".forecast-input");
   if(input) input.onchange=function(){
     const v=Number(input.value.replace(",","."));
-    if(Number.isFinite(v)&&v>0){ui.currentPrice.forecast=v;rerenderContent();}
+    if(!ui.isAdmin||!Number.isFinite(v)||v<=0||v===savedForecastIndex()){rerenderContent();return;}
+    input.disabled=true;
+    saveForecastIndex(v).then(rerenderContent).catch(function(err){alert("Индекс не сохранён:\n"+(err&&err.message?err.message:String(err)));rerenderContent();});
   };
   select("temporary");
 }

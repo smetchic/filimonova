@@ -190,7 +190,7 @@ function gprRowMonthQty(row,e,monthKey,estimateRows) {
 
 function gprRowCurrentPrice(row,m) {
   const c=rowCost(row,m);
-  const P=ui.currentPrice||{forecast:1.0647,competition:1,vat:0};
+  const P=currentPriceParams();
   const qty=Number(row.quantity||0);
 
   const salary=Number(c.salary_amount||0);
