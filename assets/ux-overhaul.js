@@ -113,7 +113,7 @@
         kpi('АВР',num0.format(d.avrQty)+' шт.',money.format(d.avrAmount)+' руб.','blue',avrPct,'avr',0)+
         kpi('С-29',num2.format(d.writtenM3)+' м³','экономия '+num2.format(d.economy)+' · перерасход '+num2.format(d.overrun),'amber',writePct,'s29',0)+
         kpi('Контроль',num0.format(d.unresolvedPrice+d.unmatchedSupply+d.reconIssues),'позиций и замечаний требуют внимания',d.unresolvedPrice+d.unmatchedSupply+d.reconIssues?'red':'green',d.unresolvedPrice+d.unmatchedSupply+d.reconIssues?70:100,'recon',0)+
-        '</div><div class="ux-dashboard-body"><div class="ux-panel"><div class="ux-panel-head"><strong>Требует внимания</strong><span>только открытые рабочие вопросы</span><span class="spacer"></span><button class="ux-panel-link" data-ux-go="diffs" data-ux-tab="0" type="button">Все расхождения</button></div><table class="ux-attention-table"><thead><tr><th>Состояние</th><th>Раздел</th><th>Что проверить</th><th class="ux-attention-count">Кол-во</th></tr></thead><tbody>'+att+'</tbody></table></div><div class="ux-panel"><div class="ux-panel-head"><strong>Исполнение проекта</strong><span class="spacer"></span></div><div class="ux-progress-list">'+progress('Поставка',supplyPct,'green')+progress('Монтаж',montagePct,'green')+progress('АВР',avrPct,'blue')+progress('Списание',writePct,'amber')+'</div><div class="ux-dashboard-note">Проценты считаются от проектного количества/объёма. Карточки и строки открывают соответствующий рабочий модуль.</div></div></div></div>';
+        '</div><div class="ux-dashboard-body"><div class="ux-panel"><div class="ux-panel-head"><strong>Требует внимания</strong><span>только открытые рабочие вопросы</span><span class="spacer"></span><button class="ux-panel-link" data-ux-go="recon" data-ux-tab="0" type="button">Открыть сверку</button></div><table class="ux-attention-table"><thead><tr><th>Состояние</th><th>Раздел</th><th>Что проверить</th><th class="ux-attention-count">Кол-во</th></tr></thead><tbody>'+att+'</tbody></table></div><div class="ux-panel"><div class="ux-panel-head"><strong>Исполнение проекта</strong><span class="spacer"></span></div><div class="ux-progress-list">'+progress('Поставка',supplyPct,'green')+progress('Монтаж',montagePct,'green')+progress('АВР',avrPct,'blue')+progress('Списание',writePct,'amber')+'</div><div class="ux-dashboard-note">Проценты считаются от проектного количества/объёма. Карточки и строки открывают соответствующий рабочий модуль.</div></div></div></div>';
       area.querySelectorAll('[data-ux-go]').forEach(x=>x.onclick=()=>go(x.dataset.uxGo,Number(x.dataset.uxTab||0)));
       const refresh=area.querySelector('[data-ux-refresh]');if(refresh)refresh.onclick=()=>{state.cache=null;renderHome(true);};
       const manager=area.querySelector('[data-ux-manager]');if(manager)manager.onclick=()=>managerMode(area);
@@ -135,7 +135,10 @@
       if(!box){box=document.createElement('span');box.className='ux-filter-summary';left.appendChild(box);}
       if(box.dataset.sig!==sig){box.dataset.sig=sig;box.innerHTML='<span class="ux-filter-caption">Фильтры:</span>'+entries.map(x=>'<span class="ux-filter-chip"><span>'+esc(x.label)+'</span><button type="button" data-field="'+esc(x.field)+'">×</button></span>').join('')+'<button class="ux-clear-filters" type="button" data-all>Очистить всё</button>';box.querySelectorAll('[data-field]').forEach(b=>b.onclick=()=>clearField(b.dataset.field));const a=box.querySelector('[data-all]');if(a)a.onclick=clearAll;}
     }else if(box)box.remove();
-    let tools=right.querySelector('.ux-service-tools');if(!tools){tools=document.createElement('span');tools.className='ux-service-tools';tools.innerHTML='<span class="ux-service-separator"></span><button class="ux-tool-link" type="button" data-cols>Колонки</button>';right.appendChild(tools);}
+    let tools=right.querySelector('.ux-service-tools');
+    // "Колонки" only makes sense next to a table.
+    if(!document.querySelector('#workArea table')){if(tools)tools.remove();return;}
+    if(!tools){tools=document.createElement('span');tools.className='ux-service-tools';tools.innerHTML='<span class="ux-service-separator"></span><button class="ux-tool-link" type="button" data-cols>Колонки</button>';right.appendChild(tools);}
     const c=tools.querySelector('[data-cols]');if(c)c.onclick=e=>openColumns(e.currentTarget);
   }
 
@@ -162,7 +165,13 @@
 
   function gpr(){const table=document.querySelector('#workArea .gpr-table');if(!table||table.dataset.uxGprEnhanced)return;table.dataset.uxGprEnhanced='1';table.querySelectorAll('tbody tr.data-row').forEach(r=>{const cells=Array.from(r.querySelectorAll('.gpr-month')),active=cells.filter(c=>{const n=Number((c.textContent||'').replace(/\s/g,'').replace(',','.'));return n>0;});if(!active.length)return;const a=cells.indexOf(active[0]),b=cells.indexOf(active[active.length-1]);for(let i=a;i<=b;i++)cells[i].classList.add('ux-gpr-span');active.forEach(c=>c.classList.add('ux-gpr-active'));cells[a].classList.add('ux-gpr-start');cells[b].classList.add('ux-gpr-end');});const right=$('serviceRight');if(!right||right.querySelector('.ux-gpr-scale'))return;const s=document.createElement('span');s.className='ux-gpr-scale';s.innerHTML='<button class="active" data-scale="month" type="button">Месяц</button><button data-scale="quarter" type="button">Квартал</button><button data-scale="year" type="button">Год</button>';right.insertBefore(s,right.firstChild);s.querySelectorAll('button').forEach(b=>b.onclick=()=>{s.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));table.classList.toggle('ux-gpr-scale-quarter',b.dataset.scale==='quarter');table.classList.toggle('ux-gpr-scale-year',b.dataset.scale==='year');});}
 
-  function afterRender(){if(page()==='home'){renderHome(false);return;}serviceTools();restoreColumns();wireDrawer();statuses();if(page()==='estimates'&&tab()===2)gpr();}
+  // Bars above the work area that ended up with nothing in them take no space.
+  function hideEmptyBars(){
+    const filled=el=>!!el&&(!!el.textContent.trim()||!!el.querySelector('select,input,button'));
+    const service=$('serviceRow');if(service)service.classList.toggle('is-empty',!filled($('serviceLeft'))&&!filled($('serviceRight')));
+    const context=$('contextRow');if(context)context.classList.toggle('is-empty',!filled(context));
+  }
+  function afterRender(){if(page()==='home'){renderHome(false);hideEmptyBars();return;}serviceTools();restoreColumns();wireDrawer();statuses();if(page()==='estimates'&&tab()===2)gpr();hideEmptyBars();}
   function schedule(){clearTimeout(state.timer);state.timer=setTimeout(afterRender,80);}
   function start(){const root=$('appView')||document.body;state.observer=new MutationObserver(schedule);state.observer.observe(root,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});document.addEventListener('click',schedule,true);schedule();}
 
