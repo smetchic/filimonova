@@ -11,13 +11,13 @@
 <link rel="stylesheet" href="./assets/ux-overhaul.css?v=20261003-1944">
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2"></script>
 <script defer src="./assets/config.js?v=material-card-v11-20260929-3"></script>
-<script defer src="./assets/app/01-core.js?v=20261006-split"></script>
+<script defer src="./assets/app/01-core.js?v=20261006-lazy"></script>
 <script defer src="./assets/app/02-tables.js?v=20261006-split"></script>
 <script defer src="./assets/app/03-material-card.js?v=20261006-split"></script>
 <script defer src="./assets/app/04-render-common.js?v=20261006-split"></script>
 <script defer src="./assets/app/05-import-spec.js?v=20261006-split"></script>
 <script defer src="./assets/app/06-import-estimate.js?v=20261006-split"></script>
-<script defer src="./assets/app/07-supplier-price.js?v=20261006-split"></script>
+<script defer src="./assets/app/07-supplier-price.js?v=20261006-lazy"></script>
 <script defer src="./assets/app/08-spec.js?v=20261006-split"></script>
 <script defer src="./assets/app/09-estimates.js?v=20261006-split"></script>
 <script defer src="./assets/app/10-gpr.js?v=20261006-split"></script>
@@ -28,7 +28,7 @@
 <script defer src="./assets/app/15-recon.js?v=20261006-split"></script>
 <script defer src="./assets/app/16-work-links.js?v=20261006-split"></script>
 <script defer src="./assets/app/17-navigation.js?v=20261006-split"></script>
-<script defer src="./assets/app/18-main.js?v=20261006-split"></script>
+<script defer src="./assets/app/18-main.js?v=20261006-lazy"></script>
 <script defer src="./assets/ux-overhaul.js?v=20261003-1944"></script>
 <script defer src="./assets/material-card-compact.js?v=20261003-2342"></script>
 <link rel="stylesheet" href="./assets/material-card-v11.css?v=20260929-integrated">
@@ -213,7 +213,7 @@
       <div class="auth-brand">Доступ не предоставлен</div>
       <div class="auth-subtitle">Учётная запись не имеет прав на проект «Филимонова».</div>
     </div>
-    <div class="auth-body"><button id="deniedLogoutBtn" class="primary" type="button">Выйти</button></div>
+    <div class="auth-body"><button id="deniedRetryBtn" class="primary hidden" type="button">Повторить</button> <button id="deniedLogoutBtn" class="primary" type="button">Выйти</button></div>
   </div>
 </section>
 
