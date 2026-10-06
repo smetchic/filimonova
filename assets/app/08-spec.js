@@ -17,7 +17,7 @@ function renderSpecProject() {
     const rootKey = "spec-project:root";
     body += specGroupRow("Всего по дому",rows,rootKey,0,levels);
     if (!ui.collapsed.has(rootKey)) {
-      ["Секция 1","Секция 2"].forEach(function(bs) {
+      buildingSections().forEach(function(bs) {
         const bsRows = rows.filter(function(r){ return r.section.building_section === bs; });
         if (!bsRows.length) return;
         const bsKey = "spec-project:bs:"+bs;
@@ -97,8 +97,8 @@ function buildWorkingSummaryRows() {
         name:r.name,
         catalogItemId:r.catalog_item_id || "",
         volumePerPiece:r.volumePerPiece,
-        bySection:{"Секция 1":0,"Секция 2":0},
-        byLevel:{"Секция 1":new Map(),"Секция 2":new Map()}
+        bySection:{},
+        byLevel:{}
       });
     }
     const g = grouped.get(key);
@@ -128,24 +128,43 @@ function buildWorkingSummaryRows() {
   return Array.from(grouped.values());
 }
 
+// Pieces of a working-summary row in the object's sections (stairs rows are house-wide).
+function summarySectionQty(r, bs) {
+  return Number(r.bySection[bs] || 0);
+}
+
+function summaryLevelQty(r, bs, code) {
+  return Number((r.byLevel[bs] && r.byLevel[bs].get(code)) || 0);
+}
+
+function summaryProjectQty(r) {
+  if (r.houseOnly) return Number(r.houseTotal || 0);
+  return buildingSections().reduce(function(sum,bs){ return sum + summarySectionQty(r,bs); },0);
+}
+
+// Group row cells: total, then quantity and volume per section, then each level per section.
 function summaryVector(rows, levels) {
+  const sections = buildingSections();
   const out = [];
-  let s1 = 0, s2 = 0, v1 = 0, v2 = 0;
-  rows.forEach(function(r) {
-    const a = Number(r.bySection["Секция 1"] || 0);
-    const b = Number(r.bySection["Секция 2"] || 0);
-    s1 += a; s2 += b;
-    v1 += a * Number(r.volumePerPiece || 0);
-    v2 += b * Number(r.volumePerPiece || 0);
-  });
-  out.push(s1+s2,s1,v1,s2,v2);
-  levels.forEach(function(code) {
-    let a = 0, b = 0;
+  let total = 0;
+  const bySection = sections.map(function(bs) {
+    let qty = 0, vol = 0;
     rows.forEach(function(r) {
-      a += Number((r.byLevel["Секция 1"] && r.byLevel["Секция 1"].get(code)) || 0);
-      b += Number((r.byLevel["Секция 2"] && r.byLevel["Секция 2"].get(code)) || 0);
+      const q = summarySectionQty(r,bs);
+      qty += q;
+      vol += q * Number(r.volumePerPiece || 0);
     });
-    out.push(a,b);
+    total += qty;
+    return [qty,vol];
+  });
+  out.push({v:total});
+  bySection.forEach(function(x){ out.push({v:x[0]},{v:x[1],volume:true}); });
+  levels.forEach(function(code) {
+    sections.forEach(function(bs) {
+      let q = 0;
+      rows.forEach(function(r){ q += summaryLevelQty(r,bs,code); });
+      out.push({v:q});
+    });
   });
   return out;
 }
@@ -155,10 +174,8 @@ function summaryGroupRow(label, rows, key, depth, levels) {
   const vector = summaryVector(rows,levels);
   let html = '<tr class="group-row group-toggle" data-group-key="' + esc(key) + '">';
   html += '<td colspan="3" class="group-title spec-group-title" style="padding-left:' + (8+depth*14) + 'px"><span class="group-arrow">' + groupArrow(key) + '</span>' + esc(label) + '</td>';
-  vector.forEach(function(v,i){
-    const isVolume = i === 2 || i === 4;
-    const cls = isVolume ? "vol-col" : "summary-col";
-    html += '<td class="' + cls + ' num">' + (isVolume ? fmt(v) : fmt0(v)) + '</td>';
+  vector.forEach(function(c){
+    html += '<td class="' + (c.volume ? "vol-col" : "summary-col") + ' num">' + (c.volume ? fmt(c.v) : fmt0(c.v)) + '</td>';
   });
   html += '</tr>';
   return html;
@@ -166,6 +183,7 @@ function summaryGroupRow(label, rows, key, depth, levels) {
 
 function renderSpecSummary() {
   const levels = levelCodes();
+  const sections = buildingSections();
   let rows = buildWorkingSummaryRows().filter(function(r){
     return columnFilterPass("mark",r.mark) && columnFilterPass("name",r.name);
   });
@@ -175,7 +193,7 @@ function renderSpecSummary() {
   let body = "";
   let displayNo = 0;
   if (!rows.length) {
-    body = tableMessage("Нет строк по текущему фильтру.",3+4+levels.length*2+1);
+    body = tableMessage("Нет строк по текущему фильтру.",4+sections.length*2+levels.length*sections.length);
   } else {
     const rootKey = "spec-summary:root";
     body += summaryGroupRow("Всего по дому",rows,rootKey,0,levels);
@@ -193,20 +211,21 @@ function renderSpecSummary() {
           body += summaryGroupRow(name,sRows,sKey,2,levels);
           if (ui.collapsed.has(sKey) || ui.collapseLeaves) return;
           sRows.forEach(function(r) {
-            const s1 = Number(r.bySection["Секция 1"] || 0);
-            const s2 = Number(r.bySection["Секция 2"] || 0);
-            const total=r.houseOnly?Number(r.houseTotal||0):s1+s2;
+            const total=summaryProjectQty(r);
             displayNo++;
             body += '<tr class="data-row" data-material-id="' + esc(r.catalogItemId||"") + '">';
             body += '<td class="sticky-1 center">' + displayNo + '</td>';
             body += filterCell("mark",r.mark,esc(r.mark),"sticky-2");
             body += filterCell("name",r.name,esc(r.name),"sticky-3");
             body += '<td class="summary-col num strong-num">' + fmt0(total) + '</td>';
-            body += '<td class="qty-col num">' + fmt0(s1) + '</td><td class="vol-col num">' + fmt(s1*r.volumePerPiece) + '</td>';
-            body += '<td class="qty-col num">' + fmt0(s2) + '</td><td class="vol-col num">' + fmt(s2*r.volumePerPiece) + '</td>';
+            sections.forEach(function(bs) {
+              const q = summarySectionQty(r,bs);
+              body += '<td class="qty-col num">' + fmt0(q) + '</td><td class="vol-col num">' + fmt(q*r.volumePerPiece) + '</td>';
+            });
             levels.forEach(function(code) {
-              body += '<td class="summary-col num">' + fmt0((r.byLevel["Секция 1"] && r.byLevel["Секция 1"].get(code)) || 0) + '</td>';
-              body += '<td class="summary-col num">' + fmt0((r.byLevel["Секция 2"] && r.byLevel["Секция 2"].get(code)) || 0) + '</td>';
+              sections.forEach(function(bs) {
+                body += '<td class="summary-col num">' + fmt0(summaryLevelQty(r,bs,code)) + '</td>';
+              });
             });
             body += '</tr>';
           });
@@ -222,9 +241,8 @@ function renderSpecSummary() {
             body += '<tr class="data-row" data-material-id="'+esc(r.catalogItemId||"")+'"><td class="sticky-1 center">'+displayNo+'</td>'+
               filterCell("mark",r.mark,esc(r.mark),"sticky-2")+filterCell("name",r.name,esc(r.name),"sticky-3")+
               '<td class="summary-col num strong-num">'+fmt0(r.houseTotal||0)+'</td>'+
-              '<td class="qty-col num">—</td><td class="vol-col num">—</td>'+
-              '<td class="qty-col num">—</td><td class="vol-col num">—</td>'+
-              levels.map(function(){return '<td class="summary-col num">—</td><td class="summary-col num">—</td>';}).join("")+
+              sections.map(function(){return '<td class="qty-col num">—</td><td class="vol-col num">—</td>';}).join("")+
+              levels.map(function(){return sections.map(function(){return '<td class="summary-col num">—</td>';}).join("");}).join("")+
               '</tr>';
           });
         }
@@ -237,15 +255,14 @@ function renderSpecSummary() {
     '<th class="sticky-2 filterable-head" rowspan="2">' + filterHeader("Марка","mark") + '</th>' +
     '<th class="sticky-3 filterable-head" rowspan="2">' + filterHeader("Наименование","name") + '</th>' +
     '<th rowspan="2" class="summary-col">Итого, шт.</th>' +
-    '<th colspan="2">Секция 1</th><th colspan="2">Секция 2</th>' +
-    levels.map(function(x){ return '<th colspan="2" class="floor-parent">' + esc(summaryLevelLabel(x)) + '</th>'; }).join("") +
+    sections.map(function(bs){ return '<th colspan="2">' + esc(bs) + '</th>'; }).join("") +
+    levels.map(function(x){ return '<th colspan="' + sections.length + '" class="floor-parent">' + esc(summaryLevelLabel(x)) + '</th>'; }).join("") +
     '</tr>';
   const head2 = '<tr>' +
-    '<th class="qty-col">Кол-во, шт.</th><th class="vol-col">Объём, м³</th>' +
-    '<th class="qty-col">Кол-во, шт.</th><th class="vol-col">Объём, м³</th>' +
-    levels.map(function(){ return '<th class="summary-col">1</th><th class="summary-col">2</th>'; }).join("") +
+    sections.map(function(){ return '<th class="qty-col">Кол-во, шт.</th><th class="vol-col">Объём, м³</th>'; }).join("") +
+    levels.map(function(){ return sections.map(function(bs){ return '<th class="summary-col">' + esc(sectionKey(bs).slice(1)) + '</th>'; }).join(""); }).join("") +
     '</tr>';
 
   $("workArea").className = "work-area table-work spec-work";
-  $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="spec-table working-summary" data-table-key="spec-summary-v6"><thead>' + head1 + head2 + '</thead><tbody>' + body + '</tbody></table></div></div>';
+  $("workArea").innerHTML = '<div class="engineering-shell"><div class="engineering-scroll"><table class="spec-table working-summary" data-table-key="spec-summary-v6' + (sections.length===2 ? '' : '-s'+sections.length) + '"><thead>' + head1 + head2 + '</thead><tbody>' + body + '</tbody></table></div></div>';
 }

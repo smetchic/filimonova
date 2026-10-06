@@ -242,3 +242,11 @@ html[data-theme="dark"] .theme-choice button{background:#202328}
   .theme-settings-row{grid-template-columns:1fr}
   .theme-choice{grid-template-columns:1fr}
 }
+
+/* Object switcher dialog */
+html[data-theme="dark"] .object-list-item,
+html[data-theme="dark"] .object-settings,
+html[data-theme="dark"] .object-estimates input,
+html[data-theme="dark"] .object-estimates select{border-color:var(--line)!important}
+html[data-theme="dark"] .object-list-item.current{border-color:var(--text)!important}
+html[data-theme="dark"] .object-estimates select option{background:var(--panel);color:var(--text)}

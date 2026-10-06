@@ -32,9 +32,8 @@ const ui = {
   search: {},
   collapsed: new Set(),
   currentGroupKeys: [],
+  // Section switches are keyed "s1".."sN" (Секция N); a missing key means the section is shown.
   spec: {
-    s1: true,
-    s2: true,
     basement: true,
     above: true,
     stairs: true,
@@ -50,8 +49,6 @@ const ui = {
     period: localStorage.getItem("filimonova.s29.period") || ""
   },
   montage: {
-    s1: localStorage.getItem("filimonova.montage.s1") !== "0",
-    s2: localStorage.getItem("filimonova.montage.s2") !== "0",
     level: localStorage.getItem("filimonova.montage.level") || "1",
     period: localStorage.getItem("filimonova.montage.period") || ""
   },
@@ -524,11 +521,66 @@ function specJoinedRows() {
 function passesSpecFilters(row) {
   const s = row.section;
   if (s.is_stairs) return ui.spec.stairs;
-  if (s.building_section === "Секция 1" && !ui.spec.s1) return false;
-  if (s.building_section === "Секция 2" && !ui.spec.s2) return false;
+  if (!specSectionOn(s.building_section)) return false;
   if (s.zone === "Цоколь" && !ui.spec.basement) return false;
   if (s.zone === "Выше 0.000" && !ui.spec.above) return false;
   return true;
+}
+
+// Object settings (projects.settings): number of building sections and the local estimates
+// with the section/zone each one covers. Objects without settings keep the original layout.
+const DEFAULT_OBJECT_SETTINGS = Object.freeze({
+  sections: 2,
+  estimates: [
+    {number:"200",section:"Секция 1",zone:"Цоколь",stairs:false},
+    {number:"201",section:"Секция 2",zone:"Цоколь",stairs:false},
+    {number:"202",section:"Секция 1",zone:"Выше 0.000",stairs:false},
+    {number:"203",section:"Секция 2",zone:"Выше 0.000",stairs:false},
+    {number:"207",section:"Элементы лестниц",zone:"Лестницы",stairs:true}
+  ]
+});
+
+function objectSettings(project) {
+  const p = project || dataState.project || {};
+  const raw = p.settings && typeof p.settings === "object" ? p.settings : {};
+  const count = Math.round(Number(raw.sections));
+  return {
+    sections: count >= 1 && count <= 20 ? count : DEFAULT_OBJECT_SETTINGS.sections,
+    estimates: Array.isArray(raw.estimates) ? raw.estimates.map(function(e){
+      return {
+        number:String(e && e.number || "").trim(),
+        section:String(e && e.section || "").trim(),
+        zone:String(e && e.zone || "").trim(),
+        stairs:!!(e && e.stairs)
+      };
+    }).filter(function(e){ return e.number; }) : DEFAULT_OBJECT_SETTINGS.estimates.slice()
+  };
+}
+
+function buildingSections() {
+  const list = [];
+  for (let i = 1; i <= objectSettings().sections; i++) list.push("Секция " + i);
+  return list;
+}
+
+function sectionKey(name) {
+  const m = /^Секция\s+(\d+)$/.exec(String(name || "").trim());
+  return m ? "s" + m[1] : "";
+}
+
+function specSectionOn(name) {
+  const key = sectionKey(name);
+  return !key || ui.spec[key] !== false;
+}
+
+function montageSectionOn(name) {
+  const key = sectionKey(name);
+  return !!key && localStorage.getItem("filimonova.montage." + key) !== "0";
+}
+
+function setMontageSection(name, on) {
+  const key = sectionKey(name);
+  if (key) localStorage.setItem("filimonova.montage." + key, on ? "1" : "0");
 }
 
 function currentViewKey() {

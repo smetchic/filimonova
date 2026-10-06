@@ -52,14 +52,15 @@ function wireContextControls() {
   document.querySelectorAll('#contextRow input[data-filter-group="spec"]').forEach(function(input) {
     input.addEventListener("click",function(e) {
       const id=input.dataset.filterId;
-      if(id==="s1" || id==="s2"){
-        const focused = id==="s1" ? (ui.spec.s1 && !ui.spec.s2 && !ui.spec.stairs) : (ui.spec.s2 && !ui.spec.s1 && !ui.spec.stairs);
+      const sectionKeys=buildingSections().map(sectionKey);
+      if(sectionKeys.includes(id)){
+        // Clicking a section shows only that section; clicking it again when it is alone hides it.
+        const focused = ui.spec[id]!==false && !ui.spec.stairs && sectionKeys.every(function(k){return k===id || ui.spec[k]===false;});
         e.preventDefault();
         if(focused){
           ui.spec[id]=false;
         }else{
-          ui.spec.s1=id==="s1";
-          ui.spec.s2=id==="s2";
+          sectionKeys.forEach(function(k){ui.spec[k]=k===id;});
           ui.spec.basement=true;
           ui.spec.above=true;
           ui.spec.stairs=false;
@@ -69,9 +70,9 @@ function wireContextControls() {
     });
     input.addEventListener("change",function() {
       const id = input.dataset.filterId;
-      if(id==="s1" || id==="s2") return;
+      if(/^s\d+$/.test(id)) return;
       if (id === "all") {
-        ["s1","s2","basement","above","stairs"].forEach(function(k){ui.spec[k]=input.checked;});
+        buildingSections().map(sectionKey).concat(["basement","above","stairs"]).forEach(function(k){ui.spec[k]=input.checked;});
       } else {
         ui.spec[id] = input.checked;
       }
@@ -80,7 +81,7 @@ function wireContextControls() {
   });
   const specMaster = document.querySelector('#contextRow input[data-filter-group="spec"][data-filter-id="all"]');
   if (specMaster) {
-    const vals = [ui.spec.s1,ui.spec.s2,ui.spec.basement,ui.spec.above,ui.spec.stairs];
+    const vals = buildingSections().map(specSectionOn).concat([ui.spec.basement,ui.spec.above,ui.spec.stairs]);
     specMaster.indeterminate = vals.some(Boolean) && !vals.every(Boolean);
   }
   document.querySelectorAll('#contextRow input[data-filter-group="estimate"]').forEach(function(input) {
@@ -101,20 +102,15 @@ function wireContextControls() {
   document.querySelectorAll('#contextRow input[data-filter-group="montage"]').forEach(function(input){
     input.addEventListener("change",function(){
       const id=input.dataset.filterId;
-      if(id==="all"){
-        ui.montage.s1=input.checked;
-        ui.montage.s2=input.checked;
-      }else if(id==="s1"||id==="s2"){
-        ui.montage[id]=input.checked;
-      }
-      localStorage.setItem("filimonova.montage.s1",ui.montage.s1?"1":"0");
-      localStorage.setItem("filimonova.montage.s2",ui.montage.s2?"1":"0");
+      buildingSections().forEach(function(bs){
+        if(id==="all"||sectionKey(bs)===id) setMontageSection(bs,input.checked);
+      });
       renderPage("montage",ui.tabs.montage||0);
     });
   });
   const montageMaster=document.querySelector('#contextRow input[data-filter-group="montage"][data-filter-id="all"]');
   if(montageMaster){
-    const vals=[!!ui.montage.s1,!!ui.montage.s2];
+    const vals=buildingSections().map(montageSectionOn);
     montageMaster.indeterminate=vals.some(Boolean)&&!vals.every(Boolean);
   }
   const montageLevel=document.querySelector("[data-montage-level]");
@@ -223,7 +219,7 @@ function renderPage(pageKey,tabIndex) {
     btn.classList.toggle("active",btn.dataset.page === pageKey);
   });
 
-  $("breadcrumbs").innerHTML = '<span>Филимонова</span><span class="slash">/</span><span>'+esc(page.section)+'</span><span class="slash">/</span><span class="current">'+esc(page.title)+'</span>';
+  $("breadcrumbs").innerHTML = '<span>'+esc(dataState.project&&dataState.project.name||cfg.projectName)+'</span><span class="slash">/</span><span>'+esc(page.section)+'</span><span class="slash">/</span><span class="current">'+esc(page.title)+'</span>';
   $("pageTitle").textContent = page.title;
   $("pageSubtitle").textContent = page.subtitle;
   renderUtilityActions(pageKey);

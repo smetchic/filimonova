@@ -79,8 +79,11 @@ function gprAssignedMonth(section,level) {
 }
 
 function estimateScope(e) {
+  // The import stores the section and zone of each estimate (from the object settings).
+  if(e && !e.is_stairs && sectionKey(e.building_section) && e.zone) return {section:e.building_section,zone:e.zone};
   const name=String(e && e.name || "");
-  const section=name.includes("Секция 2") ? "Секция 2" : name.includes("Секция 1") ? "Секция 1" : "";
+  const m=/Секция\s+(\d+)/.exec(name);
+  const section=m ? "Секция "+m[1] : "";
   const zone=name.includes("Цоколь") ? "Цоколь" : name.includes("Выше 0.000") ? "Выше 0.000" : "";
   return {section:section,zone:zone};
 }
@@ -690,8 +693,8 @@ function openGprAllocationModal() {
     y.count++;
   });
   function existingFor(level){
-    const a=existing["Секция 1|"+level]||"",b=existing["Секция 2|"+level]||"";
-    return a===b?a:(a||b);
+    const values=buildingSections().map(function(bs){return existing[bs+"|"+level]||"";});
+    return values.find(Boolean)||"";
   }
   modal.innerHTML='<div class="gpr-modal"><div class="gpr-modal-head"><strong>Разнести по графику</strong><button type="button" class="gpr-modal-close">×</button></div>'+
     '<div class="gpr-modal-body"><div class="gpr-alloc-scroll"><table class="gpr-alloc-table"><thead><tr><th rowspan="2">Этаж / уровень</th>'+years.map(function(y){return '<th colspan="'+y.count+'">'+esc(y.year)+'</th>';}).join("")+'</tr><tr>'+months.map(function(mon){return '<th>'+esc(mon.month)+'</th>';}).join("")+'</tr></thead><tbody>'+
@@ -722,7 +725,7 @@ function openGprAllocationModal() {
     modal.querySelectorAll(".gpr-month-check:checked").forEach(function(check){
       const mon=monthByKey.get(check.dataset.month);
       if(!mon) return;
-      ["Секция 1","Секция 2"].forEach(function(section){
+      buildingSections().forEach(function(section){
         rows.push({
           project_id:dataState.project.id,
           plan_id:plan.id,

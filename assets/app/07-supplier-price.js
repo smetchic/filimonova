@@ -496,7 +496,7 @@ function supplierLinkScopeKey(link,snapshot) {
 
 function supplierCheckProjectRows() {
   return buildWorkingSummaryRows().filter(function(r){return !!r.catalogItemId;}).map(function(r){
-    const qty=r.houseOnly?Number(r.houseTotal||0):Number(r.bySection["Секция 1"]||0)+Number(r.bySection["Секция 2"]||0);
+    const qty=summaryProjectQty(r);
     const volume=Number(r.volumePerPiece)>0?Number(r.volumePerPiece):null;
     const scopeKey=supplierProjectScopeKey(r.zone,r.sectionName);
     return {

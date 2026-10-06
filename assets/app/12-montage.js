@@ -75,9 +75,7 @@ function renderMontage(tab) {
 
   let rows=allRows.filter(function(r){
     const bs=r.section&&r.section.building_section;
-    if(bs==="Секция 1"&&!ui.montage.s1) return false;
-    if(bs==="Секция 2"&&!ui.montage.s2) return false;
-    if(bs!=="Секция 1"&&bs!=="Секция 2") return false;
+    if(!buildingSections().includes(bs)||!montageSectionOn(bs)) return false;
     if(qtyAt(r,level)<=0) return false;
     return passesSearch([r.position_no,r.mark,r.name,r.section&&r.section.name]) &&
       rowPassesColumnFilters({mark:r.mark,name:r.name});

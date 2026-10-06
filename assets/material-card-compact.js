@@ -91,25 +91,27 @@
     const firstRowHead=children.findIndex(function(x){return x.classList.contains("rowhead");});
     if(firstRowHead<4) return;
     const colCount=firstRowHead;
-    if(children.length<colCount*3) return;
+    if(children.length<colCount*2) return;
 
     const headers=children.slice(0,colCount).map(text);
-    const row1=children.slice(colCount,colCount*2).map(text);
-    const row2=children.slice(colCount*2,colCount*3).map(text);
+    // One row per building section of the object.
+    const rows=[];
+    for(let i=colCount;i+colCount<=children.length;i+=colCount) rows.push(children.slice(i,i+colCount).map(text));
     const floorCount=Math.max(0,headers.length-2);
     if(!floorCount) return;
 
     const split=Math.ceil(floorCount/2);
     const shell=document.createElement("div");
     shell.className="mc-floor-split";
-    shell.appendChild(makeFloorTable(headers,[row1,row2],0,split));
-    shell.appendChild(makeFloorTable(headers,[row1,row2],split,floorCount));
+    shell.appendChild(makeFloorTable(headers,rows,0,split));
+    shell.appendChild(makeFloorTable(headers,rows,split,floorCount));
 
-    const total1=(row1[colCount-1]&&row1[colCount-1]!=="0"&&row1[colCount-1]!=="—")?row1[colCount-1]:"";
-    const total2=(row2[colCount-1]&&row2[colCount-1]!=="0"&&row2[colCount-1]!=="—")?row2[colCount-1]:"";
     const totals=document.createElement("div");
     totals.className="mc-floor-totals";
-    totals.innerHTML='<span>Секция 1'+(total1?' <b>'+esc(total1)+'</b>':'')+'</span><span>Секция 2'+(total2?' <b>'+esc(total2)+'</b>':'')+'</span>';
+    totals.innerHTML=rows.map(function(row){
+      const total=(row[colCount-1]&&row[colCount-1]!=="0"&&row[colCount-1]!=="—")?row[colCount-1]:"";
+      return '<span>'+esc(row[0]||"")+(total?' <b>'+esc(total)+'</b>':'')+'</span>';
+    }).join("");
     shell.appendChild(totals);
     grid.replaceWith(shell);
   }
