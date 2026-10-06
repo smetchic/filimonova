@@ -116,6 +116,31 @@ async function ensureProject(user) {
   return result.data;
 }
 
+const DENIED_TITLE="Доступ не предоставлен";
+const DENIED_TEXT="Учётная запись не имеет прав на проект «Филимонова».";
+
+function setDeniedScreen(title,text,canRetry) {
+  deniedView.querySelector(".auth-brand").textContent=title;
+  deniedView.querySelector(".auth-subtitle").textContent=text;
+  $("deniedRetryBtn").classList.toggle("hidden",!canRetry);
+}
+
+// A failed load is not the same as missing rights: only an access error from the
+// database means "no access"; anything else (network, timeout) can simply be retried.
+function showSessionError(err,session) {
+  const message=err && err.message ? err.message : String(err);
+  const status=Number(err && err.status);
+  const denied=status===401 || status===403 || (err && err.code==="42501");
+  appView.classList.add("hidden");
+  deniedView.classList.remove("hidden");
+  if(denied) setDeniedScreen(DENIED_TITLE,"Ошибка доступа: "+message,false);
+  else setDeniedScreen("Не удалось загрузить данные","Проверьте соединение и повторите. Подробности: "+message,true);
+  $("deniedRetryBtn").onclick=function(){
+    deniedView.classList.add("hidden");
+    renderSession(session);
+  };
+}
+
 async function renderSession(session) {
   if (reviewMode) {
     if (!session || !session.user) {
@@ -132,6 +157,7 @@ async function renderSession(session) {
       if (!admin) {
         appView.classList.add("hidden");
         deniedView.classList.remove("hidden");
+        setDeniedScreen(DENIED_TITLE,DENIED_TEXT,false);
         return;
       }
       const project = await ensureProject(session.user);
@@ -143,9 +169,7 @@ async function renderSession(session) {
       $("projectId").textContent = project.id;
       appView.classList.remove("hidden");
     } catch (err) {
-      appView.classList.add("hidden");
-      deniedView.classList.remove("hidden");
-      deniedView.querySelector(".auth-subtitle").textContent = "Ошибка доступа: " + (err && err.message ? err.message : String(err));
+      showSessionError(err,session);
       return;
     }
     renderPage(ui.page);
@@ -168,6 +192,7 @@ async function renderSession(session) {
     if (!admin) {
       appView.classList.add("hidden");
       deniedView.classList.remove("hidden");
+      setDeniedScreen(DENIED_TITLE,DENIED_TEXT,false);
       return;
     }
     const project = await ensureProject(session.user);
@@ -182,9 +207,7 @@ async function renderSession(session) {
     appView.classList.remove("hidden");
     renderPage(ui.page);
   } catch (err) {
-    appView.classList.add("hidden");
-    deniedView.classList.remove("hidden");
-    deniedView.querySelector(".auth-subtitle").textContent = "Ошибка доступа: " + (err && err.message ? err.message : String(err));
+    showSessionError(err,session);
   }
 }
 

@@ -928,6 +928,7 @@ async function openSupplierCheck() {
     ]);
     dataState.supplierPriceLinks=results[0]||[];
     dataState.supplierSnapshotRows=results[1]||[];
+    dataState.supplierSnapshotLoaded=true;
   }catch(err){
     console.error(err);
   }
@@ -1326,7 +1327,31 @@ function supplierOnlyPriceModel(item) {
   };
 }
 
+// The snapshot archive is the largest table, so it is not part of the initial load.
+let supplierSnapshotLoadPromise=null;
+function loadSupplierSnapshotForPage() {
+  if(supplierSnapshotLoadPromise) return;
+  supplierSnapshotLoadPromise=refreshProjectDataSlices(["supplierSnapshotRows"],dataState.project).then(function(){
+    dataState.supplierSnapshotLoaded=true;
+    supplierSnapshotLoadPromise=null;
+    if(ui.page==="supply" && ui.tabs.supply===2) renderPage("supply",2);
+  }).catch(function(err){
+    console.error(err);
+    supplierSnapshotLoadPromise=null;
+    dataState.supplierSnapshotError=true;
+    if(ui.page==="supply" && ui.tabs.supply===2) renderPage("supply",2);
+  });
+}
+
 function renderSupplierPrice() {
+  if(!dataState.supplierSnapshotLoaded){
+    if(dataState.supplierSnapshotError){
+      dataState.supplierSnapshotError=false;
+      return '<div class="empty">Не удалось загрузить прайс поставщика. <button class="primary" type="button" onclick="renderPage(\'supply\',2)">Повторить</button></div>';
+    }
+    loadSupplierSnapshotForPage();
+    return '<div class="empty">Загружаю прайс поставщика…</div>';
+  }
   const snapshot=latestSupplierSnapshotRows().slice().sort(function(a,b){
     const an=Number(a.source_row_no),bn=Number(b.source_row_no);
     return an-bn;

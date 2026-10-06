@@ -244,16 +244,50 @@ function ensureXlsxLoaded() {
   return xlsxLoadPromise;
 }
 
+// Browsers and PostgREST sometimes drop a request (network blip, pool timeout).
+// Retry those, but never an access error: it would fail the same way again.
+function isRetryableLoadError(err) {
+  if(!err) return false;
+  const status=Number(err.status);
+  if(status===401 || status===403 || status===404) return false;
+  const code=String(err.code||"");
+  if(code==="42501" || code==="PGRST301" || code==="PGRST302") return false;
+  if(code.indexOf("PGRST")===0 && status>=400 && status<500) return false;
+  return true;
+}
+
+// Cap parallel requests so a full load does not flood the database connection pool.
+const loadSlots={active:0,waiting:[],max:8};
+function acquireLoadSlot() {
+  if(loadSlots.active<loadSlots.max){loadSlots.active++;return Promise.resolve();}
+  return new Promise(function(resolve){loadSlots.waiting.push(resolve);});
+}
+function releaseLoadSlot() {
+  const next=loadSlots.waiting.shift();
+  if(next) next(); else loadSlots.active--;
+}
+
 async function fetchAllRows(table,columns,configure) {
   const pageSize=1000;
+  const maxAttempts=3;
   async function page(from,withCount) {
-    let query=client.from(table).select(columns,withCount?{count:"exact"}:undefined);
-    if(configure) query=configure(query);
-    const result=await query.range(from,from+pageSize-1);
-    if(result.error) throw result.error;
-    return {rows:result.data||[],count:result.count};
+    for(let attempt=1;;attempt++){
+      await acquireLoadSlot();
+      let result;
+      try{
+        let query=client.from(table).select(columns,withCount?{count:"exact"}:undefined);
+        if(configure) query=configure(query);
+        result=await query.range(from,from+pageSize-1);
+      }catch(err){
+        result={error:err};
+      }finally{
+        releaseLoadSlot();
+      }
+      if(!result.error) return {rows:result.data||[],count:result.count};
+      if(attempt>=maxAttempts || !isRetryableLoadError(result.error)) throw result.error;
+      await new Promise(function(resolve){setTimeout(resolve,400*attempt*attempt);});
+    }
   }
-
   const first=await page(0,false);
   if(first.rows.length<pageSize) return first.rows;
 
@@ -283,97 +317,17 @@ async function fetchAllRows(table,columns,configure) {
   return all;
 }
 
+// Tables that are not needed to draw the first screen are loaded on demand:
+// supplierSnapshotRows (the archive of every supplier price upload, the largest
+// table in the browser) is fetched by openSupplierCheck() and after supplier imports.
+const initialProjectDataKeys=["catalogItems","specSections","specRows","specQuantities","estimates","estimateSections","estimateRows","estimateCosts","reconciliationLinks","reconciliationJournal","suppliers","supplierItems","supplierPrices","supplyDocuments","supplyDocumentLines","supplyLineAllocations","estimateWorkLinks","montageEvents","gprPlans","gprMonths","gprFloorAssignments","gprRowAssignments","avrDocuments","avrVersions","avrRows","accountingRows","accountingCodeLinks","accountingPeriodSources","s29Documents","s29Rows","s29Allocations","s29Carryovers","s29CarryoverSettlements","imports","supplierPriceLinks","supplierPriceJournal","supplierControlJournal"];
+
 async function loadProjectDataFresh(project) {
-  const requests = [
-    fetchAllRows("catalog_items","id,mark,name,normalized_key,length_mm,height_mm,thickness_mm,area_m2,geometry_source,geometry_source_page,geometry_confidence",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("mark");}),
-    fetchAllRows("specification_sections","id,building_section,zone,name,sort_order,is_stairs",function(q){return q.eq("project_id",project.id).order("sort_order");}),
-    fetchAllRows("specification_rows","id,section_id,catalog_item_id,position_no,designation,project_volume_m3,sort_order",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("position_no");}),
-    fetchAllRows("specification_quantities","specification_row_id,level_code,level_order,quantity",function(q){return q.eq("project_id",project.id).order("level_order").order("specification_row_id");}),
-    fetchAllRows("estimates","id,number,name,status,building_section,zone,is_stairs",function(q){return q.eq("project_id",project.id).eq("status","active").order("number");}),
-    fetchAllRows("estimate_sections","id,estimate_id,title,sort_order",function(q){return q.eq("project_id",project.id).order("sort_order");}),
-    fetchAllRows("estimate_rows","id,estimate_id,section_id,row_type,position,basis,name,unit,quantity,sort_order,catalog_item_id,source_original",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("sort_order");}),
-    fetchAllRows("estimate_row_costs","estimate_row_id,salary_unit,salary_amount,machines_unit,machines_amount,drivers_unit,drivers_amount,materials_unit,materials_amount,transport_unit,transport_amount,total_unit,total_amount",function(q){return q.eq("project_id",project.id);}),
-    fetchAllRows("reconciliation_links","id,estimate_row_id,specification_row_id,link_method,origin_mode",function(q){return q.eq("project_id",project.id);}),
-    fetchAllRows("reconciliation_journal","id,estimate_row_id,specification_row_id,issue_key,reasons,proposal,comment,status,snapshot,created_at,updated_at",function(q){return q.eq("project_id",project.id).order("created_at",{ascending:false});}),
-    fetchAllRows("suppliers","id,name",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("name");}),
-    fetchAllRows("supplier_items","id,supplier_id,catalog_item_id,source_mark,source_name,source_section,source_key,unit_volume_m3,link_method,link_state,source_import_row_id",function(q){return q.eq("project_id",project.id).is("archived_at",null).order("source_mark");}),
-    fetchAllRows("supplier_prices_current","id,supplier_item_id,effective_from,price_basis,unit_price_gross,unit_volume_snapshot_m3,source_import_row_id,source_imported_at",function(q){return q.eq("project_id",project.id).order("effective_from");}),
-    fetchAllRows("supply_documents","id,supplier_id,document_type,receipt_date,ttn_number,status,note,source_file_name,source_file_path,created_at,updated_at",function(q){return q.eq("project_id",project.id).order("receipt_date");}),
-    fetchAllRows("supply_document_lines","id,document_id,sort_order,source_mark,source_name,catalog_item_id,supplier_item_id,qty_pieces,qty_m3,unit_volume_snapshot_m3,price_basis,unit_price,amount_net,vat_percent,vat_amount,amount_gross,match_state",function(q){return q.eq("project_id",project.id).order("sort_order");}),
-    fetchAllRows("supply_line_allocations","id,white_line_id,green_line_id,allocated_pieces,allocated_m3",function(q){return q.eq("project_id",project.id);}),
-    fetchAllRows("montage_events","id,specification_row_id,level_code,event_date,event_type,quantity,note",function(q){return q.eq("project_id",project.id).order("event_date");}),
-    fetchAllRows("estimate_work_links","id,material_row_id,work_row_id,link_method",function(q){return q.eq("project_id",project.id);}),
-    fetchAllRows("current_price_settings","*",function(q){return q.eq("project_id",project.id);}),
-    fetchAllRows("current_price_revisions","id,estimate_id,revision_no,settings_snapshot,is_current,created_at",function(q){return q.eq("project_id",project.id).order("created_at");}),
-    fetchAllRows("current_price_row_results","id,revision_id,estimate_row_id,quantity,unit_price_at_start,total_with_vat,with_tender,with_forecast,with_tender_and_forecast,contractor_total",function(q){return q.eq("project_id",project.id);}),
-    fetchAllRows("gpr_plans","id,name,status,start_month,end_month,created_at,updated_at",function(q){return q.eq("project_id",project.id).order("created_at");}),
-    fetchAllRows("gpr_months","id,plan_id,month,monthly_index,execution_index,is_in_period",function(q){return q.eq("project_id",project.id).order("month");}),
-    fetchAllRows("gpr_floor_assignments","id,plan_id,month_id,building_section,level_code",function(q){return q.eq("project_id",project.id);}),
-    fetchAllRows("gpr_row_assignments","id,plan_id,month_id,estimate_row_id,quantity,source_mode,source_specification_row_id,source_level_code,parent_assignment_id",function(q){return q.eq("project_id",project.id);}),
-    fetchAllRows("avr_documents","id,period_month,display_number,created_at,updated_at",function(q){return q.eq("project_id",project.id).order("period_month");}),
-    fetchAllRows("avr_versions","id,document_id,version_no,state,source_import_id,signed_at,created_at",function(q){return q.eq("project_id",project.id).order("created_at");}),
-    fetchAllRows("avr_rows","id,version_id,estimate_row_id,quantity,quantity_m3,amount,source_import_row_id",function(q){return q.eq("project_id",project.id);}),
-    fetchAllRows("accounting_rows","id,import_id,source_import_row_id,account_code,material_code,name,unit,quantity,unit_price,amount,source_row_no",function(q){return q.eq("project_id",project.id).order("source_row_no");}),
-    fetchAllRows("accounting_code_links","id,accounting_code,catalog_item_id,link_method,note",function(q){return q.eq("project_id",project.id);}),
-    fetchAllRows("accounting_period_sources","period_month,import_id,selected_at",function(q){return q.eq("project_id",project.id).order("period_month");}),
-    fetchAllRows("s29_documents","id,period_month,avr_version_id,accounting_import_id,status,fixed_at,created_at,updated_at",function(q){return q.eq("project_id",project.id).order("period_month");}),
-    fetchAllRows("s29_rows","id,document_id,catalog_item_id,avr_quantity_pieces,volume_per_piece_snapshot_m3,avr_quantity_m3,written_off_m3,economy_m3,overrun_m3,note",function(q){return q.eq("project_id",project.id);}),
-    fetchAllRows("s29_allocations","id,s29_row_id,accounting_row_id,allocated_m3",function(q){return q.eq("project_id",project.id);}),
-    fetchAllRows("s29_carryovers","id,origin_document_id,origin_row_id,catalog_item_id,kind,origin_month,created_m3,created_at",function(q){return q.eq("project_id",project.id);}),
-    fetchAllRows("s29_carryover_settlements","id,carryover_id,settlement_document_id,settlement_month,settled_m3,created_at",function(q){return q.eq("project_id",project.id);}),
-    fetchAllRows("imports","id,domain,source_name,source_period,status,report,imported_at,source_slot,applied_at",function(q){return q.eq("project_id",project.id).in("domain",["avr","accounting","supplier_price"]).order("imported_at",{ascending:false});}),
-    fetchAllRows("supplier_price_links","id,supplier_id,catalog_item_id,supplier_item_id,scope_key,link_method,validation_state,last_checked_import_id,created_at,updated_at",function(q){return q.eq("project_id",project.id);}),
-    fetchAllRows("supplier_price_journal","id,import_id,catalog_item_id,supplier_item_id,event_type,before_value,after_value,link_method,actor_id,created_at",function(q){return q.eq("project_id",project.id).order("created_at",{ascending:false});}),
-    fetchAllRows("supplier_price_snapshot_rows","import_id,source_name,imported_at,version_no,supplier_id,import_row_id,source_row_no,source_key,raw_data,normalized_data,supplier_item_id,catalog_item_id,link_method,validation_state,scope_key",function(q){return q.eq("project_id",project.id).order("imported_at",{ascending:false}).order("source_row_no");}),
-    fetchAllRows("supplier_price_control_journal","id,catalog_item_id,supplier_item_id,issue_key,reasons,status,snapshot,created_at,updated_at",function(q){return q.eq("project_id",project.id).order("created_at",{ascending:false});})
-  ];
-  const results = await Promise.all(requests);
-  dataState = {
-    loaded:true,
-    source:"supabase",
-    project:project,
-    catalogItems:results[0] || [],
-    specSections:results[1] || [],
-    specRows:results[2] || [],
-    specQuantities:results[3] || [],
-    estimates:results[4] || [],
-    estimateSections:results[5] || [],
-    estimateRows:results[6] || [],
-    estimateCosts:results[7] || [],
-    reconciliationLinks:results[8] || [],
-    reconciliationJournal:results[9] || [],
-    suppliers:results[10] || [],
-    supplierItems:results[11] || [],
-    supplierPrices:results[12] || [],
-    supplyDocuments:results[13] || [],
-    supplyDocumentLines:results[14] || [],
-    supplyLineAllocations:results[15] || [],
-    montageEvents:results[16] || [],
-    estimateWorkLinks:results[17] || [],
-    currentPriceSettings:results[18] || [],
-    currentPriceRevisions:results[19] || [],
-    currentPriceRowResults:results[20] || [],
-    gprPlans:results[21] || [],
-    gprMonths:results[22] || [],
-    gprFloorAssignments:results[23] || [],
-    gprRowAssignments:results[24] || [],
-    avrDocuments:results[25] || [],
-    avrVersions:results[26] || [],
-    avrRows:results[27] || [],
-    accountingRows:results[28] || [],
-    accountingCodeLinks:results[29] || [],
-    accountingPeriodSources:results[30] || [],
-    s29Documents:results[31] || [],
-    s29Rows:results[32] || [],
-    s29Allocations:results[33] || [],
-    s29Carryovers:results[34] || [],
-    s29CarryoverSettlements:results[35] || [],
-    imports:results[36] || [],
-    supplierPriceLinks:results[37] || [],
-    supplierPriceJournal:results[38] || [],
-    supplierSnapshotRows:results[39] || [],
-    supplierControlJournal:results[40] || []
-  };
+  const results=await Promise.all(initialProjectDataKeys.map(function(key){return projectDataSliceRequest(key,project);}));
+  dataState={loaded:true,source:"supabase",project:project};
+  initialProjectDataKeys.forEach(function(key,i){dataState[key]=results[i]||[];});
+  dataState.supplierSnapshotRows=[];
+  dataState.supplierSnapshotLoaded=false;
 }
 
 // Prevent duplicate full-project reloads. Supabase can emit INITIAL_SESSION while
@@ -455,6 +409,7 @@ async function refreshProjectDataSlices(keys,project) {
   const unique=Array.from(new Set(keys));
   const values=await Promise.all(unique.map(function(key){return projectDataSliceRequest(key,project);}));
   unique.forEach(function(key,index){dataState[key]=values[index]||[];});
+  if(unique.indexOf("supplierSnapshotRows")>=0) dataState.supplierSnapshotLoaded=true;
   dataState.loaded=true;
   dataState.source="supabase";
   dataState.project=project;
