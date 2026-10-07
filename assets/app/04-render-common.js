@@ -250,9 +250,24 @@ function registerGroup(key) {
   ui.currentGroupKeys.push(key);
 }
 
+// A group total of quantities only makes sense when every row is counted in the
+// same unit; mixing "100 шт" work rows with "шт" materials gives a meaningless sum.
+function sameUnitTotal(list,unitOf,qtyOf) {
+  if(!list.length) return null;
+  const unit=String(unitOf(list[0])||"").trim();
+  if(list.some(function(x){return String(unitOf(x)||"").trim()!==unit;})) return null;
+  return list.reduce(function(sum,x){return sum+Number(qtyOf(x)||0);},0);
+}
+
+// Group rows carry their nesting depth (for shading) and mark the whole-object
+// total row, which stays visible under the header while scrolling.
+function groupRowClass(key,depth) {
+  return "group-row group-toggle group-depth-"+Math.min(Number(depth)||0,3)+(/:root$/.test(String(key))?" group-total":"");
+}
+
 function specGroupRow(label, rows, key, depth, levels) {
   registerGroup(key);
-  let html = '<tr class="group-row group-toggle" data-group-key="' + esc(key) + '">';
+  let html = '<tr class="' + groupRowClass(key,depth) + '" data-group-key="' + esc(key) + '">';
   html += '<td colspan="3" class="group-title spec-group-title" style="padding-left:' + (8 + depth * 14) + 'px"><span class="group-arrow">' + groupArrow(key) + '</span>' + esc(label) + '</td>';
   levels.forEach(function(code) {
     let value = 0;

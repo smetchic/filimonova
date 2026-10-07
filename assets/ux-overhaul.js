@@ -124,16 +124,28 @@
 
   function managerMode(area){const title=area.querySelector('.ux-dashboard-title strong');if(title)title.textContent='Сводка руководителя';const b=area.querySelectorAll('.ux-mode-switch button');b.forEach(x=>x.classList.remove('active'));if(b[1])b[1].classList.add('active');const note=area.querySelector('.ux-dashboard-note');if(note)note.textContent='Управленческий режим: выполнение, стоимость и ключевые отклонения без технической детализации.';}
 
-  function filterEntries(){return Array.from(document.querySelectorAll('#workArea .column-filter-trigger.active')).map(b=>({field:b.dataset.columnFilter,label:((b.closest('th')&&b.closest('th').querySelector('.header-label')&&b.closest('th').querySelector('.header-label').textContent)||b.dataset.columnFilter||'Фильтр')}));}
-  function clearField(field){const t=document.querySelector('#workArea .column-filter-trigger[data-column-filter="'+CSS.escape(field)+'"]');if(!t)return;t.click();setTimeout(()=>{const p=$('columnFilterPopup');if(!p)return;const c=p.querySelector('.filter-clear'),ok=p.querySelector('[data-filter-ok]');if(c)c.click();if(ok)ok.click();},30);}
-  function clearAll(){const f=filterEntries().map(x=>x.field);let i=0;(function next(){if(i>=f.length)return;clearField(f[i++]);setTimeout(next,110);})();}
+  // Active column filters as chips: «Марка: ПБ 60-12, НС-1 ×». Values come from the
+  // filter state itself, so the chip says exactly what is shown.
+  function filterEntries(){
+    const filters=(ui.columnFilters&&ui.columnFilters[currentViewKey()])||{};
+    return Object.keys(filters).map(field=>{
+      const b=document.querySelector('#workArea .column-filter-trigger[data-column-filter="'+CSS.escape(field)+'"]');
+      const head=b&&b.closest('th')&&b.closest('th').querySelector('.header-label');
+      const name=(head&&head.textContent.trim())||field;
+      const values=Array.from(filters[field]||[]).map(v=>v||'(Пусто)');
+      const shown=values.length?(values.length<=2?values.join(', '):values.slice(0,2).join(', ')+' и ещё '+(values.length-2)):'ничего';
+      return {field,label:name+': '+shown,title:name+': '+values.join(', ')};
+    });
+  }
+  function clearField(field){clearColumnFilter(field);rerenderContent();}
+  function clearAll(){Object.keys((ui.columnFilters&&ui.columnFilters[currentViewKey()])||{}).forEach(clearColumnFilter);rerenderContent();}
 
   function serviceTools(){
     const left=$('serviceLeft'),right=$('serviceRight');if(!left||!right)return;
-    const entries=filterEntries(),sig=entries.map(x=>x.field).join('|');let box=left.querySelector('.ux-filter-summary');
+    const entries=filterEntries(),sig=entries.map(x=>x.label).join('|');let box=left.querySelector('.ux-filter-summary');
     if(entries.length){
       if(!box){box=document.createElement('span');box.className='ux-filter-summary';left.appendChild(box);}
-      if(box.dataset.sig!==sig){box.dataset.sig=sig;box.innerHTML='<span class="ux-filter-caption">Фильтры:</span>'+entries.map(x=>'<span class="ux-filter-chip"><span>'+esc(x.label)+'</span><button type="button" data-field="'+esc(x.field)+'">×</button></span>').join('')+'<button class="ux-clear-filters" type="button" data-all>Очистить всё</button>';box.querySelectorAll('[data-field]').forEach(b=>b.onclick=()=>clearField(b.dataset.field));const a=box.querySelector('[data-all]');if(a)a.onclick=clearAll;}
+      if(box.dataset.sig!==sig){box.dataset.sig=sig;box.innerHTML='<span class="ux-filter-caption">Фильтры:</span>'+entries.map(x=>'<span class="ux-filter-chip" title="'+esc(x.title)+'"><span>'+esc(x.label)+'</span><button type="button" data-field="'+esc(x.field)+'">×</button></span>').join('')+'<button class="ux-clear-filters" type="button" data-all>Сбросить все</button>';box.querySelectorAll('[data-field]').forEach(b=>b.onclick=()=>clearField(b.dataset.field));const a=box.querySelector('[data-all]');if(a)a.onclick=clearAll;}
     }else if(box)box.remove();
     let tools=right.querySelector('.ux-service-tools');
     // "Колонки" only makes sense next to a table.
@@ -148,6 +160,7 @@
   function applyHidden(table,set){
     const g=grid(table),seen=new Set();g.forEach(row=>row.forEach(cell=>{if(seen.has(cell))return;seen.add(cell);const indexes=[];for(let i=0;i<row.length;i++)if(row[i]===cell)indexes.push(i);cell.style.display=indexes.length&&indexes.every(i=>set.has(i))?'none':'';}));
     const cols=table.querySelectorAll('colgroup col');cols.forEach((c,i)=>c.style.display=set.has(i)?'none':'');
+    if(typeof refreshFrozenColumns==='function')refreshFrozenColumns(table);
   }
   function storageKey(table){return 'filimonova.hiddenColumns.'+(table.dataset.tableKey||page()+'.'+tab());}
   function restoreColumns(){document.querySelectorAll('#workArea table').forEach(t=>{let x=[];try{x=JSON.parse(localStorage.getItem(storageKey(t))||'[]');}catch(_){}applyHidden(t,new Set(x.map(Number)));});}
@@ -161,7 +174,7 @@
   async function renderDrawer(mode){const d=drawer(),item=state.drawerItem;if(!item)return;const data=await dashboardData(false),s=itemStats(item,data);if(mode==='overview'){d.querySelector('.ux-drawer-body').innerHTML='<div class="ux-drawer-grid">'+metric('Проект',num0.format(s.projectQty)+' шт.')+metric('Поставлено',num0.format(s.supplied)+' шт.')+metric('Смонтировано',num0.format(s.mounted)+' шт.')+metric('Объём/ед.',s.vol?num2.format(s.vol)+' м³':'—')+metric('Списано',num2.format(s.written)+' м³')+metric('Осталось',num0.format(Math.max(0,s.projectQty-s.mounted))+' шт.')+'</div>'+section('Контроль','<ul class="ux-ref-list"><li><b>Экономия</b><span>'+num2.format(s.econ)+' м³</span></li><li><b>Перерасход</b><span>'+num2.format(s.over)+' м³</span></li><li><b>Проектный объём</b><span>'+num2.format(s.projectM3)+' м³</span></li></ul>');}else{const spec=s.rs.length?s.rs.map(r=>'№ '+(r.position_no||'—')).join(', '):'нет',docs=data.supplyLines.filter(x=>x.catalog_item_id===item.id).length,links=data.priceLinks.filter(x=>x.catalog_item_id===item.id).length;d.querySelector('.ux-drawer-body').innerHTML=section('Вертикальная трассировка','<ul class="ux-ref-list"><li><b>Спецификация</b><span>'+esc(spec)+'</span></li><li><b>Прайс</b><span>'+num0.format(links)+' связей</span></li><li><b>Поставка</b><span>'+num0.format(docs)+' строк белых ТТН</span></li><li><b>Монтаж</b><span>'+num0.format(s.mounted)+' шт.</span></li><li><b>С-29</b><span>'+num2.format(s.written)+' м³ списано</span></li></ul>');}}
   function wireDrawer(){document.querySelectorAll('#workArea .data-row[data-material-id],#workArea .data-row[data-material-mark]').forEach(r=>{if(r.dataset.uxDrawerWired)return;r.dataset.uxDrawerWired='1';r.addEventListener('click',e=>{if(e.target.closest('button,input,select,a,.day-cell,.column-filter-trigger'))return;openDrawer(r);});});}
 
-  function statuses(){document.querySelectorAll('#workArea td,#workArea .supply-doc-state,#workArea .ttn-link-state').forEach(el=>{if(el.dataset.uxStatus)return;const t=(el.textContent||'').trim().toLowerCase();let c='';if(/сопоставлено|подписан|закрыт|совпадает|норма|используется/.test(t)&&!/не сопостав/.test(t))c='ux-state-ok';else if(/провер|замеч|частич|без цены|нет в новой|ожида/.test(t))c='ux-state-warn';else if(/ошиб|перерасход|не сопостав|расхожд/.test(t))c='ux-state-bad';if(c){el.classList.add(c);el.dataset.uxStatus='1';}});}
+  function statuses(){document.querySelectorAll('#workArea td,#workArea .supply-doc-state,#workArea .ttn-link-state').forEach(el=>{if(el.dataset.uxStatus)return;const t=(el.textContent||'').trim().toLowerCase();let c='';if((/сопоставлено|подписан|закрыт|совпадает|норма|используется/.test(t)||t==='поставлено')&&!/не сопостав/.test(t))c='ux-state-ok';else if(/провер|замеч|частич|без цены|нет в новой|ожида/.test(t))c='ux-state-warn';else if(/ошиб|перерасход|перепостав|не сопостав|расхожд/.test(t))c='ux-state-bad';if(c){el.classList.add(c);el.dataset.uxStatus='1';}});}
 
   function gpr(){const table=document.querySelector('#workArea .gpr-table');if(!table||table.dataset.uxGprEnhanced)return;table.dataset.uxGprEnhanced='1';table.querySelectorAll('tbody tr.data-row').forEach(r=>{const cells=Array.from(r.querySelectorAll('.gpr-month')),active=cells.filter(c=>{const n=Number((c.textContent||'').replace(/\s/g,'').replace(',','.'));return n>0;});if(!active.length)return;const a=cells.indexOf(active[0]),b=cells.indexOf(active[active.length-1]);for(let i=a;i<=b;i++)cells[i].classList.add('ux-gpr-span');active.forEach(c=>c.classList.add('ux-gpr-active'));cells[a].classList.add('ux-gpr-start');cells[b].classList.add('ux-gpr-end');});const right=$('serviceRight');if(!right||right.querySelector('.ux-gpr-scale'))return;const s=document.createElement('span');s.className='ux-gpr-scale';s.innerHTML='<button class="active" data-scale="month" type="button">Месяц</button><button data-scale="quarter" type="button">Квартал</button><button data-scale="year" type="button">Год</button>';right.insertBefore(s,right.firstChild);s.querySelectorAll('button').forEach(b=>b.onclick=()=>{s.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));table.classList.toggle('ux-gpr-scale-quarter',b.dataset.scale==='quarter');table.classList.toggle('ux-gpr-scale-year',b.dataset.scale==='year');});}
 

@@ -64,8 +64,9 @@ function renderSupplySummary() {
     const remainM3=Math.max(0,projectM3-Number(delivered.m3||0));
     let status="";
     if(Number(delivered.pieces||0)<=0&&Number(delivered.m3||0)<=0) status="Не поставлялось";
-    else if(Number(delivered.pieces||0)>projectPieces+1e-9) status="Перепоставка";
+    else if(Number(delivered.pieces||0)>projectPieces+1e-9) status="Перепоставка +"+exFmt0(Number(delivered.pieces||0)-projectPieces)+" шт.";
     else if(Number(delivered.pieces||0)<projectPieces-1e-9) status="Частично";
+    else status="Поставлено";
     return {
       projectPieces:projectPieces,projectM3:projectM3,
       deliveredPieces:Number(delivered.pieces||0),deliveredM3:Number(delivered.m3||0),
@@ -89,7 +90,7 @@ function renderSupplySummary() {
   function group(label,list,key,depth){
     registerGroup(key);
     const v=supplyVector(list);
-    return '<tr class="group-row group-toggle" data-group-key="'+esc(key)+'">'+
+    return '<tr class="'+groupRowClass(key,depth)+'" data-group-key="'+esc(key)+'">'+
       '<td colspan="3" class="group-title spec-group-title" style="padding-left:'+(8+depth*14)+'px"><span class="group-arrow">'+groupArrow(key)+'</span>'+esc(label)+'</td>'+
       '<td class="num">'+exFmt0(v.projectPieces)+'</td><td class="num">'+exFmt(v.projectM3)+'</td>'+
       '<td class="num">'+exFmt0(v.deliveredPieces)+'</td><td class="num">'+exFmt(v.deliveredM3)+'</td>'+
@@ -142,7 +143,7 @@ function renderSupplySummary() {
     const key="supply:unmatched";
     registerGroup(key);
     const totals=unmatched.reduce(function(a,x){a.pieces+=x.pieces;a.m3+=x.m3;return a;},{pieces:0,m3:0});
-    body+='<tr class="group-row group-toggle" data-group-key="'+key+'"><td colspan="3" class="group-title spec-group-title"><span class="group-arrow">'+groupArrow(key)+'</span>Не сопоставлено</td>'+
+    body+='<tr class="'+groupRowClass(key,0)+'" data-group-key="'+key+'"><td colspan="3" class="group-title spec-group-title"><span class="group-arrow">'+groupArrow(key)+'</span>Не сопоставлено</td>'+
       '<td></td><td></td><td class="num">'+exFmt(totals.pieces)+'</td><td class="num">'+exFmt(totals.m3)+'</td><td class="num">'+exFmt(totals.pieces)+'</td><td class="num">'+exFmt(totals.m3)+'</td><td></td><td></td><td></td><td></td><td>Не сопоставлено</td></tr>';
     if(!ui.collapsed.has(key)&&!ui.collapseLeaves){
       unmatched.forEach(function(x,index){

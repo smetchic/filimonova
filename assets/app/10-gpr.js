@@ -342,7 +342,7 @@ function gprGroupRow(label,rows,e,key,depth,m,monthList) {
     totalMonths+=a.totalMonths;
     activeMonths.forEach(function(mon){monthTotals[mon.key]+=a.months[mon.key]||0;});
   });
-  let html='<tr class="group-row group-toggle" data-group-key="'+esc(key)+'">';
+  let html='<tr class="'+groupRowClass(key,depth)+'" data-group-key="'+esc(key)+'">';
   html+='<td colspan="4" class="est-group-title gpr-group-title" style="padding-left:'+(8+depth*14)+'px"><span class="group-arrow">'+groupArrow(key)+'</span>'+esc(label)+'</td>';
   html+='<td></td><td></td>';
   if(display.price) html+='<td></td>';
