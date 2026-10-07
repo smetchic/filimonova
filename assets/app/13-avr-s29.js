@@ -118,11 +118,11 @@ function renderAvr(tab) {
       });
       const estimateKey="avr:"+estimate.id;
       registerGroup(estimateKey);
-      const estimateQty=estimateRows.reduce(function(s,x){return s+Number(x.fact.quantity||0);},0);
+      const estimateQty=sameUnitTotal(estimateRows,function(x){return x.row.unit;},function(x){return x.fact.quantity;});
       const estimateM3=estimateRows.reduce(function(s,x){return s+Number(x.fact.quantity_m3||0);},0);
       const estimateAmount=estimateRows.reduce(function(s,x){return s+Number(x.fact.amount||0);},0);
-      widthSample(6,exFmt(estimateQty));widthSample(7,exFmt(estimateM3));widthSample(8,exMoney(estimateAmount));
-      body+='<tr class="group-row group-toggle" data-group-key="'+estimateKey+'"><td colspan="6"><span class="group-arrow">'+groupArrow(estimateKey)+'</span>'+esc("Смета №"+estimate.number+" · "+estimate.name)+'</td><td class="num">'+exFmt(estimateQty)+'</td><td class="num">'+exFmt(estimateM3)+'</td><td class="num">'+exMoney(estimateAmount)+'</td></tr>';
+      if(estimateQty!==null) widthSample(6,exFmt(estimateQty));widthSample(7,exFmt(estimateM3));widthSample(8,exMoney(estimateAmount));
+      body+='<tr class="'+groupRowClass(estimateKey,0)+'" data-group-key="'+estimateKey+'"><td colspan="6"><span class="group-arrow">'+groupArrow(estimateKey)+'</span>'+esc("Смета №"+estimate.number+" · "+estimate.name)+'</td><td class="num">'+(estimateQty===null?'':exFmt(estimateQty))+'</td><td class="num">'+exFmt(estimateM3)+'</td><td class="num">'+exMoney(estimateAmount)+'</td></tr>';
       if(ui.collapsed.has(estimateKey)) return;
       const sections=dataState.estimateSections.filter(function(s){return s.estimate_id===estimate.id;})
         .sort(function(a,b){return Number(a.sort_order||0)-Number(b.sort_order||0);});
@@ -132,11 +132,11 @@ function renderAvr(tab) {
         if(!sectionRows.length) return;
         const sectionKey=estimateKey+":"+section.id;
         registerGroup(sectionKey);
-        const sectionQty=sectionRows.reduce(function(s,x){return s+Number(x.fact.quantity||0);},0);
+        const sectionQty=sameUnitTotal(sectionRows,function(x){return x.row.unit;},function(x){return x.fact.quantity;});
         const sectionM3=sectionRows.reduce(function(s,x){return s+Number(x.fact.quantity_m3||0);},0);
         const sectionAmount=sectionRows.reduce(function(s,x){return s+Number(x.fact.amount||0);},0);
-        widthSample(6,exFmt(sectionQty));widthSample(7,exFmt(sectionM3));widthSample(8,exMoney(sectionAmount));
-        body+='<tr class="group-row group-toggle" data-group-key="'+sectionKey+'"><td colspan="6" class="est-group-title" style="padding-left:22px"><span class="group-arrow">'+groupArrow(sectionKey)+'</span>'+esc(section.title)+'</td><td class="num">'+exFmt(sectionQty)+'</td><td class="num">'+exFmt(sectionM3)+'</td><td class="num">'+exMoney(sectionAmount)+'</td></tr>';
+        if(sectionQty!==null) widthSample(6,exFmt(sectionQty));widthSample(7,exFmt(sectionM3));widthSample(8,exMoney(sectionAmount));
+        body+='<tr class="'+groupRowClass(sectionKey,1)+'" data-group-key="'+sectionKey+'"><td colspan="6" class="est-group-title" style="padding-left:22px"><span class="group-arrow">'+groupArrow(sectionKey)+'</span>'+esc(section.title)+'</td><td class="num">'+(sectionQty===null?'':exFmt(sectionQty))+'</td><td class="num">'+exFmt(sectionM3)+'</td><td class="num">'+exMoney(sectionAmount)+'</td></tr>';
         if(ui.collapsed.has(sectionKey)||ui.collapseLeaves) return;
         sectionRows.forEach(function(x){
           const r=x.row,f=x.fact,item=(dataState.catalogItems||[]).find(function(c){return c.id===r.catalog_item_id;});
@@ -248,7 +248,7 @@ function renderKs6() {
     widthSample(6,exFmt(f.accrued));
     widthSample(7,exFmt(f.rest));
     f.monthTotals.forEach(function(v,i){widthSample(8+i,exFmt(v));});
-    return '<tr class="group-row group-toggle" data-group-key="'+key+'">'+
+    return '<tr class="'+groupRowClass(key,depth)+'" data-group-key="'+key+'">'+
       '<td colspan="5" class="est-group-title" style="padding-left:'+(8+depth*14)+'px"><span class="group-arrow">'+groupArrow(key)+'</span>'+esc(label)+'</td>'+
       '<td class="num">'+exFmt(f.estimateTotal)+'</td>'+
       '<td class="num">'+exFmt(f.accrued)+'</td>'+

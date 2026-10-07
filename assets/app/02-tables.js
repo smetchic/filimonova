@@ -532,30 +532,85 @@ function updateStickyHeaderOffsets(table) {
     const h = row.getBoundingClientRect().height;
     if (Number.isFinite(h) && h > 0) top += h;
   });
+  // The whole-object total row sticks right under the header.
+  table.style.setProperty("--thead-height", Math.round(top) + "px");
+}
+
+// How many leading columns stay in place when a wide table is scrolled sideways:
+// the columns that say which row you are on (number, mark, basis, name).
+function frozenColumnCount(table) {
+  const cls=table.classList;
+  if(cls.contains("avr-table")) return 6;
+  if(cls.contains("ks-table")) return 5;
+  if(cls.contains("est-table") || cls.contains("recon-table") || cls.contains("work-links-table") || cls.contains("supplier-source-price-table")) return 4;
+  if(cls.contains("spec-table") || cls.contains("supply-table") || cls.contains("montage-table")) return 3;
+  if(cls.contains("s29-table")) return 2;
+  return 0;
+}
+
+// Logical start column of every body cell, honouring colspan and rowspan.
+function bodyCellStarts(table) {
+  const out=[];
+  const taken=[];
+  Array.from(table.tBodies).forEach(function(tbody){
+    Array.from(tbody.rows).forEach(function(row){
+      const r=out.length;
+      if(!taken[r]) taken[r]=[];
+      const starts=[];
+      let c=0;
+      Array.from(row.cells).forEach(function(cell){
+        while(taken[r][c]) c++;
+        const rs=cell.rowSpan||1, cs=cell.colSpan||1;
+        starts.push({cell:cell,start:c,span:cs});
+        for(let rr=r+1;rr<r+rs;rr++){
+          if(!taken[rr]) taken[rr]=[];
+          for(let cc=0;cc<cs;cc++) taken[rr][c+cc]=true;
+        }
+        c+=cs;
+      });
+      out.push(starts);
+    });
+  });
+  return out;
 }
 
 function updateStickyOffsets(table,widths) {
-  /* Sticky offsets must be based only on the rendered sticky identity columns.
-     Colgroup widths are not reliable here because grouped headers can make the
-     browser redistribute column width. */
-  const sets = [
-    ["sticky-1","sticky-2","sticky-3"],
-    ["e-sticky-1","e-sticky-2","e-sticky-3","e-sticky-4"]
-  ];
-
-  sets.forEach(function(classes) {
-    let left = 0;
-    classes.forEach(function(cls) {
-      const cells = Array.from(table.querySelectorAll("." + cls));
-      if (!cells.length) return;
-      cells.forEach(function(cell){ cell.style.left = Math.round(left) + "px"; });
-      const head = table.querySelector("thead ." + cls) || cells[0];
-      const width = head.getBoundingClientRect().width;
-      if (Number.isFinite(width) && width > 0) left += width;
-    });
+  /* Frozen identity columns. Offsets come from the generated COLGROUP widths,
+     the single source of truth for column geometry (hidden columns count as 0).
+     The legacy sticky-N / e-sticky-N classes stay static; frozen cells get .fz. */
+  if(!table) return;
+  table.querySelectorAll(".fz,.fz-edge").forEach(function(cell){
+    cell.classList.remove("fz","fz-edge");
+    cell.style.removeProperty("left");
   });
+  const count=frozenColumnCount(table);
+  const cols=table.querySelector("colgroup[data-generated]");
+  if(!count || !cols || !widths) return;
+  const lefts=[0];
+  for(let i=0;i<count;i++){
+    const col=cols.children[i];
+    const hidden=col && col.style.display==="none";
+    lefts.push(lefts[i]+(hidden ? 0 : (Number(widths[i])||0)));
+  }
+  function freeze(cell,start,span){
+    if(start+span>count) return;
+    cell.classList.add("fz");
+    if(start+span===count) cell.classList.add("fz-edge");
+    cell.style.setProperty("left",lefts[start]+"px","important");
+  }
+  logicalHeaderGrid(table);
+  table.querySelectorAll("thead th").forEach(function(th){
+    freeze(th,Number(th.dataset.logicalStart),Number(th.dataset.logicalSpan||1));
+  });
+  bodyCellStarts(table).forEach(function(row){
+    row.forEach(function(x){freeze(x.cell,x.start,x.span);});
+  });
+}
 
-  table.querySelectorAll(".gpr-sticky").forEach(function(cell){cell.style.left="0px";});
+function refreshFrozenColumns(table) {
+  const cols=table && table.querySelector("colgroup[data-generated]");
+  if(!cols) return;
+  updateStickyOffsets(table,Array.from(cols.children).map(function(col){return parseFloat(col.style.width)||0;}));
 }
 
 function tableColumnMinimum(table,index) {
@@ -719,6 +774,7 @@ function installResizeAutofit(table) {
 }
 
 function installTableTools() {
+  clearCellSelection();
   document.querySelectorAll("#workArea table").forEach(function(table){installResizeAutofit(table);});
   document.querySelectorAll("#workArea .column-filter-trigger").forEach(function(btn){
     btn.onclick=function(e){e.preventDefault();e.stopPropagation();openColumnFilter(btn);};
@@ -727,3 +783,183 @@ function installTableTools() {
     row.ondblclick=function(e){e.preventDefault();openMaterialCard(row.dataset.materialId||"",row.dataset.materialMark||"",row.dataset.materialName||"");};
   });
 }
+
+// Cell range selection, as in Excel: drag across cells (or Shift+click) to see the
+// count, sum and average of the selected numbers; Ctrl+C copies the block as
+// tab-separated text that pastes into Excel cell by cell. A plain click keeps its
+// usual meaning (open the position, toggle a group).
+const cellSelection={table:null,cells:null,anchor:null,focus:null,dragging:false,moved:false,suppressClick:false};
+
+function selectionCellNumber(cell) {
+  const t=(cell.textContent||"").replace(/[\s  ]/g,"").replace("−","-");
+  if(!/^-?\d+(,\d+)?$/.test(t)) return null;
+  const n=Number(t.replace(",","."));
+  return Number.isFinite(n) ? n : null;
+}
+
+function selectionPosition(table,td) {
+  if(!cellSelection.cells || cellSelection.table!==table) {
+    cellSelection.table=table;
+    cellSelection.cells=bodyCellStarts(table);
+  }
+  for(let r=0;r<cellSelection.cells.length;r++){
+    const hit=cellSelection.cells[r].find(function(x){return x.cell===td;});
+    if(hit) return {row:r,start:hit.start,end:hit.start+hit.span-1};
+  }
+  return null;
+}
+
+function selectedCells() {
+  const a=cellSelection.anchor,f=cellSelection.focus;
+  if(!a || !f || !cellSelection.cells) return {rows:[],c1:0,c2:-1};
+  const r1=Math.min(a.row,f.row),r2=Math.max(a.row,f.row);
+  const c1=Math.min(a.start,f.start),c2=Math.max(a.end,f.end);
+  const rows=[];
+  for(let r=r1;r<=r2;r++){
+    const row=cellSelection.cells[r].filter(function(x){
+      return x.start<=c2 && x.start+x.span-1>=c1 && x.cell.offsetParent!==null;
+    });
+    if(row.length) rows.push(row);
+  }
+  return {rows:rows,c1:c1,c2:c2};
+}
+
+function selectionBar() {
+  let bar=document.getElementById("selectionBar");
+  if(bar) return bar;
+  bar=document.createElement("div");
+  bar.id="selectionBar";
+  bar.className="selection-bar hidden";
+  document.body.appendChild(bar);
+  return bar;
+}
+
+function clearCellSelection() {
+  document.querySelectorAll("#workArea td.cell-selected").forEach(function(td){td.classList.remove("cell-selected");});
+  cellSelection.table=null;cellSelection.cells=null;cellSelection.anchor=null;cellSelection.focus=null;
+  const bar=document.getElementById("selectionBar");
+  if(bar) bar.classList.add("hidden");
+}
+
+function paintCellSelection() {
+  document.querySelectorAll("#workArea td.cell-selected").forEach(function(td){td.classList.remove("cell-selected");});
+  const sel=selectedCells();
+  let count=0,nums=0,sum=0;
+  sel.rows.forEach(function(row){
+    row.forEach(function(x){
+      x.cell.classList.add("cell-selected");
+      count++;
+      const n=selectionCellNumber(x.cell);
+      if(n!==null){nums++;sum+=n;}
+    });
+  });
+  const bar=selectionBar();
+  if(count<2){bar.classList.add("hidden");return;}
+  const f=new Intl.NumberFormat("ru-RU",{maximumFractionDigits:2});
+  bar.innerHTML='<span>Ячеек:<b>'+count+'</b></span>'+
+    (nums ? '<span>Сумма:<b>'+f.format(sum)+'</b></span><span>Среднее:<b>'+f.format(sum/nums)+'</b></span>' : '')+
+    '<span class="selection-hint">Ctrl+C — копировать в Excel</span>'+
+    '<button type="button" aria-label="Снять выделение">×</button>';
+  bar.querySelector("button").onclick=clearCellSelection;
+  bar.classList.remove("hidden","copied");
+}
+
+function selectionAsText() {
+  const sel=selectedCells();
+  return sel.rows.map(function(row){
+    const out=[];
+    for(let c=sel.c1;c<=sel.c2;c++) out.push("");
+    row.forEach(function(x){
+      const i=Math.max(x.start,sel.c1)-sel.c1;
+      const n=selectionCellNumber(x.cell);
+      out[i]=n!==null ? String(n).replace(".",",") : (x.cell.textContent||"").replace(/[\t\r\n]+/g," ").trim();
+    });
+    return out.join("\t");
+  }).join("\r\n");
+}
+
+function selectableCell(target) {
+  if(!target || !target.closest) return null;
+  if(target.closest("button,input,select,textarea,a,label,.resize-handle,.column-filter-trigger,.montage-day,.day-cell")) return null;
+  const td=target.closest("#workArea table tbody td");
+  if(!td || td.colSpan>=20) return null;
+  return td;
+}
+
+document.addEventListener("mousedown",function(e){
+  if(e.button!==0) return;
+  const td=selectableCell(e.target);
+  if(!td){
+    if(!e.target.closest || !e.target.closest("#selectionBar")) clearCellSelection();
+    return;
+  }
+  const table=td.closest("table");
+  if(e.shiftKey && cellSelection.anchor && cellSelection.table===table){
+    e.preventDefault();
+    cellSelection.focus=selectionPosition(table,td);
+    cellSelection.suppressClick=true;
+    paintCellSelection();
+    return;
+  }
+  clearCellSelection();
+  const pos=selectionPosition(table,td);
+  if(!pos) return;
+  cellSelection.anchor=pos;
+  cellSelection.focus=pos;
+  cellSelection.dragging=true;
+  cellSelection.moved=false;
+});
+
+document.addEventListener("mouseover",function(e){
+  if(!cellSelection.dragging) return;
+  const td=selectableCell(e.target);
+  if(!td || td.closest("table")!==cellSelection.table) return;
+  const pos=selectionPosition(cellSelection.table,td);
+  if(!pos) return;
+  if(pos.row!==cellSelection.anchor.row || pos.start!==cellSelection.anchor.start){
+    if(!cellSelection.moved){
+      cellSelection.moved=true;
+      cellSelection.table.classList.add("selecting");
+      const s=window.getSelection();
+      if(s) s.removeAllRanges();
+    }
+  }
+  cellSelection.focus=pos;
+  if(cellSelection.moved) paintCellSelection();
+});
+
+document.addEventListener("mouseup",function(){
+  if(!cellSelection.dragging) return;
+  cellSelection.dragging=false;
+  if(cellSelection.table) cellSelection.table.classList.remove("selecting");
+  // A drag across cells is a selection, not a click on the row.
+  if(cellSelection.moved) cellSelection.suppressClick=true;
+});
+
+document.addEventListener("click",function(e){
+  if(!cellSelection.suppressClick) return;
+  cellSelection.suppressClick=false;
+  e.preventDefault();
+  e.stopPropagation();
+},true);
+
+document.addEventListener("keydown",function(e){
+  if(e.key==="Escape" && cellSelection.anchor) clearCellSelection();
+});
+
+document.addEventListener("copy",function(e){
+  if(!cellSelection.anchor || !cellSelection.table || !cellSelection.table.isConnected) return;
+  if(!document.querySelector("#workArea td.cell-selected")) return;
+  const active=document.activeElement;
+  if(active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) return;
+  const s=window.getSelection();
+  if(s && !s.isCollapsed && String(s).trim()) return;
+  e.clipboardData.setData("text/plain",selectionAsText());
+  e.preventDefault();
+  const bar=document.getElementById("selectionBar");
+  if(bar){
+    bar.classList.add("copied");
+    const hint=bar.querySelector(".selection-hint");
+    if(hint) hint.textContent="Скопировано";
+  }
+});

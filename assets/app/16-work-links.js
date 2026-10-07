@@ -423,7 +423,7 @@ function renderWorkLinks() {
         if(unmatched.length){
           const uk="work-links:unmatched:"+sec.id;
           registerGroup(uk);
-          sectionBody+='<tr class="group-row group-toggle work-link-unmatched-group" data-group-key="'+esc(uk)+'"><td colspan="10"><span class="group-arrow">'+groupArrow(uk)+'</span>Не сопоставлено · '+unmatched.length+'</td></tr>';
+          sectionBody+='<tr class="group-row group-toggle group-depth-2 work-link-unmatched-group" data-group-key="'+esc(uk)+'"><td colspan="10"><span class="group-arrow">'+groupArrow(uk)+'</span>Не сопоставлено · '+unmatched.length+'</td></tr>';
           if(!ui.collapsed.has(uk) && !ui.collapseLeaves){
             unmatched.forEach(function(m){
               const geometry=workLinkMaterialGeometry(m);
@@ -447,7 +447,7 @@ function renderWorkLinks() {
       if(!sectionBody) return;
       const sk="work-links:section:"+sec.id;
       registerGroup(sk);
-      estimateBody+='<tr class="group-row group-toggle group-level-2" data-group-key="'+esc(sk)+'"><td colspan="10"><span class="group-arrow">'+groupArrow(sk)+'</span>'+esc(sec.title)+'</td></tr>';
+      estimateBody+='<tr class="group-row group-toggle group-depth-1 group-level-2" data-group-key="'+esc(sk)+'"><td colspan="10"><span class="group-arrow">'+groupArrow(sk)+'</span>'+esc(sec.title)+'</td></tr>';
       if(!ui.collapsed.has(sk) && !ui.collapseLeaves) estimateBody+=sectionBody;
     });
 
@@ -456,7 +456,7 @@ function renderWorkLinks() {
     registerGroup(ek);
     const allMaterials=estimateRows.filter(function(r){return r.row_type==="material";});
     const linkedCount=allMaterials.filter(function(r){return (materialLinks.get(r.id)||[]).length>0;}).length;
-    body+='<tr class="group-row group-toggle work-link-estimate-group" data-group-key="'+esc(ek)+'"><td colspan="10"><span class="group-arrow">'+groupArrow(ek)+'</span>'+esc("Смета №"+e.number+" · "+(e.name||""))+' · '+linkedCount+' / '+allMaterials.length+' материалов</td></tr>';
+    body+='<tr class="group-row group-toggle group-depth-0 work-link-estimate-group" data-group-key="'+esc(ek)+'"><td colspan="10"><span class="group-arrow">'+groupArrow(ek)+'</span>'+esc("Смета №"+e.number+" · "+(e.name||""))+' · '+linkedCount+' / '+allMaterials.length+' материалов</td></tr>';
     if(!ui.collapsed.has(ek)) body+=estimateBody;
   });
 

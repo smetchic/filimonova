@@ -6,9 +6,9 @@ function rowCost(row,m) {
 }
 
 function estimateGroupVector(rows,m) {
-  let qty = 0, salary = 0, machines = 0, materials = 0, transport = 0, total = 0;
+  const qty = sameUnitTotal(rows,function(r){return r.unit;},function(r){return r.quantity;});
+  let salary = 0, machines = 0, materials = 0, transport = 0, total = 0;
   rows.forEach(function(r) {
-    qty += Number(r.quantity || 0);
     const c = rowCost(r,m);
     salary += Number(c.salary_amount || 0);
     machines += Number(c.machines_amount || 0);
@@ -22,9 +22,9 @@ function estimateGroupVector(rows,m) {
 function estimateGroupRow(label,rows,key,depth,m) {
   registerGroup(key);
   const v = estimateGroupVector(rows,m);
-  let html = '<tr class="group-row group-toggle" data-group-key="' + esc(key) + '">';
+  let html = '<tr class="' + groupRowClass(key,depth) + '" data-group-key="' + esc(key) + '">';
   html += '<td colspan="4" class="est-group-title" style="padding-left:' + (8+depth*14) + 'px"><span class="group-arrow">' + groupArrow(key) + '</span>' + esc(label) + '</td>';
-  html += '<td></td><td class="num">' + fmt(v.qty) + '</td><td class="num"></td>';
+  html += '<td></td><td class="num">' + (v.qty===null ? '' : fmt(v.qty)) + '</td><td class="num"></td>';
   html += '<td></td><td class="num">' + money(v.salary) + '</td>';
   html += '<td></td><td class="num">' + money(v.machines) + '</td>';
   html += '<td></td><td class="num">' + money(v.materials) + '</td>';

@@ -1,0 +1,46 @@
+/* Table usability layer: frozen identity columns, group depth shading,
+   sticky whole-object total, row hover, cell range selection.
+   Loaded last so it wins over the older table rules. */
+
+/* Frozen identity columns (offsets: updateStickyOffsets in 02-tables.js). */
+/* Doubled class beats the older per-table header rules (z-index 12–40). */
+html #workArea table tbody tr td.fz.fz{position:sticky!important;z-index:4!important}
+html #workArea table thead tr th.fz.fz{position:sticky!important;z-index:45!important}
+#workArea table .fz-edge{box-shadow:4px 0 6px -4px rgba(16,24,40,.25)!important}
+html[data-theme="dark"] #workArea table .fz-edge{box-shadow:4px 0 6px -4px rgba(0,0,0,.6)!important}
+
+/* Group depth: outer levels darker and bolder. */
+#workArea table tr.group-row.group-depth-0 > td{background:#E2E4E8!important;font-weight:650!important;color:#2F3036!important}
+#workArea table tr.group-row.group-depth-1 > td{background:#EBECEF!important;font-weight:600!important}
+#workArea table tr.group-row.group-depth-2 > td{background:#F2F3F5!important;font-weight:500!important}
+#workArea table tr.group-row.group-depth-3 > td{background:#F7F7F9!important;font-weight:500!important}
+html[data-theme="dark"] #workArea table tr.group-row.group-depth-0 > td{background:#333a43!important;color:#eef0f3!important}
+html[data-theme="dark"] #workArea table tr.group-row.group-depth-1 > td{background:#2c3139!important}
+html[data-theme="dark"] #workArea table tr.group-row.group-depth-2 > td{background:#272b32!important}
+html[data-theme="dark"] #workArea table tr.group-row.group-depth-3 > td{background:#23272d!important}
+
+/* «Всего по дому» stays visible under the header. */
+#workArea table tbody tr.group-total > td{position:sticky!important;top:var(--thead-height,0px);z-index:30!important;box-shadow:inset 0 -1px 0 #C9CDD4}
+html #workArea table tbody tr.group-total > td.fz.fz{z-index:35!important}
+#workArea table tbody tr.group-total > td.fz-edge{box-shadow:inset 0 -1px 0 #C9CDD4,4px 0 6px -4px rgba(16,24,40,.25)!important}
+html[data-theme="dark"] #workArea table tbody tr.group-total > td{box-shadow:inset 0 -1px 0 #4a525d}
+
+/* Row under the mouse. Status cells keep their own colours. */
+#workArea table tbody tr.data-row:hover > td:not([class*="ux-state-"]):not(.cell-selected){background:#EEF4FF!important}
+html[data-theme="dark"] #workArea table tbody tr.data-row:hover > td:not([class*="ux-state-"]):not(.cell-selected){background:#26313f!important}
+
+/* Cell range selection (Excel-like): sum bar and Ctrl+C. */
+#workArea table.selecting{user-select:none}
+#workArea table td.cell-selected{background:#DCE8FF!important;box-shadow:inset 0 0 0 1px #8DB1FF!important}
+html[data-theme="dark"] #workArea table td.cell-selected{background:#24406a!important;box-shadow:inset 0 0 0 1px #4f7fd0!important}
+.selection-bar{position:fixed;right:20px;bottom:16px;z-index:120;display:flex;align-items:center;gap:14px;padding:8px 10px 8px 14px;border-radius:8px;background:#18202B;color:#E9EDF2;font-size:12.5px;box-shadow:0 8px 24px rgba(16,24,40,.25);font-variant-numeric:tabular-nums}
+.selection-bar b{font-weight:600;color:#fff;margin-left:4px}
+.selection-bar .selection-hint{color:#9AA4B2}
+.selection-bar button{border:0;background:transparent;color:#9AA4B2;font-size:15px;line-height:1;cursor:pointer;padding:0 2px}
+.selection-bar button:hover{color:#fff}
+.selection-bar.copied .selection-hint{color:#7EE2A8}
+
+/* Active filter chips: readable size, room for the chosen values. */
+.ux-filter-caption{font-size:11.5px!important;color:#5d636b!important}
+.ux-filter-chip{max-width:340px!important;font-size:11.5px!important;min-height:22px!important}
+.ux-clear-filters{font-size:11.5px!important;color:#2d5f9c!important}

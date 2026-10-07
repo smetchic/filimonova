@@ -1414,7 +1414,7 @@ function renderSupplierPrice() {
   function groupRow(label,list,key,depth,sourceField){
     registerGroup(key);
     const t=totals(list,sourceField);
-    return '<tr class="group-row group-toggle supplier-source-group" data-group-key="'+esc(key)+'"><td colspan="4" class="group-title spec-group-title" style="padding-left:'+(8+depth*14)+'px"><span class="group-arrow">'+groupArrow(key)+'</span>'+esc(label)+'</td><td></td>'+
+    return '<tr class="'+groupRowClass(key,depth)+' supplier-source-group" data-group-key="'+esc(key)+'"><td colspan="4" class="group-title spec-group-title" style="padding-left:'+(8+depth*14)+'px"><span class="group-arrow">'+groupArrow(key)+'</span>'+esc(label)+'</td><td></td>'+
       priceKeys.map(function(){return '<td></td>';}).join('')+
       '<td class="num">'+fmt0(t.qty)+'</td><td class="num">'+fmt(t.volume)+'</td><td class="num">'+money(t.amount)+'</td><td></td></tr>';
   }
@@ -1458,7 +1458,7 @@ function renderSupplierPrice() {
       });
     });
     const grand=totals(rows,"source_grand_total");
-    body+='<tr class="group-row supplier-price-grand-total"><td colspan="4" class="group-title spec-group-title">ВСЕГО НА ДОМ</td><td></td>'+priceKeys.map(function(){return '<td></td>';}).join('')+'<td class="num">'+fmt0(grand.qty)+'</td><td class="num">'+fmt(grand.volume)+'</td><td class="num">'+money(grand.amount)+'</td><td></td></tr>';
+    body+='<tr class="group-row group-depth-0 supplier-price-grand-total"><td colspan="4" class="group-title spec-group-title">ВСЕГО НА ДОМ</td><td></td>'+priceKeys.map(function(){return '<td></td>';}).join('')+'<td class="num">'+fmt0(grand.qty)+'</td><td class="num">'+fmt(grand.volume)+'</td><td class="num">'+money(grand.amount)+'</td><td></td></tr>';
   }
 
   const version=snapshot[0]||null;
